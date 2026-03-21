@@ -534,16 +534,28 @@
             }
             list.innerHTML = stocks.map(s => {
                 const name = stockNameMap[s.code] || '未定義資產';
+                const cached = getCached(s.code);
+                const rsiHtml = cached ? (() => {
+                    const arrow  = cached.rsi_trend === 'rising' ? '↑' : '↓';
+                    const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
+                    const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
+                    const bollClr = { near_upper:'text-amber-600', mid_zone:'text-slate-500', near_lower:'text-emerald-600' };
+                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
+                        <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
+                        <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
+                    </div>`;
+                })() : `<div class="flex-1"></div>`;
                 return `
-                <div class="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
-                    <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-3 shrink-0">
                         <div class="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center font-black text-blue-600 shadow-inner">${s.code[0]}</div>
                         <div>
                             <div class="font-black text-lg tracking-tight">${s.code}</div>
                             <div class="text-[10px] font-black text-slate-400 uppercase">${name}</div>
                         </div>
                     </div>
-                    <button onclick="window.removeStock('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2">
+                    ${rsiHtml}
+                    <button onclick="window.removeStock('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2 shrink-0">
                         <i data-lucide="x-circle" class="w-5 h-5"></i>
                     </button>
                 </div>`;
@@ -642,6 +654,9 @@
                              ? (bgDark ? 'text-emerald-400' : 'text-emerald-600')
                              : (bgDark ? 'text-rose-400'    : 'text-rose-500');
             const bollMap  = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
+            const bollClr  = { near_upper: bgDark ? 'text-amber-400' : 'text-amber-600',
+                               mid_zone:   bgDark ? 'text-slate-300' : 'text-slate-500',
+                               near_lower: bgDark ? 'text-emerald-400' : 'text-emerald-600' };
             const condText = hasBuy && result.conditions && result.conditions.length
                              ? '觸發：' + result.conditions.join('、') : '';
             const cardBg   = bgDark
@@ -649,27 +664,31 @@
                 : (hasBuy ? 'border-emerald-300 bg-emerald-50'  : 'border-slate-200 bg-white');
             const textMain = bgDark ? 'text-white'     : 'text-slate-800';
             const textSub  = bgDark ? 'text-slate-400' : 'text-slate-400';
-            const tagBg    = bgDark ? 'bg-slate-800'   : 'bg-white/70';
+            // 智能診斷無買進訊號 → 「持續觀察，暫不賣出」；待買清單無買進 → 「持續觀察」
+            const noSignalText = bgDark ? '持續觀察，暫不賣出' : '持續觀察';
 
             return `<div class="border-2 rounded-[2rem] p-5 ${cardBg}">
-                <div class="flex items-start justify-between gap-2">
-                    <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <!-- 左：icon + 代碼 + 名稱 -->
+                    <div class="flex items-center gap-3 shrink-0">
                         <div class="w-10 h-10 rounded-xl ${hasBuy ? 'bg-emerald-200 text-emerald-700' : (bgDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500')} flex items-center justify-center font-black">${code[0]}</div>
                         <div>
                             <div class="font-black ${textMain}">${code}</div>
                             <div class="text-[10px] ${textSub} uppercase">${name}</div>
                         </div>
                     </div>
+                    <!-- 中：RSI + 布林（填滿空白區域）-->
+                    <div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
+                        <span class="${rsiClr}">RSI ${result.rsi} ${arrow}</span>
+                        <span class="${bollClr[result.boll_position] || textSub}">${bollMap[result.boll_position] || result.boll_position}</span>
+                    </div>
+                    <!-- 右：價格 + 狀態 -->
                     <div class="text-right shrink-0">
                         <div class="font-black text-base ${textMain}">${result.price}</div>
-                        <div class="text-[10px] font-black ${hasBuy ? 'text-emerald-500' : textSub}">${hasBuy ? '⭐ 買進訊號' : '持續觀察'}</div>
+                        <div class="text-[10px] font-black ${hasBuy ? 'text-emerald-500' : textSub}">${hasBuy ? '⭐ 買進訊號' : noSignalText}</div>
                     </div>
                 </div>
-                <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
-                    <span class="px-2 py-1 ${tagBg} rounded-lg ${rsiClr}">RSI ${result.rsi} ${arrow}</span>
-                    <span class="px-2 py-1 ${tagBg} rounded-lg ${hasBuy ? 'text-emerald-500' : textSub}">${bollMap[result.boll_position] || result.boll_position}</span>
-                    ${condText ? `<span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg">${condText}</span>` : ''}
-                </div>
+                ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[11px] font-black text-center">${condText}</div>` : ''}
             </div>`;
         };
 
@@ -705,17 +724,16 @@
         ];
 
         const fetchWithFallback = async (yahooUrl) => {
-            // 3個proxy同時競速，誰最快回應就用誰（Promise.any）
-            const tryProxy = async (proxyFn) => {
-                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(12000) });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
-                const result = data.chart && data.chart.result && data.chart.result[0];
-                if (!result) throw new Error('no chart data');
-                return result;
-            };
-            // Promise.any：任一成功即回傳，全部失敗才拋出
-            return Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
+            for (const proxyFn of PROXIES) {
+                try {
+                    const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(10000) });
+                    if (!resp.ok) continue;
+                    const data = await resp.json();
+                    const result = data.chart && data.chart.result && data.chart.result[0];
+                    if (result) return result;
+                } catch(e) { /* 試下一個proxy */ }
+            }
+            throw new Error('all proxies failed');
         };
 
         // ── 並行工作池（建議3：最多3個同時執行）────────────────
@@ -891,12 +909,24 @@
             }
             list.innerHTML = watchlist.map(s => {
                 const name = stockNameMap[s.code] || '未定義資產';
-                return `<div class="flex items-center justify-between p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
-                    <div class="flex items-center gap-4">
+                const cached = getCached(s.code);
+                const rsiHtml = cached ? (() => {
+                    const arrow  = cached.rsi_trend === 'rising' ? '↑' : '↓';
+                    const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
+                    const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
+                    const bollClr = { near_upper:'text-amber-600', mid_zone:'text-slate-500', near_lower:'text-emerald-600' };
+                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
+                        <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
+                        <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
+                    </div>`;
+                })() : `<div class="flex-1"></div>`;
+                return `<div class="flex items-center gap-2 p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-3 shrink-0">
                         <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
                         <div><div class="font-black text-lg tracking-tight">${s.code}</div><div class="text-[10px] font-black text-slate-400 uppercase">${name}</div></div>
                     </div>
-                    <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
+                    ${rsiHtml}
+                    <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2 shrink-0"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
                 </div>`;
             }).join('');
             lucide.createIcons();
