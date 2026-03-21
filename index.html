@@ -191,6 +191,30 @@
     </nav>
 
     <main id="main-content" class="hide pt-24 pb-32 px-4 max-w-4xl mx-auto">
+        <!-- 待買觀察清單頁面 -->
+        <div id="page-watchlist" class="hide space-y-6">
+            <div class="flex justify-between items-end px-2">
+                <div>
+                    <h3 class="text-2xl font-black italic tracking-tight uppercase">Watchlist</h3>
+                    <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">待買觀察清單</p>
+                </div>
+                <div class="text-right">
+                    <span id="watchlist-count" class="text-3xl font-black text-amber-500">0</span>
+                    <span class="text-[10px] font-black text-slate-400 block uppercase">觀察中</span>
+                </div>
+            </div>
+            <div class="bg-white border-2 border-slate-200 rounded-[2.5rem] p-6 md:p-8 shadow-sm">
+                <div class="flex flex-col gap-3 mb-8">
+                    <div class="flex gap-3">
+                        <input type="text" id="new-watchlist-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)"
+                               class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-400 uppercase transition-all">
+                        <button id="btn-add-watchlist" class="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black text-sm hover:bg-amber-600 transition-all">新增</button>
+                    </div>
+                </div>
+                <div id="watchlist-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[200px]"></div>
+            </div>
+        </div>
+
         <!-- 監控頁面 -->
         <div id="page-monitor" class="space-y-6">
             <div class="flex justify-between items-end px-2">
@@ -273,6 +297,10 @@
     <!-- 導航欄 -->
     <div id="tab-bar" class="hide fixed bottom-0 w-full bg-white/90 backdrop-blur-lg border-t border-slate-200 pb-8 pt-2">
         <div class="max-w-md mx-auto flex justify-around items-center">
+            <button onclick="switchPage('watchlist')" id="tab-watchlist" class="flex flex-col items-center gap-1 py-2 px-4 transition-all text-slate-400">
+                <i data-lucide="eye" class="w-6 h-6"></i>
+                <span class="text-[10px] font-black">待買觀察</span>
+            </button>
             <button onclick="switchPage('monitor')" id="tab-monitor" class="flex flex-col items-center gap-1 py-2 px-4 transition-all tab-active">
                 <i data-lucide="list" class="w-6 h-6"></i>
                 <span class="text-[10px] font-black">持股清單</span>
@@ -316,6 +344,7 @@
         };
 
         let stocks = [];
+        let watchlist = [];        // ✅ 新增：待買觀察清單
         let currentUserEmail = "";
         let otpCode = "";
         let otpExpireTime = 0;
@@ -364,6 +393,7 @@
                 await setDoc(getSharedDocPath(currentUserEmail), {
                     email: currentUserEmail,
                     stocks: stocks,
+                    watchlist: watchlist,        // ✅ 新增
                     lastUpdated: new Date().toISOString()
                 });
             } catch (e) {
@@ -379,11 +409,14 @@
                 const snap = await getDoc(getSharedDocPath(email));
                 if (snap.exists()) {
                     const data = snap.data();
-                    stocks = (data.email === email) ? (data.stocks || []) : [];
+                    stocks    = (data.email === email) ? (data.stocks    || []) : [];
+                    watchlist = (data.email === email) ? (data.watchlist || []) : [];
                 } else {
-                    stocks = [];
+                    stocks    = [];
+                    watchlist = [];
                 }
                 window.renderStocks();
+                window.renderWatchlist();    // ✅ 新增
             } catch (e) {
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
@@ -492,6 +525,52 @@
             }, 1000);
         };
 
+        // ✅ 待買觀察清單 渲染
+        window.renderWatchlist = () => {
+            const list = document.getElementById('watchlist-list');
+            document.getElementById('watchlist-count').innerText = watchlist.length;
+            if (watchlist.length === 0) {
+                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Watchlist</div>`;
+                return;
+            }
+            list.innerHTML = watchlist.map(s => {
+                const name = stockNameMap[s.code] || '未定義資產';
+                return `
+                <div class="flex items-center justify-between p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
+                        <div>
+                            <div class="font-black text-lg tracking-tight">${s.code}</div>
+                            <div class="text-[10px] font-black text-slate-400 uppercase">${name}</div>
+                        </div>
+                    </div>
+                    <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2">
+                        <i data-lucide="x-circle" class="w-5 h-5"></i>
+                    </button>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        };
+
+        // ✅ 新增待買
+        document.getElementById('btn-add-watchlist').addEventListener('click', async () => {
+            const input = document.getElementById('new-watchlist-input');
+            const val   = input.value.trim().toUpperCase();
+            if (val && !watchlist.some(s => s.code === val)) {
+                watchlist.push({ code: val });
+                input.value = '';
+                window.renderWatchlist();
+                await saveToCloud();
+            }
+        });
+
+        // ✅ 移除待買
+        window.removeWatchlist = async (code) => {
+            watchlist = watchlist.filter(s => s.code !== code);
+            window.renderWatchlist();
+            await saveToCloud();
+        };
+
         window.renderStocks = () => {
             const list = document.getElementById('stock-list');
             document.getElementById('stock-count').innerText = stocks.length;
@@ -538,7 +617,7 @@
         window.switchPage = (pageName) => {
             document.querySelectorAll('main > div').forEach(div => div.classList.add('hide'));
             document.getElementById(`page-${pageName}`).classList.remove('hide');
-            ['monitor', 'scan', 'settings'].forEach(p => {
+            ['watchlist', 'monitor', 'scan', 'settings'].forEach(p => {
                 const tab = document.getElementById(`tab-${p}`);
                 if (tab) {
                     p === pageName ? tab.classList.add('tab-active') : tab.classList.remove('tab-active');
