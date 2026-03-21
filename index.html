@@ -587,7 +587,8 @@
 {"price":"最新收盤價","rsi":RSI數值,"rsi_trend":"rising或falling","boll_position":"near_upper或mid_zone或near_lower","buy_signal":true或false,"conditions":["條件21"]}
 布林位置：收盤價高於布林中軌且靠近上軌=near_upper，中軌附近=mid_zone，低於中軌或靠近下軌=near_lower。
 買進訊號：RSI上升且RSI>35且MACD柱向上且價格在布林中軌以下=buy_signal:true。
-conditions只在buy_signal為true時填入觸發的條件編號（如條件21、條件47、截圖條件），否則填[]。`;
+conditions只在buy_signal為true時填入觸發的條件編號（如條件21、條件47、截圖條件），否則填[]。
+台股代碼請搜尋時加上.TW後綴（如0050.TW、00878.TW）以取得正確資料。`;
 
             const resp = await fetch("https://api.anthropic.com/v1/messages", {
                 method: "POST",
