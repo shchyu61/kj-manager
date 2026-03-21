@@ -646,7 +646,7 @@
         // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
 
         // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
-        const makeDiagCard = (code, result, bgDark) => {
+        const makeDiagCard = (code, result, bgDark, isHolding = false) => {
             const name     = stockNameMap[code] || '未定義資產';
             const hasBuy   = result.buy_signal;
             const arrow    = result.rsi_trend === 'rising' ? '↑' : '↓';
@@ -665,7 +665,7 @@
             const textMain = bgDark ? 'text-white'     : 'text-slate-800';
             const textSub  = bgDark ? 'text-slate-400' : 'text-slate-400';
             // 智能診斷無買進訊號 → 「持續觀察，暫不賣出」；待買清單無買進 → 「持續觀察」
-            const noSignalText = bgDark ? '持續觀察，暫不賣出' : '持續觀察';
+            const noSignalText = isHolding ? '持續觀察，暫不賣出' : '持續觀察';
 
             return `<div class="border-2 rounded-[2rem] p-5 ${cardBg}">
                 <div class="flex items-center gap-2">
@@ -878,7 +878,7 @@
                 try {
                     const result = await analyzeStock(code); // 有快取自動跳過抓取
                     const name = stockNameMap[code] || '未定義資產';
-                    const cardHtml = makeDiagCard(code, result, true)
+                    const cardHtml = makeDiagCard(code, result, true, tag === '持股')
                         .replace(
                             `<div class="text-[10px] ${result.rsi_trend === 'rising' ? 'text-emerald-400' : 'text-rose-400'} uppercase">${name}</div>`,
                             `<div class="text-[10px] text-slate-400 uppercase">${name} <span class="text-blue-400">(${tag})</span></div>`
