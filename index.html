@@ -16,11 +16,18 @@
         import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        const firebaseConfig = {
+            apiKey: "AIzaSyCnvmKp-2RUjFuiJNlrkoRw5OkTzz-Bbi4",
+            authDomain: "kj-wealth-manager.firebaseapp.com",
+            projectId: "kj-wealth-manager",
+            storageBucket: "kj-wealth-manager.firebasestorage.app",
+            messagingSenderId: "657270829857",
+            appId: "1:657270829857:web:bd43147d24d500eebf8460"
+        };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = 'kj-wealth-manager';  // ✅ 固定值，不隨session變動，確保每次存取同一路徑
+        const appId = 'kj-wealth-manager';  // ✅ 固定值，永遠存取同一路徑
 
         window.db = db;
         window.appId = appId;
