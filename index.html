@@ -358,6 +358,7 @@
         let currentUserEmail = "";
         let otpCode = "";
         let otpExpireTime = 0;
+        let otpFailCount = 0; // 🔒 錯誤計數器（全域）OTP錯誤次數（最多5次）
         let countdownTimer = null;
         let otpEmail = "";       // ✅ 發送OTP時鎖定信箱，避免驗證時讀到不同值
 
@@ -523,7 +524,18 @@
                 showError('錯誤次數過多，請重新發送OTP');
                 return;
             }
-            if (inputOtp !== otpCode) { showError('驗證碼錯誤。'); return; }
+
+            # OTP錯誤判斷（3 → 5次）
+            if (inputOtp !== otpCode) {
+                otpFailCount++;
+                if (otpFailCount >= 5) {
+                    showError('錯誤次數過多，請重新取得驗證碼。');
+                    document.getElementById('btn-verify-otp').disabled = true;
+                    return;
+                }
+                showError(`驗證碼錯誤（${otpFailCount}/5）`);
+                return;
+            }
             window.otpFailCount++; # OTP 驗證防暴力破解（防止一直猜6碼）
 
             // ✅ 使用發送時鎖定的 otpEmail，不再即時讀取輸入框（防止空白或誤值）
@@ -540,6 +552,7 @@
         });
 
         document.getElementById('btn-resend-otp').addEventListener('click', () => {
+    otpFailCount = 0; // ✅ 重置錯誤次數，重新發送時重置。📍區塊：btn-resend-otp
             document.getElementById('otp-step1').classList.remove('hide');
             document.getElementById('otp-step2').classList.add('hide');
             document.getElementById('btn-send-otp').disabled = false;
@@ -753,6 +766,7 @@
         };
         const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
 
+        # 「4路版本」做 retry/backoff（穩定性強化），「多 CORS Proxy 備援（fetchWithFallback）」
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         const PROXIES = [
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
@@ -761,7 +775,7 @@
             (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
         ];
 
-        // ✅ 上面4個proxy同時競速，誰最快回應就用誰（Promise.any）
+        // ✅ 上面4個proxy同時競速 + retry/backoff（穩定性強化）
         const fetchWithFallback = async (yahooUrl) => {
             const tryProxy = async (proxyFn) => {
                 const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(12000) });
@@ -771,7 +785,19 @@
                 if (!result) throw new Error('no chart data');
                 return result;
             };
-            return Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
+
+            // 🔁 最多重試 2 次（共 3 輪）
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    return await Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
+                } catch (e) {
+                    if (attempt === 2) throw e;
+
+                    // ⏱️ 漸進延遲
+                    const delay = 500 * (attempt + 1); // 500ms → 1000ms
+                    await new Promise(res => setTimeout(res, delay));
+                }
+            }
         };
 
         // ── 並行工作池（建議3：最多3個同時執行）────────────────
