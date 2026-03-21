@@ -330,11 +330,9 @@
         lucide.createIcons();
 
         // EmailJS 初始化
-        const EMAILJS_PUBLIC_KEY = '5dk4HoCBYIS7ypwiw'; // ⚠️ 改為變數集中管理
+        emailjs.init('5dk4HoCBYIS7ypwiw');
         const EMAILJS_SERVICE  = 'service_knhvcfj';
         const EMAILJS_TEMPLATE = 'template_oqm4kw9';
-
-        emailjs.init(EMAILJS_PUBLIC_KEY);
 
         const ALLOWED_EMAILS = [
             "shchyu61@gmail.com",
@@ -358,14 +356,12 @@
         let currentUserEmail = "";
         let otpCode = "";
         let otpExpireTime = 0;
-        let otpFailCount = 0; // 🔒 錯誤計數器（全域）OTP錯誤次數（最多5次）
         let countdownTimer = null;
         let otpEmail = "";       // ✅ 發送OTP時鎖定信箱，避免驗證時讀到不同值
 
         const getSafeDocId = (email) => email.toLowerCase().replace(/[@.]/g, '_');
-        # 「共享路徑」改成每個人資料隔離（真正安全）
         const getSharedDocPath = (email) =>
-    doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'stocks');
+            doc(window.db, 'artifacts', window.appId, 'public', 'data', 'sharedStocks', getSafeDocId(email));
 
         const getEmailInput = () => {
             const raw = document.getElementById('auth-email').value.trim().toLowerCase();
@@ -475,13 +471,7 @@
             if (!ALLOWED_EMAILS.includes(email)) { showError('此信箱未在授權名單內。'); return; }
             if (keyInput !== expected) { showError('每日密碼錯誤。'); return; }
 
-            // 🔒 OTP 發送冷卻（60秒）
-            if (window.lastOtpSendTime && Date.now() - window.lastOtpSendTime < 60000) {
-                showError('請稍候再發送（60秒冷卻）');
-                return;
-            }
-            window.lastOtpSendTime = Date.now();
-            const btn = document.getElementById('btn-verify-key'); # OTP 發送冷卻機制（防止瘋狂點「發送OTP」
+            const btn = document.getElementById('btn-verify-key');
             btn.disabled = true;
             try {
                 await completeLogin(email);
@@ -518,33 +508,13 @@
         document.getElementById('btn-verify-otp').addEventListener('click', async () => {
             const inputOtp = document.getElementById('otp-input').value.trim();
             if (Date.now() > otpExpireTime) { showError('密碼已過期。'); return; }
-
-            // 🔒 OTP 嘗試次數限制（最多5次） # OTP 驗證防暴力破解（防止一直猜6碼）
-            window.otpFailCount = window.otpFailCount || 0;
-            if (window.otpFailCount >= 5) {
-                showError('錯誤次數過多，請重新發送OTP');
-                return;
-            }
-
-            # OTP錯誤判斷（3 → 5次）
-            if (inputOtp !== otpCode) {
-                otpFailCount++;
-                if (otpFailCount >= 5) {
-                    showError('錯誤次數過多，請重新取得驗證碼。');
-                    document.getElementById('btn-verify-otp').disabled = true;
-                    return;
-                }
-                showError(`驗證碼錯誤（${otpFailCount}/5）`);
-                return;
-            }
-            window.otpFailCount++; # OTP 驗證防暴力破解（防止一直猜6碼）
+            if (inputOtp !== otpCode) { showError('驗證碼錯誤。'); return; }
 
             // ✅ 使用發送時鎖定的 otpEmail，不再即時讀取輸入框（防止空白或誤值）
             const email = otpEmail || getEmailInput();
             const btn = document.getElementById('btn-verify-otp');
             btn.disabled = true;
             try {
-            window.otpFailCount = 0; // 【成功時歸零】 # ✅ 優點：成功登入 → 清空錯誤次數。防止「被鎖住」。之後你做防暴力破解會用到。
                 await completeLogin(email);
             } catch (e) {
                 btn.disabled = false;
@@ -553,7 +523,6 @@
         });
 
         document.getElementById('btn-resend-otp').addEventListener('click', () => {
-    otpFailCount = 0; // ✅ 重置錯誤次數，重新發送時重置。📍區塊：btn-resend-otp
             document.getElementById('otp-step1').classList.remove('hide');
             document.getElementById('otp-step2').classList.add('hide');
             document.getElementById('btn-send-otp').disabled = false;
@@ -718,7 +687,7 @@
             // 智能診斷無買進訊號 → 「持續觀察，暫不賣出」；待買清單無買進 → 「持續觀察」
             const noSignalText = isHolding ? '持續觀察，暫不賣出' : '持續觀察';
 
-            return `<div class="border-2 rounded-[2rem] p-6 ${cardBg}">
+            return `<div class="border-2 rounded-[2rem] p-5 ${cardBg}">
                 <div class="flex items-center gap-2">
                     <!-- 左：icon + 代碼 + 名稱 -->
                     <div class="flex items-center gap-3 shrink-0">
@@ -729,14 +698,14 @@
                         </div>
                     </div>
                     <!-- 中：RSI + 布林（填滿空白區域）-->
-                    <div class="flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-black px-2 min-w-[70px]">
-                        <span class="${rsiClr} whitespace-nowrap">RSI ${result.rsi} ${arrow}</span>
-                        <span class="${bollClr[result.boll_position] || textSub} text-[10px] text-center leading-tight break-words">${bollMap[result.boll_position] || result.boll_position}</span>
+                    <div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
+                        <span class="${rsiClr}">RSI ${result.rsi} ${arrow}</span>
+                        <span class="${bollClr[result.boll_position] || textSub}">${bollMap[result.boll_position] || result.boll_position}</span>
                     </div>
                     <!-- 右：價格 + 狀態 -->
-                    <div class="text-right shrink-0 max-w-[90px]">
-                        <div class="font-black text-sm ${textMain} truncate">${result.price}</div>
-                        <div class="text-[10px] font-black ${hasBuy ? 'text-emerald-500' : textSub} truncate">${hasBuy ? '⭐ 買進訊號' : noSignalText}</div>
+                    <div class="text-right shrink-0">
+                        <div class="font-black text-base ${textMain}">${result.price}</div>
+                        <div class="text-[10px] font-black ${hasBuy ? 'text-emerald-500' : textSub}">${hasBuy ? '⭐ 買進訊號' : noSignalText}</div>
                     </div>
                 </div>
                 ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[11px] font-black text-center">${condText}</div>` : ''}
@@ -767,16 +736,16 @@
         };
         const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
 
-        # 「4路版本」做 retry/backoff（穩定性強化），「多 CORS Proxy 備援（fetchWithFallback）」
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         const PROXIES = [
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
             (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
             (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
+            (url) => `https://proxy.cors.sh/${url}`,
         ];
 
-        // ✅ 上面4個proxy同時競速 + retry/backoff（穩定性強化）
+        // ✅ 5個proxy同時競速，誰最快回應就用誰（Promise.any）
         const fetchWithFallback = async (yahooUrl) => {
             const tryProxy = async (proxyFn) => {
                 const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(12000) });
@@ -786,19 +755,7 @@
                 if (!result) throw new Error('no chart data');
                 return result;
             };
-
-            // 🔁 最多重試 2 次（共 3 輪）
-            for (let attempt = 0; attempt < 3; attempt++) {
-                try {
-                    return await Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
-                } catch (e) {
-                    if (attempt === 2) throw e;
-
-                    // ⏱️ 漸進延遲
-                    const delay = 500 * (attempt + 1); // 500ms → 1000ms
-                    await new Promise(res => setTimeout(res, delay));
-                }
-            }
+            return Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
         };
 
         // ── 並行工作池（建議3：最多3個同時執行）────────────────
