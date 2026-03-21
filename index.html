@@ -640,12 +640,20 @@
             const fetchYahoo = async (tk) => {
                 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${tk}?interval=1wk&range=2y`;
                 const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-                const resp = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
-                const result = data.chart && data.chart.result && data.chart.result[0];
-                if (!result) throw new Error('no data');
-                return result;
+                // 最多重試2次
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        const resp = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        const data = await resp.json();
+                        const result = data.chart && data.chart.result && data.chart.result[0];
+                        if (!result) throw new Error('no data');
+                        return result;
+                    } catch(e) {
+                        if (attempt === 1) throw e; // 第2次還失敗才真的拋出
+                        await new Promise(r => setTimeout(r, 800)); // 重試前等800ms
+                    }
+                }
             };
 
             let result;
@@ -756,8 +764,9 @@
             list.innerHTML = watchlist.map(s => makeLoadingCard(s.code, false)).join('');
 
             // 並行抓取所有股票，速度提升數倍
-            txt.innerText = `診斷中（同時掃描${watchlist.length}支）...`;
-            await Promise.allSettled(watchlist.map(async (s) => {
+            txt.innerText = `診斷中（掃描${watchlist.length}支）...`;
+            await Promise.allSettled(watchlist.map(async (s, idx) => {
+                await new Promise(r => setTimeout(r, idx * 300)); // 每支錯開300ms
                 const code = s.code;
                 try {
                     const result = await analyzeStock(code);
@@ -797,6 +806,7 @@
             document.getElementById('last-diagnostic-time').innerText = new Date().toLocaleTimeString();
 
             await Promise.allSettled(all.map(async ({ code, tag }, i) => {
+                await new Promise(r => setTimeout(r, i * 300)); // 每支錯開300ms
                 progress.style.width = `${Math.round((i+1)/all.length*100)}%`;
                 try {
                     const result = await analyzeStock(code);
