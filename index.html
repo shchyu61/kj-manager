@@ -600,9 +600,13 @@ conditions只在buy_signal為true時填入觸發的條件編號（如條件21、
                 })
             });
             const data = await resp.json();
-            const textBlock = data.content && data.content.find(b => b.type === 'text');
-            if (!textBlock) throw new Error("no text");
-            return JSON.parse(textBlock.text.replace(/```json|```/g, '').trim());
+            // 網路搜尋後回應包含多個block，取最後一個text block才是最終答案
+            const textBlocks = data.content && data.content.filter(b => b.type === 'text');
+            if (!textBlocks || textBlocks.length === 0) throw new Error("no text");
+            const lastText = textBlocks[textBlocks.length - 1].text;
+            const match = lastText.match(/\{[\s\S]*\}/);
+            if (!match) throw new Error("no json");
+            return JSON.parse(match[0]);
         };
 
         // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
