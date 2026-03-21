@@ -350,6 +350,7 @@
         let otpCode = "";
         let otpExpireTime = 0;
         let countdownTimer = null;
+        let otpEmail = "";       // ✅ 發送OTP時鎖定信箱，避免驗證時讀到不同值
 
         const getSafeDocId = (email) => email.toLowerCase().replace(/[@.]/g, '_');
         const getSharedDocPath = (email) =>
@@ -482,6 +483,7 @@
             btn.disabled = true;
             otpCode = generateOTP();
             otpExpireTime = Date.now() + 5 * 60 * 1000;
+            otpEmail = email;    // ✅ 鎖定信箱，驗證時直接用此值
 
             try {
                 await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, { to_email: email, otp: otpCode });
@@ -491,6 +493,7 @@
             } catch (e) {
                 window.showAlert('發送失敗。');
                 btn.disabled = false;
+                otpEmail = "";
             }
         });
 
@@ -500,7 +503,8 @@
             if (Date.now() > otpExpireTime) { showError('密碼已過期。'); return; }
             if (inputOtp !== otpCode) { showError('驗證碼錯誤。'); return; }
 
-            const email = getEmailInput();
+            // ✅ 使用發送時鎖定的 otpEmail，不再即時讀取輸入框（防止空白或誤值）
+            const email = otpEmail || getEmailInput();
             const btn = document.getElementById('btn-verify-otp');
             btn.disabled = true;
             try {
@@ -602,6 +606,11 @@
         stockNameMap["00919"] = "群益台灣精選高息";
         stockNameMap["00929"] = "復華台灣科技優息";
         stockNameMap["006208"] = "富邦台灣50";
+        stockNameMap["00818"] = "永豐美國500大";
+        stockNameMap["00646"] = "元大S&P500";
+        stockNameMap["00662"] = "富邦NASDAQ";
+        stockNameMap["00850"] = "元大臺灣ESG永續";
+        stockNameMap["00900"] = "富邦特選高股息30";
 
         // ── 技術指標計算工具函數 ──────────────────────────────────
         const calcRSI = (closes, period = 14) => {
@@ -725,19 +734,21 @@
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
             (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+            (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
+            (url) => `https://proxy.cors.sh/${url}`,
         ];
 
+        // ✅ 5個proxy同時競速，誰最快回應就用誰（Promise.any）
         const fetchWithFallback = async (yahooUrl) => {
-            for (const proxyFn of PROXIES) {
-                try {
-                    const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(10000) });
-                    if (!resp.ok) continue;
-                    const data = await resp.json();
-                    const result = data.chart && data.chart.result && data.chart.result[0];
-                    if (result) return result;
-                } catch(e) { /* 試下一個proxy */ }
-            }
-            throw new Error('all proxies failed');
+            const tryProxy = async (proxyFn) => {
+                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(12000) });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                const result = data.chart && data.chart.result && data.chart.result[0];
+                if (!result) throw new Error('no chart data');
+                return result;
+            };
+            return Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
         };
 
         // ── 並行工作池（建議3：最多3個同時執行）────────────────
