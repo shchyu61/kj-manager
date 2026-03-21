@@ -391,6 +391,7 @@
         const saveToCloud = async () => {
             if (!currentUserEmail || !window.db) return;
             try {
+                await initFirebaseAuth(); // ✅ 確保 Auth 有效再寫入，避免因 UID 過期被拒絕
                 await setDoc(getSharedDocPath(currentUserEmail), {
                     email: currentUserEmail,
                     stocks: stocks,
@@ -406,12 +407,14 @@
         const loadFromCloud = async (email) => {
             if (!email || !window.db) return;
             try {
-                await initFirebaseAuth(); // 確保已登入
+                await initFirebaseAuth();
                 const snap = await getDoc(getSharedDocPath(email));
                 if (snap.exists()) {
                     const data = snap.data();
-                    stocks    = (data.email === email) ? (data.stocks    || []) : [];
-                    watchlist = (data.email === email) ? (data.watchlist || []) : [];
+                    // ✅ 改用 toLowerCase 比對，避免大小寫不同導致讀到空陣列
+                    const match = data.email && data.email.toLowerCase() === email.toLowerCase();
+                    stocks    = match ? (data.stocks    || []) : [];
+                    watchlist = match ? (data.watchlist || []) : [];
                 } else {
                     stocks = []; watchlist = [];
                 }
@@ -421,6 +424,7 @@
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
                 window.renderStocks();
+                window.renderWatchlist(); // ✅ catch 也要呼叫，否則 watchlist 永遠空白
             }
         };
 
