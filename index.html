@@ -204,14 +204,20 @@
                 </div>
             </div>
             <div class="bg-white border-2 border-slate-200 rounded-[2.5rem] p-6 md:p-8 shadow-sm">
-                <div class="flex flex-col gap-3 mb-8">
+                <div class="flex flex-col gap-3 mb-6">
                     <div class="flex gap-3">
                         <input type="text" id="new-watchlist-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)"
                                class="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-400 uppercase transition-all">
                         <button id="btn-add-watchlist" class="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black text-sm hover:bg-amber-600 transition-all">新增</button>
                     </div>
+                    <button id="btn-watchlist-scan" onclick="startWatchlistScan()"
+                            class="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-black text-sm hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        <span id="watchlist-scan-text">全部診斷（掃描買進訊號）</span>
+                    </button>
                 </div>
-                <div id="watchlist-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[200px]"></div>
+                <!-- 診斷前顯示清單卡片，診斷後替換為含結果的卡片 -->
+                <div id="watchlist-list" class="grid grid-cols-1 gap-4 min-h-[200px]"></div>
             </div>
         </div>
 
@@ -258,13 +264,7 @@
                     <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                         <div id="scan-progress" class="bg-blue-600 h-full w-0 progress-bar-fill"></div>
                     </div>
-                    <div id="diagnostic-result" class="hide p-6 bg-slate-900 rounded-3xl text-white">
-                        <div class="flex items-center gap-2 mb-4">
-                            <i data-lucide="zap" class="w-4 h-4 text-yellow-400"></i>
-                            <span id="diagnostic-status-title" class="text-xs font-black tracking-widest uppercase text-emerald-400">診斷中...</span>
-                        </div>
-                        <div id="report-text" class="text-sm font-bold leading-relaxed text-slate-300">正在計算多維指標...</div>
-                    </div>
+                    <div id="scan-result-list" class="hide space-y-3"></div>
                 </div>
             </div>
         </div>
@@ -297,19 +297,19 @@
     <!-- 導航欄 -->
     <div id="tab-bar" class="hide fixed bottom-0 w-full bg-white/90 backdrop-blur-lg border-t border-slate-200 pb-8 pt-2">
         <div class="max-w-md mx-auto flex justify-around items-center">
-            <button onclick="switchPage('watchlist')" id="tab-watchlist" class="flex flex-col items-center gap-1 py-2 px-4 transition-all text-slate-400">
+            <button onclick="switchPage('watchlist')" id="tab-watchlist" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="eye" class="w-6 h-6"></i>
                 <span class="text-[10px] font-black">待買觀察</span>
             </button>
-            <button onclick="switchPage('monitor')" id="tab-monitor" class="flex flex-col items-center gap-1 py-2 px-4 transition-all tab-active">
+            <button onclick="switchPage('monitor')" id="tab-monitor" class="flex flex-col items-center gap-1 py-2 px-3 transition-all tab-active">
                 <i data-lucide="list" class="w-6 h-6"></i>
                 <span class="text-[10px] font-black">持股清單</span>
             </button>
-            <button onclick="switchPage('scan')" id="tab-scan" class="flex flex-col items-center gap-1 py-2 px-4 transition-all text-slate-400">
+            <button onclick="switchPage('scan')" id="tab-scan" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="brain-circuit" class="w-6 h-6"></i>
                 <span class="text-[10px] font-black">智能診斷</span>
             </button>
-            <button onclick="switchPage('settings')" id="tab-settings" class="flex flex-col items-center gap-1 py-2 px-4 transition-all text-slate-400">
+            <button onclick="switchPage('settings')" id="tab-settings" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="user-check" class="w-6 h-6"></i>
                 <span class="text-[10px] font-black">帳號權限</span>
             </button>
@@ -344,7 +344,7 @@
         };
 
         let stocks = [];
-        let watchlist = [];        // ✅ 新增：待買觀察清單
+        let watchlist = [];          // 待買觀察清單
         let currentUserEmail = "";
         let otpCode = "";
         let otpExpireTime = 0;
@@ -393,7 +393,7 @@
                 await setDoc(getSharedDocPath(currentUserEmail), {
                     email: currentUserEmail,
                     stocks: stocks,
-                    watchlist: watchlist,        // ✅ 新增
+                    watchlist: watchlist,
                     lastUpdated: new Date().toISOString()
                 });
             } catch (e) {
@@ -412,11 +412,10 @@
                     stocks    = (data.email === email) ? (data.stocks    || []) : [];
                     watchlist = (data.email === email) ? (data.watchlist || []) : [];
                 } else {
-                    stocks    = [];
-                    watchlist = [];
+                    stocks = []; watchlist = [];
                 }
                 window.renderStocks();
-                window.renderWatchlist();    // ✅ 新增
+                window.renderWatchlist();
             } catch (e) {
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
@@ -525,52 +524,6 @@
             }, 1000);
         };
 
-        // ✅ 待買觀察清單 渲染
-        window.renderWatchlist = () => {
-            const list = document.getElementById('watchlist-list');
-            document.getElementById('watchlist-count').innerText = watchlist.length;
-            if (watchlist.length === 0) {
-                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Watchlist</div>`;
-                return;
-            }
-            list.innerHTML = watchlist.map(s => {
-                const name = stockNameMap[s.code] || '未定義資產';
-                return `
-                <div class="flex items-center justify-between p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
-                        <div>
-                            <div class="font-black text-lg tracking-tight">${s.code}</div>
-                            <div class="text-[10px] font-black text-slate-400 uppercase">${name}</div>
-                        </div>
-                    </div>
-                    <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2">
-                        <i data-lucide="x-circle" class="w-5 h-5"></i>
-                    </button>
-                </div>`;
-            }).join('');
-            lucide.createIcons();
-        };
-
-        // ✅ 新增待買
-        document.getElementById('btn-add-watchlist').addEventListener('click', async () => {
-            const input = document.getElementById('new-watchlist-input');
-            const val   = input.value.trim().toUpperCase();
-            if (val && !watchlist.some(s => s.code === val)) {
-                watchlist.push({ code: val });
-                input.value = '';
-                window.renderWatchlist();
-                await saveToCloud();
-            }
-        });
-
-        // ✅ 移除待買
-        window.removeWatchlist = async (code) => {
-            watchlist = watchlist.filter(s => s.code !== code);
-            window.renderWatchlist();
-            await saveToCloud();
-        };
-
         window.renderStocks = () => {
             const list = document.getElementById('stock-list');
             document.getElementById('stock-count').innerText = stocks.length;
@@ -620,24 +573,203 @@
             ['watchlist', 'monitor', 'scan', 'settings'].forEach(p => {
                 const tab = document.getElementById(`tab-${p}`);
                 if (tab) {
-                    p === pageName ? tab.classList.add('tab-active') : tab.classList.remove('tab-active');
+                    p === pageName ? tab.classList.add('tab-active')       : tab.classList.remove('tab-active');
                     p === pageName ? tab.classList.remove('text-slate-400') : tab.classList.add('text-slate-400');
                 }
             });
         };
 
-        window.startManualScan = () => {
-            if (stocks.length === 0) { window.showAlert('請先新增監控對象。'); return; }
-            const progress = document.getElementById('scan-progress');
-            const resultBox = document.getElementById('diagnostic-result');
+        // ── 技術指標診斷（透過 Claude API + 網路搜尋）────────────
+        const analyzeStock = async (code) => {
+            const name = stockNameMap[code] || code;
+            const prompt = `你是技術分析系統。針對「${code}（${name}）」，用網路搜尋取得最新價格與技術指標，回傳以下JSON（只回傳JSON，不要任何其他文字或說明）：
+{"price":"最新收盤價","rsi":RSI數值,"rsi_trend":"rising或falling","boll_position":"near_upper或mid_zone或near_lower","buy_signal":true或false,"conditions":["條件21"]}
+布林位置：收盤價高於布林中軌且靠近上軌=near_upper，中軌附近=mid_zone，低於中軌或靠近下軌=near_lower。
+買進訊號：RSI上升且RSI>35且MACD柱向上且價格在布林中軌以下=buy_signal:true。
+conditions只在buy_signal為true時填入觸發的條件編號（如條件21、條件47、截圖條件），否則填[]。`;
+
+            const resp = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "claude-sonnet-4-20250514",
+                    max_tokens: 500,
+                    tools: [{ type: "web_search_20250305", name: "web_search" }],
+                    messages: [{ role: "user", content: prompt }]
+                })
+            });
+            const data = await resp.json();
+            const textBlock = data.content && data.content.find(b => b.type === 'text');
+            if (!textBlock) throw new Error("no text");
+            return JSON.parse(textBlock.text.replace(/```json|```/g, '').trim());
+        };
+
+        // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
+        const makeDiagCard = (code, result, bgDark) => {
+            const name     = stockNameMap[code] || '未定義資產';
+            const hasBuy   = result.buy_signal;
+            const arrow    = result.rsi_trend === 'rising' ? '↑' : '↓';
+            const rsiClr   = result.rsi_trend === 'rising'
+                             ? (bgDark ? 'text-emerald-400' : 'text-emerald-600')
+                             : (bgDark ? 'text-rose-400'    : 'text-rose-500');
+            const bollMap  = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
+            const condText = hasBuy && result.conditions && result.conditions.length
+                             ? '觸發：' + result.conditions.join('、') : '';
+            const cardBg   = bgDark
+                ? (hasBuy ? 'border-emerald-500 bg-emerald-950' : 'border-slate-700 bg-slate-900')
+                : (hasBuy ? 'border-emerald-300 bg-emerald-50'  : 'border-slate-200 bg-white');
+            const textMain = bgDark ? 'text-white'     : 'text-slate-800';
+            const textSub  = bgDark ? 'text-slate-400' : 'text-slate-400';
+            const tagBg    = bgDark ? 'bg-slate-800'   : 'bg-white/70';
+
+            return `<div class="border-2 rounded-[2rem] p-5 ${cardBg}">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl ${hasBuy ? 'bg-emerald-200 text-emerald-700' : (bgDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500')} flex items-center justify-center font-black">${code[0]}</div>
+                        <div>
+                            <div class="font-black ${textMain}">${code}</div>
+                            <div class="text-[10px] ${textSub} uppercase">${name}</div>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <div class="font-black text-base ${textMain}">${result.price}</div>
+                        <div class="text-[10px] font-black ${hasBuy ? 'text-emerald-500' : textSub}">${hasBuy ? '⭐ 買進訊號' : '持觀望'}</div>
+                    </div>
+                </div>
+                <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
+                    <span class="px-2 py-1 ${tagBg} rounded-lg ${rsiClr}">RSI ${result.rsi} ${arrow}</span>
+                    <span class="px-2 py-1 ${tagBg} rounded-lg ${hasBuy ? 'text-emerald-500' : textSub}">${bollMap[result.boll_position] || result.boll_position}</span>
+                    ${condText ? `<span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg">${condText}</span>` : ''}
+                </div>
+            </div>`;
+        };
+
+        const makeLoadingCard = (code, bgDark) => {
+            const textClr = bgDark ? 'text-white' : 'text-slate-800';
+            const bgCard  = bgDark ? 'border-slate-700 bg-slate-900' : 'border-blue-200 bg-blue-50';
+            return `<div id="wl-card-${code}" class="border-2 rounded-[2rem] p-5 ${bgCard}">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl ${bgDark ? 'bg-slate-700 text-slate-300' : 'bg-blue-100 text-blue-600'} flex items-center justify-center font-black">${code[0]}</div>
+                    <div class="font-black ${textClr}">${code}</div>
+                    <div class="ml-auto text-xs text-blue-500 font-black animate-pulse">診斷中...</div>
+                </div>
+            </div>`;
+        };
+
+        // ── 待買觀察清單：全部診斷 ──────────────────────────────
+        window.startWatchlistScan = async () => {
+            if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
+            const btn = document.getElementById('btn-watchlist-scan');
+            const txt = document.getElementById('watchlist-scan-text');
+            btn.disabled = true;
+            const list = document.getElementById('watchlist-list');
+            list.innerHTML = watchlist.map(s => makeLoadingCard(s.code, false)).join('');
+
+            for (let i = 0; i < watchlist.length; i++) {
+                const code = watchlist[i].code;
+                txt.innerText = `診斷中（${i+1}/${watchlist.length}）...`;
+                try {
+                    const result = await analyzeStock(code);
+                    document.getElementById(`wl-card-${code}`).outerHTML = makeDiagCard(code, result, false);
+                } catch(e) {
+                    document.getElementById(`wl-card-${code}`).outerHTML =
+                        `<div class="border-2 border-rose-200 bg-rose-50 rounded-[2rem] p-5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center font-black">${code[0]}</div>
+                            <div><div class="font-black">${code}</div><div class="text-[10px] text-rose-400">無法取得資料</div></div>
+                        </div>`;
+                }
+            }
+            btn.disabled = false;
+            txt.innerText = '全部診斷（掃描買進訊號）';
+        };
+
+        // ── 智能診斷：掃描持股＋待買觀察兩個清單 ───────────────
+        window.startManualScan = async () => {
+            const all = [
+                ...stocks.map(s => ({ code: s.code, tag: '持股' })),
+                ...watchlist.map(s => ({ code: s.code, tag: '觀察' }))
+            ];
+            if (all.length === 0) { window.showAlert('請先新增股票。'); return; }
+
+            const progress  = document.getElementById('scan-progress');
+            const resultDiv = document.getElementById('scan-result-list');
             progress.style.width = '0%';
-            resultBox.classList.add('hide');
-            setTimeout(() => progress.style.width = '100%', 100);
-            setTimeout(() => {
-                resultBox.classList.remove('hide');
-                document.getElementById('last-diagnostic-time').innerText = new Date().toLocaleTimeString();
-                document.getElementById('report-text').innerHTML = stocks.map(s => `• <b class="text-blue-400">${s.code}</b>: RSI 持穩。<br>`).join('');
-            }, 2000);
+            resultDiv.classList.remove('hide');
+            resultDiv.innerHTML = all.map(({ code, tag }) =>
+                `<div id="sc-card-${code}" class="border-2 border-slate-700 bg-slate-900 rounded-[2rem] p-4 flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-slate-700 text-slate-300 flex items-center justify-center font-black text-sm">${code[0]}</div>
+                    <span class="font-black text-white">${code}</span>
+                    <span class="text-[10px] text-slate-400">(${tag})</span>
+                    <span class="ml-auto text-xs text-blue-400 font-black animate-pulse">診斷中...</span>
+                </div>`
+            ).join('');
+            document.getElementById('last-diagnostic-time').innerText = new Date().toLocaleTimeString();
+
+            for (let i = 0; i < all.length; i++) {
+                const { code, tag } = all[i];
+                progress.style.width = `${Math.round((i+1)/all.length*100)}%`;
+                try {
+                    const result = await analyzeStock(code);
+                    const name = stockNameMap[code] || '未定義資產';
+                    const cardHtml = makeDiagCard(code, result, true)
+                        .replace(`<div class="text-[10px] ${result.rsi_trend === 'rising' ? 'text-emerald-400' : 'text-rose-400'} uppercase">${name}</div>`,
+                                 `<div class="text-[10px] text-slate-400 uppercase">${name} <span class="text-blue-400">(${tag})</span></div>`);
+                    document.getElementById(`sc-card-${code}`).outerHTML = cardHtml;
+                } catch(e) {
+                    document.getElementById(`sc-card-${code}`).outerHTML =
+                        `<div class="border-2 border-rose-800 bg-slate-900 rounded-[2rem] p-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-slate-700 text-rose-400 flex items-center justify-center font-black text-sm">${code[0]}</div>
+                            <span class="font-black text-white">${code}</span>
+                            <span class="text-[10px] text-rose-400 ml-1">無法取得資料</span>
+                        </div>`;
+                }
+            }
+        };
+
+        // ── 待買觀察清單：渲染/新增/刪除 ──────────────────────
+        window.renderWatchlist = () => {
+            const list = document.getElementById('watchlist-list');
+            document.getElementById('watchlist-count').innerText = watchlist.length;
+            if (watchlist.length === 0) {
+                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Watchlist</div>`;
+                return;
+            }
+            list.innerHTML = watchlist.map(s => {
+                const name = stockNameMap[s.code] || '未定義資產';
+                return `<div class="flex items-center justify-between p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
+                        <div><div class="font-black text-lg tracking-tight">${s.code}</div><div class="text-[10px] font-black text-slate-400 uppercase">${name}</div></div>
+                    </div>
+                    <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        };
+
+        document.getElementById('btn-add-watchlist').addEventListener('click', async () => {
+            const input = document.getElementById('new-watchlist-input');
+            const val = input.value.trim().toUpperCase();
+            if (val && !watchlist.some(s => s.code === val)) {
+                watchlist.push({ code: val }); input.value = '';
+                window.renderWatchlist(); await saveToCloud();
+            }
+        });
+        window.removeWatchlist = async (code) => {
+            watchlist = watchlist.filter(s => s.code !== code);
+            window.renderWatchlist(); await saveToCloud();
+        };
+
+        window.switchPage = (pageName) => {
+            document.querySelectorAll('main > div').forEach(div => div.classList.add('hide'));
+            document.getElementById(`page-${pageName}`).classList.remove('hide');
+            ['watchlist', 'monitor', 'scan', 'settings'].forEach(p => {
+                const tab = document.getElementById(`tab-${p}`);
+                if (tab) {
+                    p === pageName ? tab.classList.add('tab-active') : tab.classList.remove('tab-active');
+                    p === pageName ? tab.classList.remove('text-slate-400') : tab.classList.add('text-slate-400');
+                }
+            });
         };
 
         document.getElementById('btn-logout').addEventListener('click', () => location.reload());
