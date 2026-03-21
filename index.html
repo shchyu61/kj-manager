@@ -580,34 +580,110 @@
             });
         };
 
-        // ── 技術指標診斷（透過 Claude API + 網路搜尋）────────────
-        const analyzeStock = async (code) => {
-            const name = stockNameMap[code] || code;
-            const prompt = `你是技術分析系統。針對「${code}（${name}）」，用網路搜尋取得最新價格與技術指標，回傳以下JSON（只回傳JSON，不要任何其他文字或說明）：
-{"price":"最新收盤價","rsi":RSI數值,"rsi_trend":"rising或falling","boll_position":"near_upper或mid_zone或near_lower","buy_signal":true或false,"conditions":["條件21"]}
-布林位置：收盤價高於布林中軌且靠近上軌=near_upper，中軌附近=mid_zone，低於中軌或靠近下軌=near_lower。
-買進訊號：RSI上升且RSI>35且MACD柱向上且價格在布林中軌以下=buy_signal:true。
-conditions只在buy_signal為true時填入觸發的條件編號（如條件21、條件47、截圖條件），否則填[]。
-台股代碼請搜尋時加上.TW後綴（如0050.TW、00878.TW）以取得正確資料。`;
+        // ── stockNameMap 補充台股ETF ────────────────────────────
+        stockNameMap["00713"] = "元大台灣高息低波";
+        stockNameMap["00878"] = "國泰永續高股息";
+        stockNameMap["00919"] = "群益台灣精選高息";
+        stockNameMap["00929"] = "復華台灣科技優息";
+        stockNameMap["006208"] = "富邦台灣50";
 
-            const resp = await fetch("https://api.anthropic.com/v1/messages", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514",
-                    max_tokens: 500,
-                    tools: [{ type: "web_search_20250305", name: "web_search" }],
-                    messages: [{ role: "user", content: prompt }]
-                })
-            });
+        // ── 技術指標計算工具函數 ──────────────────────────────────
+        const calcRSI = (closes, period = 14) => {
+            if (closes.length < period + 1) return null;
+            let gains = 0, losses = 0;
+            for (let i = 1; i <= period; i++) {
+                const diff = closes[i] - closes[i - 1];
+                if (diff >= 0) gains += diff; else losses -= diff;
+            }
+            let avgGain = gains / period, avgLoss = losses / period;
+            for (let i = period + 1; i < closes.length; i++) {
+                const diff = closes[i] - closes[i - 1];
+                avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+                avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
+            }
+            if (avgLoss === 0) return 100;
+            return 100 - 100 / (1 + avgGain / avgLoss);
+        };
+
+        const calcBoll = (closes, period = 20) => {
+            if (closes.length < period) return null;
+            const slice = closes.slice(-period);
+            const mean = slice.reduce((a, b) => a + b, 0) / period;
+            const std  = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period);
+            return { upper: mean + 2 * std, mid: mean, lower: mean - 2 * std };
+        };
+
+        const calcEMA = (arr, period) => {
+            const k = 2 / (period + 1);
+            let ema = arr[0];
+            for (let i = 1; i < arr.length; i++) ema = arr[i] * k + ema * (1 - k);
+            return ema;
+        };
+
+        const calcMACDHist = (closes) => {
+            if (closes.length < 27) return null;
+            // 計算最後幾根的EMA12/26
+            const ema12 = (arr) => { const k = 2/13; let e = arr[0]; for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k); return e; };
+            const ema26 = (arr) => { const k = 2/27; let e = arr[0]; for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k); return e; };
+            // 當根 MACD 柱
+            const macd_now  = ema12(closes) - ema26(closes);
+            const macd_prev = ema12(closes.slice(0,-1)) - ema26(closes.slice(0,-1));
+            return { now: macd_now, prev: macd_prev };
+        };
+
+        // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
+        const analyzeStock = async (code) => {
+            // 台股代碼加 .TW 或 .TWO 後綴
+            let ticker = code;
+            if (/^\d{4,6}$/.test(code)) ticker = code + '.TW';
+
+            // 使用 CORS proxy 取得 Yahoo Finance 週K資料（近2年）
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&range=2y`;
+            const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+
+            const resp = await fetch(proxy);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
-            // 網路搜尋後回應包含多個block，取最後一個text block才是最終答案
-            const textBlocks = data.content && data.content.filter(b => b.type === 'text');
-            if (!textBlocks || textBlocks.length === 0) throw new Error("no text");
-            const lastText = textBlocks[textBlocks.length - 1].text;
-            const match = lastText.match(/\{[\s\S]*\}/);
-            if (!match) throw new Error("no json");
-            return JSON.parse(match[0]);
+
+            const result = data.chart && data.chart.result && data.chart.result[0];
+            if (!result) throw new Error('no data');
+
+            const closes  = result.indicators.quote[0].close.filter(v => v != null);
+            const highs   = result.indicators.quote[0].high.filter(v => v != null);
+            if (closes.length < 26) throw new Error('insufficient data');
+
+            const price   = closes[closes.length - 1];
+            const boll    = calcBoll(closes);
+            const rsiNow  = calcRSI(closes);
+            const rsiPrev = calcRSI(closes.slice(0, -1));
+            const macd    = calcMACDHist(closes);
+
+            if (!boll || rsiNow === null || rsiPrev === null || !macd) throw new Error('calc fail');
+
+            const rsi_trend    = rsiNow > rsiPrev ? 'rising' : 'falling';
+            const boll_position = price >= boll.upper * 0.97 ? 'near_upper'
+                                : price <= boll.lower * 1.03 ? 'near_lower' : 'mid_zone';
+            const macd_rising  = macd.now > macd.prev;
+
+            // 買進訊號：RSI上升 AND RSI>35 AND MACD柱放大 AND 價格在布林中軌以下
+            const buy_signal = rsi_trend === 'rising' && rsiNow > 35 && macd_rising && price < boll.mid;
+
+            // 條件對應（簡化版，顯示行號）
+            let conditions = [];
+            if (buy_signal) {
+                if (price <= boll.lower * 1.03) conditions.push('截圖條件');
+                if (rsiNow < 50 && macd_rising)  conditions.push('條件27');
+                if (conditions.length === 0)      conditions.push('條件23');
+            }
+
+            return {
+                price:        price.toFixed(2),
+                rsi:          Math.round(rsiNow * 10) / 10,
+                rsi_trend,
+                boll_position,
+                buy_signal,
+                conditions
+            };
         };
 
         // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
