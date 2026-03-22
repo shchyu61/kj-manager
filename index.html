@@ -245,14 +245,6 @@
                         💡 安聯月配息基金無直接代碼，建議改用三合一追蹤：<br>
                         請分別新增 <span style="color:#1a5a30; font-weight:900;">SPY（美股）、QQQ（美股）、HYG（基金）</span>，系統將依 3_stock_monitor 策略判斷買賣訊號。
                     </div>
-                    <!-- 待買觀察：匯出/匯入備份 -->
-                    <div class="flex gap-2">
-                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-xs font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
-                        <label class="flex-1 py-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
-                            ⬆ 匯入還原 JSON
-                            <input type="file" accept=".json" class="hidden" onchange="importData(event)">
-                        </label>
-                    </div>
                     <button id="btn-watchlist-scan" onclick="startWatchlistScan()"
                             class="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-black text-sm hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
                         <i data-lucide="search" class="w-4 h-4"></i>
@@ -305,6 +297,11 @@
                             ⬆ 匯入還原 JSON
                             <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
                         </label>
+                    </div>
+                    <!-- 持股清單：安聯基金提示（選基金時顯示）-->
+                    <div id="stock-fund-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fff3cd; color:#7a4a00; border:1px solid #f0c878;">
+                        💡 安聯月配息基金無直接代碼，建議改用三合一追蹤：<br>
+                        請分別新增 <span style="color:#1a5a30; font-weight:900;">SPY（美股）、QQQ（美股）、HYG（基金）</span>，系統將依 3_stock_monitor 策略判斷買賣訊號。
                     </div>
                 </div>
                 <!-- 分類Tab -->
@@ -369,12 +366,6 @@
                 <!-- 匯出匯入（也放帳號頁一份） -->
                 <div class="rounded-2xl p-4 space-y-3" style="background:#ede0cc;">
                     <div class="text-sm font-black" style="color:#3a2010;">💾 資料備份與還原</div>
-                    <div class="text-xs rounded-xl px-3 py-2" style="background:#faf4ea; color:#5a3a10;">
-                        📋 <strong>備份內容包含：</strong><br>
-                        ✅ 【待買觀察】所有標的物（代碼＋類別）<br>
-                        ✅ 【持股清單】所有標的物（代碼＋類別）<br>
-                        ❌ 不含帳號密碼（密碼存在 Firebase，無法匯出）
-                    </div>
                     <div class="flex gap-2">
                         <button onclick="exportData()" class="flex-1 py-2.5 rounded-xl text-xs font-black border" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">⬇ 匯出 JSON</button>
                         <label class="flex-1 py-2.5 rounded-xl text-xs font-black border text-center cursor-pointer" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">
@@ -1093,8 +1084,12 @@
 
         // ── 需求2：安聯基金提示（選基金分類時顯示）──────────────
         document.addEventListener('change', (e) => {
-            if (e.target.id === 'new-watchlist-cat' || e.target.id === 'new-stock-cat') {
+            if (e.target.id === 'new-watchlist-cat') {
                 const hint = document.getElementById('fund-hint');
+                if (hint) hint.classList.toggle('hide', e.target.value !== 'fund');
+            }
+            if (e.target.id === 'new-stock-cat') {
+                const hint = document.getElementById('stock-fund-hint');
                 if (hint) hint.classList.toggle('hide', e.target.value !== 'fund');
             }
         });
