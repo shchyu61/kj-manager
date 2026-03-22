@@ -50,11 +50,11 @@
         }
     </script>
     <style>
-        body { background-color: #ece8f4; font-family: 'Noto Sans TC', sans-serif; }
+        body { background-color: #f0e8d8; font-family: 'Noto Sans TC', sans-serif; }
         .hide { display: none !important; }
         #security-overlay {
             backdrop-filter: blur(25px);
-            background: rgba(30, 22, 48, 0.98);
+            background: rgba(42, 16, 0, 0.97);
         }
         .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
         @keyframes shake {
@@ -63,7 +63,7 @@
             30, 50, 70% { transform: translate3d(-4px, 0, 0); }
             40, 60% { transform: translate3d(4px, 0, 0); }
         }
-        .tab-active { color: #5040a0; border-top: 3px solid #5040a0; }
+        .tab-active { color: #8a4a18; border-top: 3px solid #8a4a18; }
         .scan-line {
             height: 2px;
             background: linear-gradient(90deg, transparent, #3b82f6, transparent);
@@ -103,7 +103,7 @@
             content: '';
             flex: 1;
             height: 1px;
-            background: #e2e8f0;
+            background: #d4c0a0;
         }
     </style>
 </head>
@@ -111,7 +111,7 @@
 
     <!-- [Security Layer] 驗證介面 -->
     <div id="security-overlay" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div id="auth-card" class="max-w-md w-full rounded-3xl p-5 shadow-2xl text-center border" style="background:#f0eef8; border-color:#c8c0e0;">
+        <div id="auth-card" class="max-w-md w-full rounded-3xl p-5 shadow-2xl text-center border" style="background:#faf4ea; border-color:#d4c0a0;">
             <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3">
                 <i data-lucide="shield-check" class="w-6 h-6"></i>
             </div>
@@ -126,7 +126,7 @@
                         <span class="text-blue-500 font-bold normal-case">Gmail 可免輸入 @gmail.com</span>
                     </label>
                     <input type="text" id="auth-email" placeholder="如: shchyu61" 
-                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold focus:ring-2 focus:ring-purple-400 outline-none transition-all" style="background:#e4e0f0;">
+                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
                     <p class="text-[9px] text-slate-400 ml-2 italic">※ Yahoo 或其他信箱請輸入完整地址</p>
                 </div>
             </div>
@@ -137,7 +137,7 @@
                 <div class="flex flex-col gap-1">
                     <label class="text-[10px] font-black text-slate-500 ml-2 tracking-tight uppercase">Daily Key / 每日密碼</label>
                     <input type="password" id="access-key-input" placeholder="輸入每日密碼" 
-                           class="w-full border-none rounded-xl py-2.5 px-6 text-lg font-bold tracking-widest focus:ring-2 focus:ring-purple-400 outline-none transition-all" style="background:#e4e0f0;">
+                           class="w-full border-none rounded-xl py-2.5 px-6 text-lg font-bold tracking-widest focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
                 </div>
                 <button id="btn-verify-key" 
                         class="w-full py-2.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all flex items-center justify-center gap-2">
@@ -162,7 +162,7 @@
                         <p class="text-[10px] text-emerald-600 mt-0.5">有效時間：<span id="otp-countdown" class="font-black">05:00</span></p>
                     </div>
                     <input type="text" id="otp-input" placeholder="輸入6碼一次性密碼" maxlength="6"
-                           class="otp-input w-full border-none rounded-xl py-2.5 px-4 focus:ring-2 focus:ring-purple-400 outline-none transition-all" style="background:#e4e0f0;">
+                           class="otp-input w-full border-none rounded-xl py-2.5 px-4 focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
                     <div class="flex gap-2">
                         <button id="btn-verify-otp" 
                                 class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
@@ -187,7 +187,7 @@
         <span id="alert-text">發生錯誤</span>
     </div>
 
-    <nav class="fixed top-0 w-full z-50 backdrop-blur-md border-b" style="background:rgba(240,238,248,0.92); border-color:#c8c0e0;">
+    <nav class="fixed top-0 w-full z-50 backdrop-blur-md border-b" style="background:rgba(250,244,234,0.92); border-color:#d4c0a0;">
         <div class="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow font-black italic">K</div>
@@ -210,11 +210,11 @@
                     <span class="text-[10px] font-black text-slate-400 block uppercase">觀察中</span>
                 </div>
             </div>
-            <div class="rounded-[2.5rem] p-6 md:p-8 shadow-sm border-2" style="background:#f8f6fc; border-color:#c8c0e0;">
+            <div class="rounded-[2.5rem] p-6 md:p-8 shadow-sm border-2" style="background:#faf4ea; border-color:#d4c0a0;">
                 <div class="flex flex-col gap-3 mb-6">
                     <div class="flex gap-3">
                         <input type="text" id="new-watchlist-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)"
-                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-purple-400 uppercase transition-all border" style="background:#e8e4f0; border-color:#c0b8d8;">
+                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-400 uppercase transition-all border" style="background:#ede0cc; border-color:#c4a878;">
                         <button id="btn-add-watchlist" class="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black text-sm hover:bg-amber-600 transition-all">新增</button>
                     </div>
                     <button id="btn-watchlist-scan" onclick="startWatchlistScan()"
@@ -240,11 +240,11 @@
                     <span class="text-[10px] font-black text-slate-400 block uppercase">監控中</span>
                 </div>
             </div>
-            <div class="rounded-[2.5rem] p-6 md:p-8 shadow-sm border-2" style="background:#f8f6fc; border-color:#c8c0e0;">
+            <div class="rounded-[2.5rem] p-6 md:p-8 shadow-sm border-2" style="background:#faf4ea; border-color:#d4c0a0;">
                 <div class="flex flex-col gap-3 mb-8">
                     <div class="flex gap-3">
                         <input type="text" id="new-stock-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)" 
-                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-purple-500 uppercase transition-all border" style="background:#e8e4f0; border-color:#c0b8d8;">
+                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-500 uppercase transition-all border" style="background:#ede0cc; border-color:#c4a878;">
                         <button id="btn-add-stock" class="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-sm hover:bg-blue-600 transition-all">新增</button>
                     </div>
                 </div>
@@ -302,7 +302,7 @@
     </main>
 
     <!-- 導航欄 -->
-    <div id="tab-bar" class="hide fixed bottom-0 w-full backdrop-blur-lg border-t pb-8 pt-2" style="background:rgba(240,238,248,0.95); border-color:#c8c0e0;">
+    <div id="tab-bar" class="hide fixed bottom-0 w-full backdrop-blur-lg border-t pb-8 pt-2" style="background:rgba(250,244,234,0.95); border-color:#d4c0a0;">
         <div class="max-w-md mx-auto flex justify-around items-center">
             <button onclick="switchPage('watchlist')" id="tab-watchlist" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="eye" class="w-6 h-6"></i>
