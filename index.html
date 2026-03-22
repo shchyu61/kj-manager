@@ -50,8 +50,29 @@
         }
     </script>
     <style>
-        body { background-color: #f0e8d8; font-family: 'Noto Sans TC', sans-serif; }
+        /* ── 響應式基準：手機16px，筆電14px ── */
+        html { font-size: 16px; }
+        @media (min-width: 640px) { html { font-size: 15px; } }
+        @media (min-width: 1024px) { html { font-size: 14px; } }
+
+        body { background-color: #f0e8d8; font-family: 'Noto Sans TC', sans-serif; -webkit-text-size-adjust: 100%; }
         .hide { display: none !important; }
+
+        /* ── 手機：登入卡片字體放大 ── */
+        @media (max-width: 640px) {
+            #auth-card { padding: 1.4rem !important; }
+            #auth-card h2 { font-size: 1.1rem !important; line-height: 1.4 !important; }
+            #auth-card p { font-size: 0.85rem !important; }
+            #auth-card input { font-size: 1rem !important; padding: 0.7rem 1rem !important; }
+            #auth-card button { font-size: 0.95rem !important; padding: 0.7rem !important; }
+            #auth-card label { font-size: 0.7rem !important; }
+            /* 底部Tab文字放大 */
+            #tab-bar span { font-size: 0.72rem !important; }
+            /* 頁面副標題放大 */
+            main .text-\[10px\] { font-size: 0.72rem !important; }
+            /* 診斷卡片文字放大 */
+            .diag-rsi { font-size: 0.75rem !important; }
+        }
         #security-overlay {
             backdrop-filter: blur(25px);
             background: rgba(42, 16, 0, 0.97);
@@ -110,8 +131,8 @@
 <body class="text-slate-800 antialiased">
 
     <!-- [Security Layer] 驗證介面 -->
-    <div id="security-overlay" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div id="auth-card" class="max-w-md w-full rounded-3xl p-5 shadow-2xl text-center border" style="background:#faf4ea; border-color:#c4a878;">
+    <div id="security-overlay" class="fixed inset-0 z-[100] flex items-start justify-center p-4 overflow-y-auto">
+        <div id="auth-card" class="max-w-md w-full rounded-3xl p-5 shadow-2xl text-center border my-auto" style="background:#faf4ea; border-color:#c4a878;">
             <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3">
                 <i data-lucide="shield-check" class="w-6 h-6"></i>
             </div>
@@ -327,7 +348,12 @@
         import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        lucide.createIcons();
+        // ✅ 確保盾牌等圖示一定渲染（module script為defer，需手動補觸發）
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+        } else {
+            lucide.createIcons();
+        }
 
         // EmailJS 初始化
         emailjs.init('5dk4HoCBYIS7ypwiw');
@@ -721,7 +747,7 @@
                     </div>
                     <!-- 中：RSI + 布林（固定寬度，防超框）-->
                     <div class="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-black px-1 min-w-[60px] max-w-[72px]">
-                        <span class="${rsiClr} whitespace-nowrap">RSI ${result.rsi} ${arrow}</span>
+                        <span class="diag-rsi ${rsiClr} whitespace-nowrap">RSI ${result.rsi} ${arrow}</span>
                         <span class="${bollClr[result.boll_position] || textSub} text-center leading-tight whitespace-nowrap">${bollMap[result.boll_position] || result.boll_position}</span>
                     </div>
                     <!-- 右：價格 + 狀態（flex-1自動撐開不截斷）-->
