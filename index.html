@@ -63,7 +63,7 @@
         #auth-card p { font-size: 0.9rem; }
         #auth-card input { font-size: 1.06rem; padding: 0.76rem 1.01rem; }
         #auth-card button { font-size: 1rem; padding: 0.76rem 1.01rem; }
-        #auth-card label { font-size: 0.75rem; }
+        #auth-card label { font-size: 0.85rem; }
         /* 底部Tab文字 */
         #tab-bar span { font-size: 0.72rem; }
         /* 診斷卡片RSI文字 */
@@ -111,9 +111,9 @@
             align-items: center;
             gap: 12px;
             color: #94a3b8;
-            font-size: 10px;
+            font-size: 0.85rem;
             font-weight: 900;
-            letter-spacing: 0.15em;
+            letter-spacing: 0.1em;
         }
         .divider::before, .divider::after {
             content: '';
@@ -137,13 +137,13 @@
             <!-- 信箱輸入 -->
             <div class="space-y-2 text-left mb-3">
                 <div class="flex flex-col gap-1">
-                    <label class="text-[10px] font-black text-slate-500 ml-2 tracking-tight uppercase flex justify-between">
+                    <label class="text-sm font-black text-slate-500 ml-2 tracking-tight uppercase flex justify-between">
                         <span>User Account / 信箱帳號</span>
                         <span class="text-blue-500 font-bold normal-case">Gmail 可免輸入 @gmail.com</span>
                     </label>
                     <input type="text" id="auth-email" placeholder="如: shchyu61" 
                            class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
-                    <p class="text-[9px] text-slate-400 ml-2 italic">※ Yahoo 或其他信箱請輸入完整地址</p>
+                    <p class="text-xs text-slate-400 ml-2 italic">※ Yahoo 或其他信箱請輸入完整地址</p>
                 </div>
             </div>
 
@@ -151,7 +151,7 @@
             <div id="section-daily-key" class="space-y-2 text-left">
                 <div class="divider">方式 A：每日密碼</div>
                 <div class="flex flex-col gap-1">
-                    <label class="text-[10px] font-black text-slate-500 ml-2 tracking-tight uppercase">Daily Key / 每日密碼</label>
+                    <label class="text-sm font-black text-slate-500 ml-2 tracking-tight uppercase">Daily Key / 每日密碼</label>
                     <input type="password" id="access-key-input" placeholder="輸入每日密碼" 
                            class="w-full border-none rounded-xl py-2.5 px-6 text-lg font-bold tracking-widest focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
                 </div>
