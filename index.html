@@ -1020,6 +1020,7 @@
                     p === pageName ? tab.classList.remove('text-slate-400') : tab.classList.add('text-slate-400');
                 }
             });
+            lucide.createIcons(); // ✅ 新增這一行，登入首頁的上方小圖盾牌才會出現
         };
 
         document.getElementById('btn-logout').addEventListener('click', () => location.reload());
