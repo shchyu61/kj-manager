@@ -1,22 +1,38 @@
 # ============================================================
 # GitHub Actions：股票自動掃描排程
 # 檔案位置：.github/workflows/stock_scan.yml
-# 說明：每週一~五 09:00 和 14:30（台灣時間）自動執行
-#       等同 UTC 01:00 和 06:30（台灣 = UTC+8）
+# 說明：
+#   scan job      → 每週一~五 09:00 和 14:30（台灣時間）自動執行
+#   futures-scan  → 週一15:01~週三13:30，每5分鐘觸發一次
+#                   由 Python 自行判斷時段，非時段直接 exit
+# 台灣時間 = UTC+8
 # ============================================================
 
 name: 股票週K自動掃描通知
 
 on:
   schedule:
-    # 台灣時間 09:00 = UTC 01:00（週一~五）
+    # ── 週K掃描：台灣時間 09:00 = UTC 01:00（週一~五）──
     - cron: '0 1 * * 1-5'
-    # 台灣時間 14:30 = UTC 06:30（週一~五）
+    # ── 週K掃描：台灣時間 14:30 = UTC 06:30（週一~五）──
     - cron: '30 6 * * 1-5'
+
+    # ── 期貨5分K：週一 15:01~23:59 台灣 = UTC 07:01~15:59 ──
+    - cron: '*/5 7-15 * * 1'
+    # ── 期貨5分K：週二 全天 台灣 = UTC 週一16:00~週二15:59 ──
+    - cron: '*/5 16-23 * * 1'
+    - cron: '*/5 0-15 * * 2'
+    # ── 期貨5分K：週三 00:00~13:30 台灣 = UTC 週二16:00~週三05:30 ──
+    - cron: '*/5 16-23 * * 2'
+    - cron: '*/5 0-5 * * 3'
+
   # 允許手動觸發（測試用）
   workflow_dispatch:
 
 jobs:
+  # ============================================================
+  # Job 1：週K掃描（原有，不動）
+  # ============================================================
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30    # 最多跑30分鐘，避免超時
@@ -46,3 +62,41 @@ jobs:
         run: |
           python 3_stock_monitor_GitHub.py
 
+  # ============================================================
+  # Job 2：期貨5分K掃描（新增）
+  # TEST_MODE='5mk' 由環境變數傳入，Python 自行判斷時段
+  # 非時段（週一15:01前、週三13:30後）Python 會直接 exit
+  # ============================================================
+  futures-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8     # 單次最多8分鐘（5分K一次掃描足夠）
+
+    steps:
+      # 1. 取得程式碼
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      # 2. 安裝 Python 3.11
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # 3. 安裝所需套件
+      - name: 安裝套件
+        run: |
+          pip install yfinance pandas pandas-ta pytz twstock cryptography
+
+      # 4. 執行期貨5分K掃描
+      #    TEST_MODE='5mk' → 觸發期貨模式
+      #    Python 內部時段判斷：非時段直接 exit，不發任何通知
+      #    FIREBASE_SERVICE_KEY → Service Account JSON，用於寫入期貨狀態到 Firebase
+      - name: 執行期貨5分K掃描
+        env:
+          GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          TEST_MODE:            '5mk'
+          FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
+        run: |
+          python 3_stock_monitor_GitHub.py
