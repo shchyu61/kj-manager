@@ -19,7 +19,15 @@ DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 #   False  = 正式模式（週K三層嚴格過濾）
 #   True   = 測試模式
 #   '5mk'  = 期貨5分K模式（週一15:01~週三13:30）
-TEST_MODE = False   # 切換：False / True / '5mk'
+#
+# ✅ 兩路控制（任一皆可）：
+#   本機筆電：直接改下方預設值 'False'
+#   GitHub Actions：futures-scan Job 自動帶入 TEST_MODE='5mk'，不需改程式碼
+import os as _os_tm
+_tm_raw = _os_tm.environ.get('TEST_MODE', 'False')
+if   _tm_raw == 'False': TEST_MODE = False
+elif _tm_raw == 'True':  TEST_MODE = True
+else:                    TEST_MODE = _tm_raw   # '5mk' 保持字串
 
 # ── 【期貨5分K專屬設定】──────────────────────────────────────────
 FUTURES_5MK_TARGETS  = ['^TWII']   # 台指期替代標的
@@ -64,7 +72,86 @@ HOLDINGS_CRYPTO = ['BTC-USD', 'ETH-USD', 'DOGE-USD']
 HOLDINGS_TW     = ['2330', '3037','3147','6188']  # 有台股持有時填入，例如：['2330', '2317']
 
 # ============================================================
-# 【２．策略參數設定區】← 所有策略的可調數值都在這裡，不需往下翻
+# 【１-1．Firebase 期貨狀態寫入（方案B：Python寫，網頁讀）】
+# 每次期貨5分K掃描結束後，把狀態寫入 Firebase
+# 網頁登入後讀同一路徑，不需要 Token 在前端，F12 看不到敏感資訊
+# Firestore 路徑：artifacts/kj-wealth-manager/public/futures_status
+# ============================================================
+FIREBASE_PROJECT_ID = 'kj-wealth-manager'   # ← 與 index.html 的 projectId 一致
+FIREBASE_CRED_ENV   = 'FIREBASE_SERVICE_KEY' # GitHub Secrets 名稱（JSON格式）
+
+def write_futures_status_to_firebase(status: str, scan_time: str, signal_count: int):
+    """
+    將期貨5分K掃描結果寫入 Firebase Firestore（公開路徑，網頁直接讀取）
+    status      : 'in_progress' / 'completed' / 'no_signal'
+    scan_time   : 台北時間字串，例如 '2026/03/23 22:49'
+    signal_count: 本次買進/平倉訊號數量
+    """
+    cred_json = _os_tm.environ.get(FIREBASE_CRED_ENV, '')
+    if not cred_json:
+        print('  ℹ️ FIREBASE_SERVICE_KEY 未設定，跳過Firebase狀態寫入')
+        return
+    try:
+        import json as _json
+        import urllib.request as _req
+        import urllib.parse as _up
+
+        cred = _json.loads(cred_json)
+        # 取得 Service Account Access Token（用 Google OAuth2）
+        import urllib.error
+        token_url = 'https://oauth2.googleapis.com/token'
+        import time as _time, math as _math
+        import base64 as _b64, hashlib as _hs
+
+        # JWT 手工組裝（不依賴 google-auth，避免多裝套件）
+        header  = _b64.urlsafe_b64encode(_json.dumps({'alg':'RS256','typ':'JWT'}).encode()).rstrip(b'=')
+        now_ts  = int(_time.time())
+        payload = _b64.urlsafe_b64encode(_json.dumps({
+            'iss': cred['client_email'],
+            'sub': cred['client_email'],
+            'aud': 'https://oauth2.googleapis.com/token',
+            'iat': now_ts,
+            'exp': now_ts + 3600,
+            'scope': 'https://www.googleapis.com/auth/datastore'
+        }).encode()).rstrip(b'=')
+
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.backends import default_backend
+        private_key = serialization.load_pem_private_key(
+            cred['private_key'].encode(), password=None, backend=default_backend())
+        sig_input  = header + b'.' + payload
+        signature  = private_key.sign(sig_input, padding.PKCS1v15(), hashes.SHA256())
+        jwt_token  = sig_input + b'.' + _b64.urlsafe_b64encode(signature).rstrip(b'=')
+
+        # 換取 Access Token
+        body = _up.urlencode({
+            'grant_type': 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            'assertion' : jwt_token.decode()
+        }).encode()
+        r = _req.urlopen(_req.Request(token_url, data=body,
+                         headers={'Content-Type': 'application/x-www-form-urlencoded'}))
+        access_token = _json.loads(r.read())['access_token']
+
+        # 寫入 Firestore REST API
+        fs_url = (f'https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}'
+                  f'/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/futures_status')
+        doc_body = _json.dumps({'fields': {
+            'status':       {'stringValue': status},
+            'scan_time':    {'stringValue': scan_time},
+            'signal_count': {'integerValue': str(signal_count)},
+            'updated_at':   {'stringValue': scan_time},
+        }}).encode()
+        patch_url = fs_url + '?updateMask.fieldPaths=status&updateMask.fieldPaths=scan_time&updateMask.fieldPaths=signal_count&updateMask.fieldPaths=updated_at'
+        req2 = _req.Request(patch_url, data=doc_body, method='PATCH',
+                            headers={'Authorization': f'Bearer {access_token}',
+                                     'Content-Type': 'application/json'})
+        _req.urlopen(req2)
+        print(f'  ✅ Firebase期貨狀態已寫入：{status} / {scan_time} / 訊號{signal_count}支')
+    except Exception as e:
+        print(f'  ⚠️ Firebase狀態寫入失敗（不影響主流程）：{e}')
+
+# ============================================================
 # ============================================================
 
 # ── 【２-1】買進策略：截圖3、4條件（條件A + 條件B）──────────────
@@ -1196,6 +1283,12 @@ def main_task():
             f"📊 週K掃描完成 - {now_str}",
             f"掃描時間：{now_str}\n\n本週無符合條件的股票"
         )
+
+    # ── 期貨5分K模式：每次掃描結束後寫入 Firebase 狀態（方案B）──
+    if TEST_MODE == '5mk':
+        _sig_count = len(buy_signals) + len(sell_signals)
+        _status    = 'completed' if _sig_count == 0 else 'signal'
+        write_futures_status_to_firebase(_status, now_str, _sig_count)
 
     print("\n✅ 全部完成！請查收Gmail通知。")
 

@@ -358,11 +358,15 @@
                     </div>
                     <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                     <!-- 期貨5分K模式：僅 shchyu61@gmail.com 可見 -->
-                    <button id="btn-futures-5mk" onclick="startFutures5mk()"
-                        style="display:none"
-                        class="px-5 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-black hover:bg-orange-700 transition-all shadow-md">
-                        🔥 期貨5分K診斷
-                    </button>
+                    <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1">
+                        <button id="btn-futures-5mk" onclick="startFutures5mk()"
+                            class="px-5 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-black hover:bg-orange-700 transition-all shadow-md">
+                            🔥 期貨5分K診斷
+                        </button>
+                        <span id="futures-status" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
+                            ⏳ 狀態查詢中...
+                        </span>
+                    </div>
                 </div>
                 <div class="space-y-6">
                     <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -612,10 +616,11 @@
             }, 500);
             // ✅ 登入後背景預載全額交割清單
             fetchCashDeliveryStocks().catch(() => {});
-            // ✅ 期貨5分K按鈕：只對 shchyu61@gmail.com 顯示
-            const _futBtn = document.getElementById('btn-futures-5mk');
-            if (_futBtn && currentUserEmail === 'shchyu61@gmail.com') {
-                _futBtn.style.display = 'inline-block';
+            // ✅ 期貨5分K按鈕：只對 shchyu61@gmail.com 顯示，並查詢 GitHub Actions 狀態
+            const _futWrap = document.getElementById('futures-5mk-wrap');
+            if (_futWrap && currentUserEmail === 'shchyu61@gmail.com') {
+                _futWrap.style.display = 'flex';
+                fetchFuturesStatus();
             }
             document.getElementById('security-overlay').classList.add('hide');
             document.getElementById('main-content').classList.remove('hide');
@@ -1122,10 +1127,14 @@
                 setCache(code, _dr5); return _dr5;
             }
 
-            const _p1 = +atob('Mw==');
-            const _p2 = +atob('MzU=');
-            const _p3 = +atob('MS4wMw==');
-            const _p4 = +atob('MS4wMA==');
+            // ═══════════════════════════════════════════════════
+            // 【策略參數區】← 只需改這裡的數字，改完交給Claude加密
+            // ═══════════════════════════════════════════════════
+            const _p1 = 3;      // 回看根數（近幾根K棒，建議2~5）
+            const _p2 = 35;     // RSI買進門檻（RSI需>此值，建議30~45）
+            const _p3 = 1.03;   // 布林下緣容忍度（1.03=下緣上方3%內觸發）
+            const _p4 = 1.00;   // 布林上緣容忍度（1.00=嚴格貼上緣才賣）
+            // ═══════════════════════════════════════════════════
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
@@ -1146,20 +1155,24 @@
             const _n = _p1;
             const _lows_n  = lows.slice(-_n);
             const _highs_n = highs.slice(-_n);
+            // ── 條件A：近N根任一最低價<=布林下緣
             const _x1 = _lows_n.some((l, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && l <= _b.lower * _p3;
             });
-            const _r1 = _x1 && _t1 && _t2;
+            const _r1 = _x1 && _t1 && _t2;   // 條件A成立
 
+            // ── 條件B：近N根最低價均<布林中軌
             const _x2 = _lows_n.every((l, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && l < _b.mid;
             });
+            // ── 條件B：近N根最高價均<布林上軌
             const _x3 = _highs_n.every((h, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && h < _b.upper;
             });
+            // ── 條件B：前N根MACD柱持續縮小
             const _x4 = closes.length >= _n + 1 ? (() => {
                 let _ok = true;
                 for (let _j = 0; _j < _n - 1; _j++) {
@@ -1169,16 +1182,16 @@
                 }
                 return _ok;
             })() : false;
-            const _r2 = _x2 && _x3 && _x4 && _t2;
+            const _r2 = _x2 && _x3 && _x4 && _t2;  // 條件B成立
 
-            const buy_signal = (_r1 || _r2) && rsiNow > _p2;
+            const buy_signal = (_r1 || _r2) && rsiNow > _p2;  // 條件A或B任一成立且RSI>門檻
 
             let conditions = [];
             if (buy_signal) {
-                if (_r1 && price <= boll.lower * _p3) conditions.push('S1');
-                if (_r2) conditions.push('S2');
-                if (rsiNow < 50 && _t2) conditions.push('E1');
-                if (conditions.length === 0) conditions.push('E2');
+                if (_r1 && price <= boll.lower * _p3) conditions.push('S1');  // 截圖條件A觸發
+                if (_r2) conditions.push('S2');                                    // 截圖條件B觸發
+                if (rsiNow < 50 && _t2) conditions.push('E1');                     // eLeader條件觸發
+                if (conditions.length === 0) conditions.push('E2');                // 其他買進條件
             }
 
             // ── 賣出條件（截圖1、2）：最高價>=布林上緣 AND RSI下降 AND MACD柱縮
@@ -1254,6 +1267,43 @@
                 console.error('❌ 賣出通知發送失敗：', e);
             }
         };
+
+        // ── GitHub Actions 期貨Job狀態查詢 ──────────────────────────
+        // 呼叫 GitHub API 取得最近一次 futures-scan Job 狀態
+        // ── 期貨Job狀態查詢（方案B：從 Firebase 讀取，無需 Token 在前端）──
+        // Python 每次期貨掃描結束後寫入 Firebase，網頁只讀不寫，F12 看不到任何敏感資訊
+        // Firestore 路徑：artifacts/kj-wealth-manager/public/futures_status
+        async function fetchFuturesStatus() {
+            const statusEl = document.getElementById('futures-status');
+            if (!statusEl || !window.db) return;
+            try {
+                const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+                const fsDoc = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                const snap  = await getDoc(fsDoc);
+                if (!snap.exists()) {
+                    statusEl.textContent = '⚪ 尚無執行紀錄';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+                    return;
+                }
+                const d      = snap.data();
+                const status = d.status       || '';
+                const t      = d.scan_time    || '';
+                const cnt    = Number(d.signal_count) || 0;
+                if (status === 'signal' && cnt > 0) {
+                    statusEl.textContent = `🔥 上次有訊號 ${cnt}支 ${t}`;
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700';
+                } else if (status === 'completed') {
+                    statusEl.textContent = `🟢 上次無訊號 ${t}`;
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+                } else {
+                    statusEl.textContent = `⚪ ${t || '待機中'}`;
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+                }
+            } catch(e) {
+                statusEl.textContent = '❓ 狀態查詢失敗';
+                statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+            }
+        }
 
         // ── 期貨5分K診斷（專屬 shchyu61@gmail.com）────────────────
         window.startFutures5mk = async () => {
