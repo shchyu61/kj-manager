@@ -44,5 +44,5 @@ jobs:
           GMAIL_ACCOUNT:  ${{ secrets.GMAIL_ACCOUNT }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
         run: |
-          python 3_stock_monitor.py
+          python 3_stock_monitor_雲端GitHub版.py
 
