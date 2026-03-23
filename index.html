@@ -750,6 +750,26 @@
         stockNameMap["00900"] = "富邦特選高股息30";
 
         // ── 技術指標計算工具函數 ──────────────────────────────────
+        // ============================================================
+        // 【策略參數設定區】← 所有策略可調數值集中在此，勿修改下方函數
+        // ============================================================
+
+        // ── 【買進策略：截圖3、4條件】─────────────────────────────
+        const BUY_LOOKBACK_BARS   = 3;      // 近幾根K棒回看數（條件A/B共用）
+        const BUY_RSI_MIN         = 35;     // 買進RSI最低門檻
+        const BUY_BOLL_TOLERANCE  = 1.03;   // 布林下緣容忍度（1.03=下緣上方3%內觸發）
+
+        // ── 【賣出策略：截圖1、2條件】─────────────────────────────
+        const SELL_BOLL_TOLERANCE = 1.00;   // 布林上緣容忍度（1.00=嚴格貼上緣）
+
+        // ── 【停損策略（預留）】────────────────────────────────────
+        // const STOP_LOSS_PCT = 0.08;      // 跌破買入價8%停損（未啟用）
+        const ENABLE_STOP_LOSS    = false;  // 停損開關
+
+        // ============================================================
+        // 技術指標計算工具函數（引用上方策略參數，勿直接改這裡的數值）
+        // ============================================================
+
         const calcRSI = (closes, period = 14) => {
             if (closes.length < period + 1) return null;
             let gains = 0, losses = 0;
@@ -954,22 +974,56 @@
             if (!boll || rsiNow === null || rsiPrv === null || !macd) throw new Error('calc fail');
 
             const rsi_trend     = rsiNow > rsiPrv ? 'rising' : 'falling';
-            const boll_position = price >= boll.upper * 0.97 ? 'near_upper'
-                                : price <= boll.lower * 1.03 ? 'near_lower' : 'mid_zone';
+            const boll_position = price >= boll.upper * SELL_BOLL_TOLERANCE ? 'near_upper'
+                                : price <= boll.lower * BUY_BOLL_TOLERANCE ? 'near_lower' : 'mid_zone';  // 引用策略參數
             const macd_rising   = macd.now > macd.prev;
-            const buy_signal    = rsi_trend === 'rising' && rsiNow > 35 && macd_rising && price < boll.mid;
+            const buy_signal    = rsi_trend === 'rising' && rsiNow > BUY_RSI_MIN && macd_rising && price < boll.mid;  // 引用策略參數設定區
+
+            // ── 條件A（截圖3、4）：近N根任一Low<=布林下緣 AND RSI上升 AND MACD放大 ──
+            const closes_slice = closes.slice(-BUY_LOOKBACK_BARS);
+            const lows   = yResult.indicators.quote[0].low.filter(v => v != null).slice(-BUY_LOOKBACK_BARS);
+            const highs2 = yResult.indicators.quote[0].high.filter(v => v != null).slice(-BUY_LOOKBACK_BARS);
+            const boll_n = calcBoll(closes.slice(0, closes.length - BUY_LOOKBACK_BARS + 1));
+            const price_near_lower = lows.some((l, i) => {
+                const bb_i = calcBoll(closes.slice(0, closes.length - BUY_LOOKBACK_BARS + i + 1));
+                return bb_i && l <= bb_i.lower * BUY_BOLL_TOLERANCE;
+            });
+            const cond_A = price_near_lower && rsi_trend === 'rising' && macd_rising;
+
+            // ── 條件B（截圖3、4補充）：近N根Low均<中軌 AND High均<上軌 AND MACD縮後放大 ──
+            const low_below_mid  = lows.every((l, i) => {
+                const bb_i = calcBoll(closes.slice(0, closes.length - BUY_LOOKBACK_BARS + i + 1));
+                return bb_i && l < bb_i.mid;
+            });
+            const high_below_top = highs2.every((h, i) => {
+                const bb_i = calcBoll(closes.slice(0, closes.length - BUY_LOOKBACK_BARS + i + 1));
+                return bb_i && h < bb_i.upper;
+            });
+            const macd_shrink = closes.length >= BUY_LOOKBACK_BARS + 1 ? (() => {
+                let shrink = true;
+                for (let j = 0; j < BUY_LOOKBACK_BARS - 1; j++) {
+                    const m1 = calcMACDHist(closes.slice(0, closes.length - BUY_LOOKBACK_BARS + j));
+                    const m2 = calcMACDHist(closes.slice(0, closes.length - BUY_LOOKBACK_BARS + j + 1));
+                    if (!m1 || !m2 || m2.now <= m1.now) { shrink = false; break; }
+                }
+                return shrink;
+            })() : false;
+            const cond_B = low_below_mid && high_below_top && macd_shrink && macd_rising;
+
+            const buy_signal_final = cond_A || cond_B;
 
             let conditions = [];
-            if (buy_signal) {
-                if (price <= boll.lower * 1.03) conditions.push('截圖條件');
-                if (rsiNow < 50 && macd_rising)  conditions.push('條件27');
-                if (conditions.length === 0)      conditions.push('條件23');
+            if (buy_signal_final) {
+                if (cond_A && price <= boll.lower * BUY_BOLL_TOLERANCE) conditions.push('截圖條件A');
+                if (cond_B) conditions.push('截圖條件B');
+                if (rsiNow < 50 && macd_rising) conditions.push('條件27');
+                if (conditions.length === 0)    conditions.push('條件23');
             }
 
             const result = {
                 price: price.toFixed(2),
                 rsi: Math.round(rsiNow * 10) / 10,
-                rsi_trend, boll_position, buy_signal, conditions
+                rsi_trend, boll_position, buy_signal: buy_signal_final, conditions
             };
             setCache(code, result);  // 存入快取
             return result;
