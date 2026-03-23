@@ -253,6 +253,14 @@
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
                         <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
                     </div>
+                    <!-- 待買觀察：匯出/匯入備份 -->
+                    <div class="flex gap-2">
+                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-xs font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
+                        <label class="flex-1 py-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                            ⬆ 匯入還原 JSON
+                            <input type="file" accept=".json" class="hidden" onchange="importData(event)">
+                        </label>
+                    </div>
                     <button id="btn-watchlist-scan" onclick="startWatchlistScan()"
                             class="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-black text-sm hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
                         <i data-lucide="search" class="w-4 h-4"></i>
