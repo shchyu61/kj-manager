@@ -1,7 +1,7 @@
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
-# 版本：3.3
-# 更新日期：2026/03/22（新增第2章策略參數設定區，章節重編）
+# 版本：3.5
+# 更新日期：2026/03/23（強化下市偵測：加入第4階段官方公告下市日期、第5階段停牌偵測）
 # 適用：台股1845支 + 美股38支 + 虛擬幣3支 + 三合一追蹤【安聯月配息基金】
 # 通知方式：Gmail發信到 shchyu61@gmail.com
 # 重要：本程式原則上只適用週K，可視情況用於日K以下
@@ -87,6 +87,10 @@ ENABLE_INDEX_FILTER  = True    # True=啟用大盤過濾警告 / False=忽略大
 # 大盤過濾條件：RSI下彎 AND MACD柱下彎 → 發出警告（目前僅警告，不強制停止掃描）
 # 若需強制停止進場，請將 main_task 中大盤判斷區的 print 改為 return
 
+# ── 【２-6】全額交割股預警策略 ───────────────────────────────────
+ENABLE_CASH_DELIVERY_CHECK = True   # True=啟用全額交割預警 / False=關閉
+CASH_DELIVERY_CACHE_HOURS  = 24     # 全額交割清單快取時間（小時，建議24）
+
 # ============================================================
 # 【３．套件引用】
 # ============================================================
@@ -147,21 +151,39 @@ def get_delisting_risk(ticker):
     msg = ""
     try:
         info = yf.Ticker(ticker).info
-        # 檢查1：有明確下市日期
+
+        # ── 【第4階段】官方公告下市日期（最明確，提前1~2週）──────
         delist_date = info.get('delistingDate')
         if delist_date:
             is_at_risk = True
-            msg = f"預計下市日期：{delist_date}"
-        # 檢查2：查無即時報價（停牌或下市）
+            # 計算距離下市天數
+            try:
+                from datetime import date as _date
+                d = _date.fromisoformat(str(delist_date))
+                days_left = (d - _date.today()).days
+                if days_left >= 0:
+                    msg = f"⚠️【第4階段警報】官方公告下市日期：{delist_date}（距今 {days_left} 天），請儘速處理！"
+                else:
+                    msg = f"❌【已過下市日期】官方公告下市日期：{delist_date}，股票已停止交易！"
+            except:
+                msg = f"⚠️【第4階段警報】官方公告下市日期：{delist_date}，請儘速確認！"
+
+        # ── 【第5階段】查無即時報價（停牌或已下市）────────────────
         elif info.get('regularMarketPrice') is None and info.get('currentPrice') is None:
-            # 再確認：近5日是否完全無資料
             df_test = yf.download(ticker, period='5d', interval='1d', progress=False)
             if df_test is None or (hasattr(df_test, 'empty') and df_test.empty):
                 is_at_risk = True
-                msg = "近5日查無交易資料，疑似停牌或準備下市"
+                msg = "❌【第5階段警報】近5日查無交易資料，疑似已停牌或下市，請立即確認！"
+
+        # ── 市值異常歸零（財務崩潰早期警訊）────────────────────────
+        elif info.get('marketCap') is not None and info.get('marketCap') == 0:
+            is_at_risk = True
+            msg = "⚠️ 市值歸零，財務狀況極度異常，建議立即確認！"
+
     except Exception as e:
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
+
 
     # 4. 寫入本地快取（下次同一支股票在期限內不再重查）
     delisting_cache[ticker] = {
@@ -176,6 +198,98 @@ def get_delisting_risk(ticker):
         pass
 
     return is_at_risk, msg
+
+# ============================================================
+# 【３-2．全額交割股預警模組】（引用第2-6章設定）
+# 來源1：TWSE OpenAPI（上市）→ 來源2：TPEX OpenAPI（上櫃）→ 來源3：備援
+# ============================================================
+import threading as _threading
+_cash_delivery_cache = {'codes': set(), 'ts': None}
+_cash_delivery_lock  = _threading.Lock()
+
+def get_cash_delivery_set():
+    """
+    取得全額交割股票代碼 Set（上市+上櫃）。
+    快取 CASH_DELIVERY_CACHE_HOURS 小時，避免重複抓取。
+    回傳 set of str（純代碼，如 '1234'）
+    """
+    if not ENABLE_CASH_DELIVERY_CHECK:
+        return set()
+
+    from datetime import datetime as _dt
+    now = _dt.now()
+    with _cash_delivery_lock:
+        # 快取未過期則直接回傳
+        if _cash_delivery_cache['ts'] is not None:
+            elapsed = (now - _cash_delivery_cache['ts']).total_seconds() / 3600
+            if elapsed < CASH_DELIVERY_CACHE_HOURS:
+                return _cash_delivery_cache['codes']
+
+    codes = set()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'application/json'
+    }
+
+    # ── 來源1：TWSE OpenAPI（上市全額交割）────────────────────
+    try:
+        import requests as _req
+        r = _req.get(
+            'https://openapi.twse.com.tw/v1/company/cashPaymentStocks',
+            headers=headers, timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for item in data:
+                code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
+                if code:
+                    codes.add(str(code).strip())
+            print(f'  ✅ TWSE全額交割上市：{len(codes)} 支')
+    except Exception as e:
+        print(f'  ⚠️ TWSE全額交割抓取失敗：{e}')
+
+    # ── 來源2：TPEX OpenAPI（上櫃全額交割）────────────────────
+    try:
+        import requests as _req
+        r2 = _req.get(
+            'https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks',
+            headers=headers, timeout=10
+        )
+        if r2.status_code == 200:
+            data2 = r2.json()
+            before = len(codes)
+            for item in data2:
+                code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
+                if code:
+                    codes.add(str(code).strip())
+            print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
+    except Exception as e:
+        print(f'  ⚠️ TPEX全額交割抓取失敗：{e}')
+
+    # ── 來源3：備援 TWSE HTML 表格（若前兩個都失敗且 codes 仍空）──
+    if not codes:
+        try:
+            import requests as _req
+            from bs4 import BeautifulSoup as _BS
+            r3 = _req.get(
+                'https://www.twse.com.tw/zh/page/trading/exchange/TWTB4U.html',
+                headers=headers, timeout=10
+            )
+            soup = _BS(r3.text, 'html.parser')
+            for td in soup.select('table td:first-child'):
+                code = td.get_text(strip=True)
+                if code.isdigit() and len(code) == 4:
+                    codes.add(code)
+            print(f'  ✅ 備援HTML全額交割：{len(codes)} 支')
+        except Exception as e:
+            print(f'  ⚠️ 備援HTML全額交割抓取失敗：{e}')
+
+    with _cash_delivery_lock:
+        _cash_delivery_cache['codes'] = codes
+        _cash_delivery_cache['ts']    = now
+
+    print(f'  📋 全額交割股共 {len(codes)} 支（含上市+上櫃）')
+    return codes
 
 # ============================================================
 # 【４．交易時段與數據抓取核心】
@@ -538,7 +652,17 @@ def scan_stock(ticker, is_holding=False):
     if 'five_min_cache' not in globals(): five_min_cache = {}
 
     try:
-        # 0. 【最高優先級】下市風險預警（優先於一切技術分析，不論持有與否）
+        # 0. 【最高優先級①】全額交割股預警
+        _code_only = ticker.replace('.TW','').replace('.TWO','')
+        _cash_set  = get_cash_delivery_set()
+        if _cash_set and _code_only in _cash_set:
+            _msg = f'⚠️ 列為全額交割股（代碼：{_code_only}），財務惡化警訊，下市前最重要早期指標！'
+            if is_holding:
+                return ('DELIST_HOLD', _msg)
+            else:
+                return ('DELIST_WATCH', _msg)
+
+        # 0. 【最高優先級②】下市風險預警（Yahoo Finance確認）
         is_at_risk, risk_msg = get_delisting_risk(ticker)
         if is_at_risk:
             if is_holding:
@@ -726,6 +850,10 @@ def main_task():
     print(f"  掃描時間：{now_str}")
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
+
+    if ENABLE_CASH_DELIVERY_CHECK:
+        print(f"\n🔍 正在更新全額交割股清單...")
+        get_cash_delivery_set()
 
 # ============================================================
 # 【１４．台股、美股、虛擬幣掃描】（引用第2-5章大盤過濾策略）

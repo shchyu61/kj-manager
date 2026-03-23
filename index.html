@@ -604,6 +604,8 @@
             setTimeout(() => {
                 [...stocks, ...watchlist].forEach(s => fetchStockName(s.code));
             }, 500);
+            // ✅ 登入後背景預載全額交割清單
+            fetchCashDeliveryStocks().catch(() => {});
             document.getElementById('security-overlay').classList.add('hide');
             document.getElementById('main-content').classList.remove('hide');
             document.getElementById('tab-bar').classList.remove('hide');
@@ -998,11 +1000,69 @@
             });
         };
 
+        // ── 全額交割股清單（來源：TWSE + TPEX OpenAPI）──────────
+        // 策略：掃描前預先載入，diagCache 快取當天不重複抓
+        let _cashDeliverySet  = null;   // null=尚未載入
+        let _cashDeliveryDate = '';     // 載入日期（日期不同就重新抓）
+
+        const fetchCashDeliveryStocks = async () => {
+            const today = new Date().toLocaleDateString('zh-TW');
+            if (_cashDeliverySet !== null && _cashDeliveryDate === today) return _cashDeliverySet;
+
+            const codes = new Set();
+            // 來源1：TWSE OpenAPI 上市全額交割
+            try {
+                const url1 = 'https://openapi.twse.com.tw/v1/company/cashPaymentStocks';
+                const proxy1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url1)}`;
+                const r1 = await fetch(proxy1, { signal: AbortSignal.timeout(8000) });
+                if (r1.ok) {
+                    const d1 = await r1.json();
+                    d1.forEach(item => {
+                        const c = item['公司代號'] || item['Code'] || item['code'] || '';
+                        if (c) codes.add(String(c).trim());
+                    });
+                }
+            } catch(e) { console.warn('TWSE全額交割抓取失敗:', e); }
+
+            // 來源2：TPEX OpenAPI 上櫃全額交割
+            try {
+                const url2 = 'https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks';
+                const proxy2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url2)}`;
+                const r2 = await fetch(proxy2, { signal: AbortSignal.timeout(8000) });
+                if (r2.ok) {
+                    const d2 = await r2.json();
+                    d2.forEach(item => {
+                        const c = item['公司代號'] || item['Code'] || item['code'] || '';
+                        if (c) codes.add(String(c).trim());
+                    });
+                }
+            } catch(e) { console.warn('TPEX全額交割抓取失敗:', e); }
+
+            _cashDeliverySet  = codes;
+            _cashDeliveryDate = today;
+            console.log(`✅ 全額交割股載入完成：${codes.size} 支`);
+            return codes;
+        };
+
         // ── 主分析函數（含快取+多proxy）────────────────────────
         const analyzeStock = async (code) => {
             // 1. 有快取直接回傳
             const cached = getCached(code);
             if (cached) return cached;
+
+            // 1-1. 全額交割股判斷（優先於技術分析）
+            const isTWcode = /^\d{4,6}$/.test(code);
+            if (isTWcode && _cashDeliverySet !== null && _cashDeliverySet.has(code)) {
+                const dr = {
+                    price: '0.00', rsi: 0, rsi_trend: 'falling',
+                    boll_position: 'mid_zone', buy_signal: false,
+                    sell_signal: false, conditions: [],
+                    delist_risk: true,
+                    delist_msg: `⚠️ 全額交割股（${code}），財務惡化警訊！下市前最重要早期指標，持股請儘速評估！`
+                };
+                setCache(code, dr);
+                return dr;
+            }
 
             // 2. 台股代碼加後綴（先.TW再.TWO）
             const isTW = /^\d{4,6}$/.test(code);
@@ -1022,6 +1082,33 @@
 
             const closes = yResult.indicators.quote[0].close.filter(v => v != null);
             if (closes.length < 26) throw new Error('insufficient data');
+
+            // ── 【第4階段】官方公告下市日期偵測（最明確早期警訊）────
+            const _meta = yResult?.chart?.result?.[0]?.meta || {};
+            if (_meta.delistingDate) {
+                try {
+                    const _dDate    = new Date(_meta.delistingDate);
+                    const _today    = new Date();
+                    const _daysLeft = Math.ceil((_dDate - _today) / (1000 * 60 * 60 * 24));
+                    const _dmsg = _daysLeft >= 0
+                        ? `⚠️【第4階段警報】官方公告下市日期：${_meta.delistingDate}（距今 ${_daysLeft} 天），請儘速處理！`
+                        : `❌【已過下市日期】官方公告下市日期：${_meta.delistingDate}，股票已停止交易！`;
+                    const _dr = { price: (closes[closes.length-1]||0).toFixed(2), rsi: 0,
+                        rsi_trend:'falling', boll_position:'mid_zone',
+                        buy_signal:false, sell_signal:false, conditions:[],
+                        delist_risk:true, delist_msg:_dmsg };
+                    setCache(code, _dr); return _dr;
+                } catch { /* 解析失敗不中斷 */ }
+            }
+            // ── 【第5階段】查無即時報價（停牌或已下市）────────────────
+            const _lastPx = _meta.regularMarketPrice || _meta.postMarketPrice || 0;
+            if (_lastPx === 0 && closes.filter(v => v > 0).length === 0) {
+                const _dr5 = { price:'0.00', rsi:0, rsi_trend:'falling',
+                    boll_position:'mid_zone', buy_signal:false, sell_signal:false,
+                    conditions:[], delist_risk:true,
+                    delist_msg:'❌【第5階段警報】查無即時報價，疑似已停牌或下市！' };
+                setCache(code, _dr5); return _dr5;
+            }
 
             const _p1 = +atob('Mw==');
             const _p2 = +atob('MzU=');
@@ -1158,6 +1245,8 @@
 
         window.startWatchlistScan = async () => {
             if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
+            // 掃描前預載全額交割清單（台股才需要）
+            await fetchCashDeliveryStocks().catch(() => {});
             const btn = document.getElementById('btn-watchlist-scan');
             const txt = document.getElementById('watchlist-scan-text');
             btn.disabled = true;
@@ -1212,6 +1301,8 @@
                 ...watchlist.map(s => ({ code: s.code, tag: '觀察' }))
             ];
             if (all.length === 0) { window.showAlert('請先新增股票。'); return; }
+            // 掃描前預載全額交割清單
+            await fetchCashDeliveryStocks().catch(() => {});
 
             const progress  = document.getElementById('scan-progress');
             const resultDiv = document.getElementById('scan-result-list');
