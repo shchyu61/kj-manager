@@ -450,7 +450,8 @@
         // EmailJS 初始化
         emailjs.init('5dk4HoCBYIS7ypwiw');
         const EMAILJS_SERVICE  = 'service_knhvcfj';
-        const EMAILJS_TEMPLATE = 'template_oqm4kw9';
+        const EMAILJS_TEMPLATE        = 'template_oqm4kw9';   // OTP用
+        const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';  // 買進通知用（需在EmailJS建立）
 
         const ALLOWED_EMAILS = [
             "shchyu61@gmail.com",
@@ -885,12 +886,12 @@
                                near_lower: bgDark ? 'text-emerald-400' : 'text-emerald-600' };
             const condText = hasBuy && result.conditions && result.conditions.length
                              ? '觸發：' + result.conditions.join('、') : '';
+            const hasSell = isHolding && result.sell_signal;
             const cardBg   = bgDark
-                ? (hasBuy ? 'border-emerald-500 bg-emerald-950' : 'border-slate-700 bg-slate-900')
-                : (hasBuy ? 'border-emerald-300 bg-emerald-50'  : 'border-slate-200 bg-white');
+                ? (hasBuy ? 'border-emerald-500 bg-emerald-950' : hasSell ? 'border-rose-600 bg-rose-950' : 'border-slate-700 bg-slate-900')
+                : (hasBuy ? 'border-emerald-300 bg-emerald-50'  : hasSell ? 'border-rose-300 bg-rose-50'  : 'border-slate-200 bg-white');
             const textMain = bgDark ? 'text-white'     : 'text-slate-800';
             const textSub  = bgDark ? 'text-slate-400' : 'text-slate-400';
-            // 智能診斷無買進訊號 → 「持續觀察，暫不賣出」；待買清單無買進 → 「持續觀察」
             const noSignalText = isHolding ? '持續觀察，暫不賣出' : '持續觀察';
 
             return `<div class="border-2 rounded-[2rem] p-4 ${cardBg}">
@@ -911,7 +912,7 @@
                     <!-- 右：價格 + 狀態（flex-1自動撐開不截斷）-->
                     <div class="text-right flex-1 min-w-0">
                         <div class="font-black text-sm ${textMain}">${result.price}</div>
-                        <div class="text-[9px] font-black leading-tight ${hasBuy ? 'text-emerald-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : noSignalText}</div>
+                        <div class="text-[9px] font-black leading-tight ${hasBuy ? 'text-emerald-400' : hasSell ? 'text-rose-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : hasSell ? '🔔 賣出訊號' : noSignalText}</div>
                     </div>
                 </div>
                 ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black text-center">${condText}</div>` : ''}
@@ -1081,16 +1082,80 @@
                 if (conditions.length === 0) conditions.push('E2');
             }
 
+            // ── 賣出條件（截圖1、2）：最高價>=布林上緣 AND RSI下降 AND MACD柱縮
+            const sell_signal = boll_position === 'near_upper' && !_t1 && !_t2;
+
             const result = {
                 price: price.toFixed(2),
                 rsi: Math.round(rsiNow * 10) / 10,
-                rsi_trend, boll_position, buy_signal, conditions
+                rsi_trend, boll_position, buy_signal, sell_signal, conditions
             };
             setCache(code, result);
             return result;
         };
 
         // ── 待買觀察清單：全部診斷（工作池版）──────────────────
+        // ── 系統B：買進訊號自動發Gmail通知 ──────────────────────
+        const notifiedToday = new Set(); // 防止同一標的同一天重複發信
+
+        const sendBuyNotify = async (signals) => {
+            if (!signals || signals.length === 0) return;
+            if (!currentUserEmail) return;
+
+            // 過濾今日已通知過的
+            const newSignals = signals.filter(s => !notifiedToday.has(s.code));
+            if (newSignals.length === 0) return;
+
+            const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            const body = newSignals.map(s => {
+                const name = stockNameMap[s.code] || s.code;
+                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}`;
+            }).join('\n\n' + '─'.repeat(20) + '\n\n');
+
+            try {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                    to_email: currentUserEmail,
+                    scan_time: scanTime,
+                    signal_count: newSignals.length,
+                    signal_body: body,
+                });
+                newSignals.forEach(s => notifiedToday.add(s.code));
+                window.showAlert(`📧 已發送 ${newSignals.length} 支買進訊號通知到 ${currentUserEmail}`);
+                console.log('✅ 買進通知已發送');
+            } catch(e) {
+                console.error('❌ 買進通知發送失敗：', e);
+            }
+        };
+
+        // ── 賣出訊號發信 ──────────────────────────────────────────
+        const notifiedSellToday = new Set(); // 防止同一標的同一天重複發賣出信
+
+        const sendSellNotify = async (signals) => {
+            if (!signals || signals.length === 0) return;
+            if (!currentUserEmail) return;
+            const newSignals = signals.filter(s => !notifiedSellToday.has(s.code));
+            if (newSignals.length === 0) return;
+
+            const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            const body = newSignals.map(s => {
+                const name = stockNameMap[s.code] || s.code;
+                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利`;
+            }).join('\n\n' + '─'.repeat(20) + '\n\n');
+
+            try {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                    to_email: currentUserEmail,
+                    scan_time: scanTime,
+                    signal_count: `賣出 ${newSignals.length}`,
+                    signal_body: body,
+                });
+                newSignals.forEach(s => notifiedSellToday.add(s.code));
+                window.showAlert(`📧 已發送 ${newSignals.length} 支賣出訊號通知到 ${currentUserEmail}`);
+            } catch(e) {
+                console.error('❌ 賣出通知發送失敗：', e);
+            }
+        };
+
         window.startWatchlistScan = async () => {
             if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
             const btn = document.getElementById('btn-watchlist-scan');
@@ -1115,9 +1180,27 @@
                 }
             });
 
+            // 收集買進訊號
+            const wlSignals = [];
             await runWithPool(tasks, 3, (done, total) => {
                 txt.innerText = `診斷中（${done}/${total}）...`;
             });
+
+            // 掃描完成後整理買進訊號並發信
+            watchlist.forEach(s => {
+                const cached = getCached(s.code);
+                if (cached && cached.buy_signal) {
+                    wlSignals.push({
+                        code: s.code,
+                        price: cached.price,
+                        rsi: cached.rsi,
+                        boll: { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[cached.boll_position] || '',
+                        conditions: cached.conditions.join('、')
+                    });
+                }
+            });
+            if (wlSignals.length > 0) sendBuyNotify(wlSignals);
+
             btn.disabled = false;
             txt.innerText = '全部診斷（掃描買進訊號）';
         };
@@ -1168,6 +1251,25 @@
             await runWithPool(tasks, 3, (done, total) => {
                 progress.style.width = `${Math.round(done/total*100)}%`;
             }, (t) => t.tag === '持股');
+
+            // 掃描完成後整理買進+賣出訊號並分別發信
+            const manualBuySignals  = [];
+            const manualSellSignals = [];
+            all.forEach(({ code, tag }) => {
+                const cached = getCached(code);
+                if (!cached) return;
+                const name = stockNameMap[code] || code;
+                const bollText = { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[cached.boll_position] || '';
+                if (cached.buy_signal) {
+                    manualBuySignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: cached.conditions.join('、') });
+                }
+                // 賣出訊號只針對持股
+                if (tag === '持股' && cached.sell_signal) {
+                    manualSellSignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: '賣出條件觸發' });
+                }
+            });
+            if (manualBuySignals.length  > 0) sendBuyNotify(manualBuySignals);
+            if (manualSellSignals.length > 0) sendSellNotify(manualSellSignals);
         };
 
         // ── 待買觀察清單：渲染/新增/刪除 ──────────────────────
