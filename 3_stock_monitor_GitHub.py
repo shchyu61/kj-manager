@@ -1,7 +1,7 @@
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
-# 版本：3.5
-# 更新日期：2026/03/23（強化下市偵測：加入第4階段官方公告下市日期、第5階段停牌偵測）
+# 版本：3.6
+# 更新日期：2026/03/23（新增期貨5分K模式）
 # 適用：台股1845支 + 美股38支 + 虛擬幣3支 + 三合一追蹤【安聯月配息基金】
 # 通知方式：Gmail發信到 shchyu61@gmail.com
 # 重要：本程式原則上只適用週K，可視情況用於日K以下
@@ -15,8 +15,16 @@ DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 # ============================================================
 # 【１．設定區】
 
-# 驗證篩選模式（True: 測試用，只看日5分K趨勢；僅測試gmail信是否正常收信即結束，不影響開盤還持續收測試信 / False: 實戰用，嚴格三層過濾，正式交易監控）
-TEST_MODE = False
+# 驗證篩選模式：
+#   False  = 正式模式（週K三層嚴格過濾）
+#   True   = 測試模式
+#   '5mk'  = 期貨5分K模式（週一15:01~週三13:30）
+TEST_MODE = False   # 切換：False / True / '5mk'
+
+# ── 【期貨5分K專屬設定】──────────────────────────────────────────
+FUTURES_5MK_TARGETS  = ['^TWII']   # 台指期替代標的
+FUTURES_5MK_INTERVAL = 300         # 每5分鐘掃描一次
+FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 
 # Gmail設定
 # ✅ 本機執行：直接填入帳號密碼
@@ -322,6 +330,17 @@ def get_active_markets():
     if is_us_time:
         active.append('US')      # 美股
         active.append('CRYPTO')  # 虛擬幣
+
+    # 期貨5分K時段：週一15:01~週三13:30
+    is_futures_time = False
+    if weekday == 0 and time_val >= 15*60+1:
+        is_futures_time = True
+    elif weekday == 1:
+        is_futures_time = True
+    elif weekday == 2 and time_val <= 13*60+30:
+        is_futures_time = True
+    if is_futures_time:
+        active.append('FUTURES')
     return active
 
 def get_stock_data(ticker, period='2y', interval='1wk', cache=None):
@@ -1015,6 +1034,38 @@ def main_task():
                     delist_signals.append(('虛擬幣', ticker, result[0], result[1]))
             time.sleep(0.1) # 稍微加快掃描速度
 
+    # ── 期貨5分K掃描（TEST_MODE='5mk'且FUTURES在active_markets時執行）──
+    if 'FUTURES' in active_markets and TEST_MODE == '5mk':
+        print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}')
+        for ticker in FUTURES_5MK_TARGETS:
+            try:
+                df5 = yf.download(ticker, period='2d', interval='5m', progress=False)
+                if df5 is None or df5.empty or len(df5) < 20:
+                    print(f'  ⚠️ {ticker} 5分K資料不足，跳過')
+                    continue
+                df5 = calc_indicators(df5)
+                if df5 is None: continue
+                rsi_now  = float(df5['rsi14'].iloc[-1])
+                rsi_prev = float(df5['rsi14'].iloc[-2])
+                mh_now   = float(df5['macd_hist'].iloc[-1])
+                mh_prev  = float(df5['macd_hist'].iloc[-2])
+                close    = float(df5['Close'].iloc[-1])
+                boll_bot = float(df5['boll_bot20'].iloc[-1])
+                boll_top = float(df5['boll_top20'].iloc[-1])
+                now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+                if rsi_now > rsi_prev and mh_now > mh_prev and close <= boll_bot * 1.02:
+                    send_gmail(f"⭐【期貨5分K買進】{ticker} - {now_str_f}",
+                        f"⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
+                    print(f"  ✅ {ticker} 買進訊號已發送")
+                elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top:
+                    send_gmail(f"🔔【期貨5分K平倉】{ticker} - {now_str_f}",
+                        f"🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
+                    print(f"  ✅ {ticker} 平倉訊號已發送")
+                else:
+                    print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件，不發信")
+            except Exception as e:
+                print(f'  ❌ 期貨5分K掃描 {ticker} 失敗：{e}')
+
 # ============================================================
 # 【１５．發送Gmail通知】
 # ============================================================
@@ -1160,6 +1211,28 @@ if __name__ == "__main__":
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
     test_now = now.strftime('%H:%M:%S')
+
+    # === [期貨5分K模式]：TEST_MODE = '5mk' ===
+    if TEST_MODE == '5mk':
+        tz_f = pytz.timezone('Asia/Taipei')
+        now_f = datetime.now(tz_f)
+        wd_f  = now_f.weekday()
+        tv_f  = now_f.hour * 60 + now_f.minute
+        in_futures = ((wd_f==0 and tv_f>=15*60+1) or (wd_f==1) or (wd_f==2 and tv_f<=13*60+30))
+        if not in_futures:
+            print(f"[{test_now}] ❌ 非期貨5分K時段，直接結束")
+            time.sleep(5); exit()
+        print(f"🚀 期貨5分K模式啟動　標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
+        while True:
+            now_l = datetime.now(pytz.timezone('Asia/Taipei'))
+            wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
+            if not((wd_l==0 and tv_l>=15*60+1) or (wd_l==1) or (wd_l==2 and tv_l<=13*60+30)):
+                print("✅ 期貨5分K時段結束，監控結束"); break
+            try: main_task()
+            except Exception as e: print(f"掃描發生錯誤: {e}")
+            print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒...")
+            time.sleep(FUTURES_5MK_INTERVAL)
+        exit()
 
     # === [精準測試模式]：不受交易時間限制，發送兩封關鍵測試信後即結束 ===
     if TEST_MODE:

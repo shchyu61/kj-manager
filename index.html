@@ -357,6 +357,12 @@
                         <span class="text-[10px] font-bold text-slate-400">目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span></span>
                     </div>
                     <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
+                    <!-- 期貨5分K模式：僅 shchyu61@gmail.com 可見 -->
+                    <button id="btn-futures-5mk" onclick="startFutures5mk()"
+                        style="display:none"
+                        class="px-5 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-black hover:bg-orange-700 transition-all shadow-md">
+                        🔥 期貨5分K診斷
+                    </button>
                 </div>
                 <div class="space-y-6">
                     <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -606,6 +612,11 @@
             }, 500);
             // ✅ 登入後背景預載全額交割清單
             fetchCashDeliveryStocks().catch(() => {});
+            // ✅ 期貨5分K按鈕：只對 shchyu61@gmail.com 顯示
+            const _futBtn = document.getElementById('btn-futures-5mk');
+            if (_futBtn && currentUserEmail === 'shchyu61@gmail.com') {
+                _futBtn.style.display = 'inline-block';
+            }
             document.getElementById('security-overlay').classList.add('hide');
             document.getElementById('main-content').classList.remove('hide');
             document.getElementById('tab-bar').classList.remove('hide');
@@ -888,6 +899,7 @@
                                near_lower: bgDark ? 'text-emerald-400' : 'text-emerald-600' };
             const condText = hasBuy && result.conditions && result.conditions.length
                              ? '觸發：' + result.conditions.join('、') : '';
+            // hasSell必須在cardBg之前宣告
             const hasSell = isHolding && result.sell_signal;
             const cardBg   = bgDark
                 ? (hasBuy ? 'border-emerald-500 bg-emerald-950' : hasSell ? 'border-rose-600 bg-rose-950' : 'border-slate-700 bg-slate-900')
@@ -1240,6 +1252,118 @@
                 window.showAlert(`📧 已發送 ${newSignals.length} 支賣出訊號通知到 ${currentUserEmail}`);
             } catch(e) {
                 console.error('❌ 賣出通知發送失敗：', e);
+            }
+        };
+
+        // ── 期貨5分K診斷（專屬 shchyu61@gmail.com）────────────────
+        window.startFutures5mk = async () => {
+            if (currentUserEmail !== 'shchyu61@gmail.com') {
+                window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
+                return;
+            }
+
+            // 時段檢查（週一15:01~週三13:30）
+            const now = new Date();
+            const wd  = now.getDay();   // 0=日 1=一 2=二 3=三 4=四 5=五 6=六
+            const tv  = now.getHours() * 60 + now.getMinutes();
+            const inFutures = (
+                (wd === 1 && tv >= 15*60+1) ||   // 週一15:01後
+                (wd === 2) ||                       // 週二全天
+                (wd === 3 && tv <= 13*60+30)        // 週三13:30前
+            );
+
+            if (!inFutures) {
+                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三13:30）');
+                return;
+            }
+
+            const btn = document.getElementById('btn-futures-5mk');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '🔄 掃描中...';
+
+            try {
+                // 使用 ^TWII 作為台指期替代標的，抓5分K
+                const FUTURES_TARGETS = ['^TWII'];
+                const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+                for (const ticker of FUTURES_TARGETS) {
+                    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=5m&range=2d`;
+                    let yResult = null;
+                    try {
+                        yResult = await fetchWithFallback(url);
+                    } catch(e) {
+                        window.showAlert(`❌ ${ticker} 資料抓取失敗：${e.message}`);
+                        continue;
+                    }
+
+                    const closes = yResult.indicators.quote[0].close.filter(v => v != null);
+                    if (closes.length < 20) {
+                        window.showAlert(`⚠️ ${ticker} 5分K資料不足`);
+                        continue;
+                    }
+
+                    // 計算技術指標
+                    const boll    = calcBoll(closes);
+                    const rsiNow  = calcRSI(closes);
+                    const rsiPrv  = calcRSI(closes.slice(0, -1));
+                    const macd    = calcMACDHist(closes);
+                    const price   = closes[closes.length - 1];
+
+                    if (!boll || rsiNow === null || !macd) continue;
+
+                    const rsiRising   = rsiNow > rsiPrv;
+                    const macdRising  = macd.now > macd.prev;
+                    const nearLower   = price <= boll.lower * 1.02;
+                    const rsifalling  = rsiNow < rsiPrv;
+                    const macdFalling = macd.now < macd.prev;
+                    const nearUpper   = price >= boll.upper * 1.00;
+
+                    const name = stockNameMap[ticker] || ticker;
+
+                    if (rsiRising && macdRising && nearLower) {
+                        // 買進訊號：發Gmail
+                        const body = `⭐【期貨5分K買進訊號】⭐
+標的：${ticker} ${name}
+收盤：${price.toFixed(2)}　布林下緣：${boll.lower.toFixed(2)}
+RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
+時間：${scanTime}`;
+                        try {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                                to_email: currentUserEmail,
+                                scan_time: scanTime,
+                                signal_count: '期貨買進 1',
+                                signal_body: body,
+                            });
+                            window.showAlert(`⭐ ${ticker} 期貨5分K買進訊號！Gmail已發送`);
+                        } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
+
+                    } else if (rsiRising && macdFalling && nearUpper) {
+                        // 平倉訊號：發Gmail
+                        const body = `🔔【期貨5分K平倉訊號】🔔
+標的：${ticker} ${name}
+收盤：${price.toFixed(2)}　布林上緣：${boll.upper.toFixed(2)}
+RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
+時間：${scanTime}`;
+                        try {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                                to_email: currentUserEmail,
+                                scan_time: scanTime,
+                                signal_count: '期貨平倉 1',
+                                signal_body: body,
+                            });
+                            window.showAlert(`🔔 ${ticker} 期貨5分K平倉訊號！Gmail已發送`);
+                        } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
+
+                    } else {
+                        window.showAlert(`ℹ️ ${ticker} RSI=${rsiNow.toFixed(1)} 未達進出場條件，不發信`);
+                    }
+                }
+            } catch(e) {
+                window.showAlert(`❌ 期貨5分K掃描失敗：${e.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = origText;
             }
         };
 
