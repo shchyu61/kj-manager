@@ -358,11 +358,23 @@
                     </div>
                     <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                     <!-- 期貨5分K模式：僅 shchyu61@gmail.com 可見 -->
-                    <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1">
-                        <button id="btn-futures-5mk" onclick="startFutures5mk()"
-                            class="px-5 py-2.5 bg-orange-600 text-white rounded-xl text-xs font-black hover:bg-orange-700 transition-all shadow-md">
-                            🔥 期貨5分K診斷
-                        </button>
+                    <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1.5">
+                        <!-- 開關式 Toggle -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-500">期貨5分K</span>
+                            <button id="btn-futures-5mk" onclick="toggleFutures5mk()"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="futures-toggle-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="futures-toggle-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                        <!-- GitHub Actions 狀態標籤 -->
                         <span id="futures-status" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
                             ⏳ 狀態查詢中...
                         </span>
@@ -1305,6 +1317,57 @@
             }
         }
 
+        // ── 期貨5分K開關 Toggle ────────────────────────────────
+        let _futuresActive = false;  // 開關狀態（false=關，true=開）
+
+        window.toggleFutures5mk = () => {
+            if (currentUserEmail !== 'shchyu61@gmail.com') {
+                window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
+                return;
+            }
+            // 時段檢查
+            const now = new Date();
+            const wd  = now.getDay();
+            const tv  = now.getHours() * 60 + now.getMinutes();
+            const inFutures = (
+                (wd === 1 && tv >= 15*60+1) ||
+                (wd === 2) ||
+                (wd === 3 && tv <= 13*60+30)
+            );
+
+            if (!_futuresActive && !inFutures) {
+                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三13:30）');
+                return;
+            }
+
+            _futuresActive = !_futuresActive;
+            const btn    = document.getElementById('btn-futures-5mk');
+            const knob   = document.getElementById('futures-toggle-knob');
+            const label  = document.getElementById('futures-toggle-label');
+
+            if (_futuresActive) {
+                btn.style.backgroundColor   = '#ea580c';  // orange-600
+                knob.style.transform         = 'translateX(28px)';
+                label.textContent            = 'ON';
+                label.style.color            = '#fff';
+                label.style.left             = '6px';
+                label.style.right            = 'auto';
+                btn.setAttribute('aria-checked', 'true');
+                window.showAlert('🔥 期貨5分K監控已開啟！每5分鐘自動掃描');
+                window.startFutures5mk();  // 立刻掃一次
+            } else {
+                btn.style.backgroundColor   = '';
+                btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
+                knob.style.transform         = 'translateX(0px)';
+                label.textContent            = 'OFF';
+                label.style.color            = '';
+                label.style.left             = 'auto';
+                label.style.right            = '6px';
+                btn.setAttribute('aria-checked', 'false');
+                window.showAlert('⏹ 期貨5分K監控已關閉');
+            }
+        };
+
         // ── 期貨5分K診斷（專屬 shchyu61@gmail.com）────────────────
         window.startFutures5mk = async () => {
             if (currentUserEmail !== 'shchyu61@gmail.com') {
@@ -1314,12 +1377,12 @@
 
             // 時段檢查（週一15:01~週三13:30）
             const now = new Date();
-            const wd  = now.getDay();   // 0=日 1=一 2=二 3=三 4=四 5=五 6=六
+            const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
             const inFutures = (
-                (wd === 1 && tv >= 15*60+1) ||   // 週一15:01後
-                (wd === 2) ||                       // 週二全天
-                (wd === 3 && tv <= 13*60+30)        // 週三13:30前
+                (wd === 1 && tv >= 15*60+1) ||
+                (wd === 2) ||
+                (wd === 3 && tv <= 13*60+30)
             );
 
             if (!inFutures) {
@@ -1328,9 +1391,7 @@
             }
 
             const btn = document.getElementById('btn-futures-5mk');
-            const origText = btn.textContent;
             btn.disabled = true;
-            btn.textContent = '🔄 掃描中...';
 
             try {
                 // 使用 ^TWII 作為台指期替代標的，抓5分K
@@ -1413,7 +1474,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                 window.showAlert(`❌ 期貨5分K掃描失敗：${e.message}`);
             } finally {
                 btn.disabled = false;
-                btn.textContent = origText;
             }
         };
 
