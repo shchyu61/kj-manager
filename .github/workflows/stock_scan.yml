@@ -46,7 +46,7 @@ jobs:
       - name: 安裝 Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       # 3. 安裝所需套件
       - name: 安裝套件
@@ -79,7 +79,7 @@ jobs:
       - name: 安裝 Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       # 3. 安裝所需套件
       - name: 安裝套件
