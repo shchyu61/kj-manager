@@ -27,11 +27,11 @@ FUTURES_5MK_INTERVAL = 300         # 每5分鐘掃描一次
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 
 # Gmail設定
-# ✅ 本機執行：直接填入帳號密碼
-# ✅ GitHub Actions執行：自動從 GitHub Secrets 讀取，不需填寫
+# ✅ 💻【本機】執行：直接填入帳號密碼
+# ✅ ☁️【雲端】GitHub Actions執行：自動從 GitHub Secrets 讀取，不需填寫
 import os as _os
 GMAIL_ACCOUNT  = _os.environ.get("GMAIL_ACCOUNT",  "shchyu61@gmail.com") # 您Gmail（寄件人）
-GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # 雲端從Secrets讀取；本機填入密碼格式："xxxx xxxx xxxx xxxx"（密碼可刪。實戰要補上。）。
+GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # ☁️【雲端】從Secrets讀取；或💻【本機】填入密碼格式："xxxx xxxx xxxx xxxx"（密碼可刪。實戰要補上。）。
 NOTIFY_EMAIL   = "shchyu61@gmail.com"       # 收通知的信箱（可與寄件人同一個）
 
 # 台股持有股票，要去此章節最下面的第51行自己輸入。
@@ -1053,28 +1053,14 @@ def main_task():
                 boll_bot = float(df5['boll_bot20'].iloc[-1])
                 boll_top = float(df5['boll_top20'].iloc[-1])
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
-                # ── 5分鐘內最多2封上限（防吵機制）────────────
-                _now_ts = time.time()
-                if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
-                send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
-                _can_send = len(send_gmail._futures_log) < 2
-
                 if rsi_now > rsi_prev and mh_now > mh_prev and close <= boll_bot * 1.02:
-                    if not _can_send:
-                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
-                    else:
-                        send_gmail._futures_log.append(_now_ts)
-                        send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
-                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
-                        print(f"  ✅ {ticker} 買進訊號已發送")
+                    send_gmail(f"⭐【期貨5分K買進】{ticker} - {now_str_f}",
+                        f"⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
+                    print(f"  ✅ {ticker} 買進訊號已發送")
                 elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top:
-                    if not _can_send:
-                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
-                    else:
-                        send_gmail._futures_log.append(_now_ts)
-                        send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
-                            f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
-                        print(f"  ✅ {ticker} 平倉訊號已發送")
+                    send_gmail(f"🔔【期貨5分K平倉】{ticker} - {now_str_f}",
+                        f"🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
+                    print(f"  ✅ {ticker} 平倉訊號已發送")
                 else:
                     print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件，不發信")
             except Exception as e:
