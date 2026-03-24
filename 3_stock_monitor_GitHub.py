@@ -1315,17 +1315,29 @@ if __name__ == "__main__":
         if not in_futures:
             print(f"[{test_now}] ❌ 非期貨5分K時段，直接結束")
             time.sleep(5); exit()
-        print(f"🚀 期貨5分K模式啟動　標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
-        while True:
-            now_l = datetime.now(pytz.timezone('Asia/Taipei'))
-            wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
-            if not((wd_l==0 and tv_l>=15*60+1) or (wd_l==1) or (wd_l==2 and tv_l<=13*60+30)):
-                print("✅ 期貨5分K時段結束，監控結束"); break
+
+        # ✅ GitHub Actions 模式：只跑一次就結束，循環由 cron 每5分鐘觸發
+        # ✅ 本機筆電模式：改用 while True 循環（請用本機版 3_stock_monitor.py）
+        IS_GITHUB = bool(_os_tm.environ.get('GITHUB_ACTIONS', ''))
+        if IS_GITHUB:
+            print(f"🚀 [GitHub Actions] 期貨5分K單次掃描　標的：{FUTURES_5MK_TARGETS}")
             try: main_task()
             except Exception as e: print(f"掃描發生錯誤: {e}")
-            print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒...")
-            time.sleep(FUTURES_5MK_INTERVAL)
-        exit()
+            print("✅ 單次掃描完成，等待 cron 下次觸發")
+            exit()
+        else:
+            # 本機筆電：while True 每5分鐘循環
+            print(f"🚀 [本機] 期貨5分K模式啟動　標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
+            while True:
+                now_l = datetime.now(pytz.timezone('Asia/Taipei'))
+                wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
+                if not((wd_l==0 and tv_l>=15*60+1) or (wd_l==1) or (wd_l==2 and tv_l<=13*60+30)):
+                    print("✅ 期貨5分K時段結束，監控結束"); break
+                try: main_task()
+                except Exception as e: print(f"掃描發生錯誤: {e}")
+                print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒...")
+                time.sleep(FUTURES_5MK_INTERVAL)
+            exit()
 
     # === [精準測試模式]：不受交易時間限制，發送兩封關鍵測試信後即結束 ===
     if TEST_MODE:
