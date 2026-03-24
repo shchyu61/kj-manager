@@ -1135,17 +1135,17 @@ def main_task():
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
-                        send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
+                        _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
                             f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
-                        print(f"  ✅ {ticker} 買進訊號已發送")
+                        print(f"  {'✅' if _ok else '❌'} {ticker} 買進訊號{'已發送' if _ok else '發送失敗'}")
                 elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top:
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
-                        send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
+                        _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
                             f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
-                        print(f"  ✅ {ticker} 平倉訊號已發送")
+                        print(f"  {'✅' if _ok else '❌'} {ticker} 平倉訊號{'已發送' if _ok else '發送失敗'}")
                 else:
                     print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件，不發信")
             except Exception as e:
