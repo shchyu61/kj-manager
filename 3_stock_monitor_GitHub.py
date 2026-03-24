@@ -930,7 +930,7 @@ def main_task():
 
     # (以下請確保第 13, 14 章的掃描與發信代碼, 全部都要縮排在 def main_task 之下)
     print(f"\n{'='*55}")
-    print(f"  股票週K監控系統啟動")
+    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else "週K模式"}）")
     print(f"  掃描時間：{now_str}")
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
