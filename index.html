@@ -663,8 +663,7 @@
             const keyInput = document.getElementById('access-key-input').value.trim();
             const expected = generateDailyKey(email);
 
-            if (!ALLOWED_EMAILS.includes(email)) { showError('此信箱未在授權名單內。'); return; }
-
+            // ✅ 已移除白名單管控，任何信箱均可嘗試登入
             // 需求4：優先驗證自訂密碼
             const customResult = await checkCustomPassword(email, keyInput);
             if (customResult === true) {
@@ -686,10 +685,19 @@
             }
         });
 
-        // 方式B：發送OTP
+        // 方式B：發送OTP（移除白名單，改為1小時3次限制）
         document.getElementById('btn-send-otp').addEventListener('click', async () => {
             const email = getEmailInput();
-            if (!ALLOWED_EMAILS.includes(email)) { showError('未授權信箱。'); return; }
+            if (!email || !email.includes('@')) { showError('請輸入有效信箱。'); return; }
+
+            // 🔒 1小時內最多3次OTP（防止額度耗盡）
+            const _otpKey = `otp_count_${email}`;
+            const _otpData = JSON.parse(sessionStorage.getItem(_otpKey) || '{"count":0,"hour":0}');
+            const _nowHour = new Date().getHours();
+            if (_otpData.hour !== _nowHour) { _otpData.count = 0; _otpData.hour = _nowHour; }
+            if (_otpData.count >= 3) {
+                showError('本小時已發送3次OTP，請改用每日密碼（601+月日+信箱帳號）登入。'); return;
+            }
 
             // 🔒 60秒冷卻，防止瘋狂點擊
             if (window.lastOtpSendTime && Date.now() - window.lastOtpSendTime < 60000) {
@@ -707,6 +715,10 @@
 
             try {
                 await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, { to_email: email, otp: otpCode });
+                // 記錄OTP發送次數（1小時3次限制）
+                const _ok = JSON.parse(sessionStorage.getItem(`otp_count_${email}`) || '{"count":0,"hour":0}');
+                _ok.count++; _ok.hour = new Date().getHours();
+                sessionStorage.setItem(`otp_count_${email}`, JSON.stringify(_ok));
                 document.getElementById('otp-step1').classList.add('hide');
                 document.getElementById('otp-step2').classList.remove('hide');
                 startCountdown();
@@ -1475,11 +1487,13 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 
         window.startWatchlistScan = async () => {
             if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
-            // 掃描前預載全額交割清單（台股才需要）
-            await fetchCashDeliveryStocks().catch(() => {});
+            // ✅ 立刻鎖住按鈕，避免使用者以為沒反應連按多次
             const btn = document.getElementById('btn-watchlist-scan');
             const txt = document.getElementById('watchlist-scan-text');
             btn.disabled = true;
+            txt.innerText = '準備中...';
+            // 掃描前預載全額交割清單（台股才需要）
+            await fetchCashDeliveryStocks().catch(() => {});
             document.getElementById('watchlist-list').innerHTML =
                 watchlist.map(s => makeLoadingCard(s.code, false)).join('');
 

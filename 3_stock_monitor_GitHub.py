@@ -1111,28 +1111,8 @@ def main_task():
         for ticker in FUTURES_5MK_TARGETS:
             try:
                 # ══════════════════════════════════════════════
-                # 第一道門檻：日K位階（近3個交易日，不回看2週前）
-                # 買進路線：check_buy_precondition(日K) 成立
-                # 賣出路線：check_sell_condition(日K) 成立
-                # ══════════════════════════════════════════════
-                df_d5 = yf.download(ticker, period='10d', interval='1d', progress=False)
-                if df_d5 is None or df_d5.empty or len(df_d5) < 5:
-                    print(f'  ⚠️ {ticker} 日K資料不足，跳過')
-                    continue
-                df_d5 = calc_indicators(df_d5)
-                if df_d5 is None: continue
-
-                _daily_buy  = check_buy_precondition(df_d5)
-                _daily_sell = check_sell_condition(df_d5)
-
-                if not _daily_buy and not _daily_sell:
-                    print(f'  ℹ️ {ticker} 日K尚未達到買進或賣出位階，跳過5分K掃描')
-                    continue
-                _route = '買進' if _daily_buy else '賣出'
-                print(f'  ✅ {ticker} 日K{_route}位階通過，進入5分K進場判斷')
-
-                # ══════════════════════════════════════════════
-                # 第二道門檻：5分K進場時機
+                # 5分K掃描：RSI + MACD柱 轉折判斷
+                # 日K門檻：參考用（印出日K位階供參考，但不強制擋住）
                 # ══════════════════════════════════════════════
                 df5 = yf.download(ticker, period='2d', interval='5m', progress=False)
                 if df5 is None or df5.empty or len(df5) < 20:
@@ -1148,13 +1128,24 @@ def main_task():
                 boll_bot = float(df5['boll_bot20'].iloc[-1])
                 boll_top = float(df5['boll_top20'].iloc[-1])
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+                # ── 日K位階參考（印出但不擋住掃描）──────────────
+                try:
+                    df_d5 = yf.download(ticker, period='10d', interval='1d', progress=False)
+                    if df_d5 is not None and not df_d5.empty and len(df_d5) >= 5:
+                        df_d5 = calc_indicators(df_d5)
+                        if df_d5 is not None:
+                            _daily_buy  = check_buy_precondition(df_d5)
+                            _daily_sell = check_sell_condition(df_d5)
+                            _zone = '低檔✅' if _daily_buy else ('高檔⚠️' if _daily_sell else '中軌區間')
+                            print(f'  ℹ️ {ticker} 日K位階：{_zone}（供參考，不影響5分K掃描）')
+                except: pass
                 # ── 5分鐘內最多2封上限（防吵機制）────────────
                 _now_ts = time.time()
                 if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                 send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                 _can_send = len(send_gmail._futures_log) < 2
 
-                if _daily_buy and rsi_now > rsi_prev and mh_now > mh_prev:
+                if rsi_now > rsi_prev and mh_now > mh_prev and close <= boll_bot * 1.02:
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
@@ -1162,7 +1153,7 @@ def main_task():
                         _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
                             f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
                         print(f"  {'✅' if _ok else '❌'} {ticker} 買進訊號{'已發送' if _ok else '發送失敗'}")
-                elif _daily_sell and rsi_now < rsi_prev and mh_now < mh_prev:
+                elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top * 1.00:
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
