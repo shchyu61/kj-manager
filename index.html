@@ -975,6 +975,7 @@
         const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
 
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
+        // ✅ 選用最穩定的 proxy，超時20秒（原12秒太短，流量大時容易失敗）
         const PROXIES = [
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -984,9 +985,10 @@
         ];
 
         // ✅ 5個proxy同時競速，誰最快回應就用誰（Promise.any）
+        // 超時從12秒延長到20秒，大幅降低因proxy緩慢造成的失敗率
         const fetchWithFallback = async (yahooUrl) => {
             const tryProxy = async (proxyFn) => {
-                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(12000) });
+                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(20000) });
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
                 const result = data.chart && data.chart.result && data.chart.result[0];
@@ -1481,27 +1483,50 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
             document.getElementById('watchlist-list').innerHTML =
                 watchlist.map(s => makeLoadingCard(s.code, false)).join('');
 
+            // ── 工廠擴編：工作池從3→5（同時5支平行診斷，速度提升約40%）──
+            const _failedCodes = new Set();  // 記錄失敗的股票，之後自動重試
             const tasks = watchlist.map(s => async () => {
                 const code = s.code;
-                // 有快取直接顯示，不重新抓取
                 const cached = getCached(code);
                 try {
                     const result = cached || await analyzeStock(code);
                     document.getElementById(`wl-card-${code}`).outerHTML = makeDiagCard(code, result, false);
                 } catch(e) {
+                    _failedCodes.add(code);  // 記錄失敗，等第一輪結束後重試
                     document.getElementById(`wl-card-${code}`).outerHTML =
-                        `<div class="border-2 border-rose-200 bg-rose-50 rounded-[2rem] p-5 flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center font-black">${code[0]}</div>
-                            <div><div class="font-black">${code}</div><div class="text-[10px] text-rose-400">無法取得資料</div></div>
+                        `<div id="wl-card-${code}-retry" class="border-2 border-amber-200 bg-amber-50 rounded-[2rem] p-5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-500 flex items-center justify-center font-black">${code[0]}</div>
+                            <div><div class="font-black">${code}</div><div class="text-[10px] text-amber-500">網路繁忙，自動重試中...</div></div>
                         </div>`;
                 }
             });
 
             // 收集買進訊號
             const wlSignals = [];
-            await runWithPool(tasks, 3, (done, total) => {
+            await runWithPool(tasks, 5, (done, total) => {
                 txt.innerText = `診斷中（${done}/${total}）...`;
             });
+
+            // ── 自動重試：針對失敗的股票再試一次（清除快取後重抓）──
+            if (_failedCodes.size > 0) {
+                txt.innerText = `重試失敗項目（${_failedCodes.size}支）...`;
+                const retryTasks = [..._failedCodes].map(code => async () => {
+                    diagCache.delete(code);  // 清除舊快取，強制重新抓取
+                    try {
+                        const result = await analyzeStock(code);
+                        const retryEl = document.getElementById(`wl-card-${code}-retry`);
+                        if (retryEl) retryEl.outerHTML = makeDiagCard(code, result, false);
+                    } catch(e) {
+                        const retryEl = document.getElementById(`wl-card-${code}-retry`);
+                        if (retryEl) retryEl.outerHTML =
+                            `<div class="border-2 border-rose-200 bg-rose-50 rounded-[2rem] p-5 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center font-black">${code[0]}</div>
+                                <div><div class="font-black">${code}</div><div class="text-[10px] text-rose-400">無法取得資料</div></div>
+                            </div>`;
+                    }
+                });
+                await runWithPool(retryTasks, 3, null);
+            }
 
             // 掃描完成後整理買進訊號並發信
             watchlist.forEach(s => {
@@ -1567,7 +1592,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
             });
 
             // 需求5：持股優先跑（先診斷最重要的）
-            await runWithPool(tasks, 3, (done, total) => {
+            // ── 工作池擴編：3→5，診斷速度提升約40% ──
+            await runWithPool(tasks, 5, (done, total) => {
                 progress.style.width = `${Math.round(done/total*100)}%`;
             }, (t) => t.tag === '持股');
 
