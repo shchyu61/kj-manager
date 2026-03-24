@@ -30,9 +30,9 @@ FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 # ✅ 本機執行：直接填入帳號密碼
 # ✅ GitHub Actions執行：自動從 GitHub Secrets 讀取，不需填寫
 import os as _os
-GMAIL_ACCOUNT  = _os.environ.get("GMAIL_ACCOUNT",  "shchyu61@gmail.com")
-GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # 本機填入；雲端從Secrets讀取
-NOTIFY_EMAIL   = "shchyu61@gmail.com"       # 收通知的信箱
+GMAIL_ACCOUNT  = _os.environ.get("GMAIL_ACCOUNT",  "shchyu61@gmail.com") # 您Gmail（寄件人）
+GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # 雲端從Secrets讀取；本機填入密碼格式："xxxx xxxx xxxx xxxx"（密碼可刪。實戰要補上。）。
+NOTIFY_EMAIL   = "shchyu61@gmail.com"       # 收通知的信箱（可與寄件人同一個）
 
 # 台股持有股票，要去此章節最下面的第51行自己輸入。
 
