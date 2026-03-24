@@ -822,7 +822,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
                 f"收盤價：{c_price:.2f}\n"
                 f"RSI轉折：{r_prev:.1f} → {r_now:.1f}\n"
             )
-            send_gmail(f"☁️【雲端】🔔基金買進訊號：{fund_name}", msg_body)
+            send_gmail(f"🔔 基金買進訊號：{fund_name}", msg_body)
             print(f"✅ {fund_name} 已發送觸發買進訊號，已加入今日彙整清單！")
         else:
             print(f"ℹ️ {fund_name}：目前尚未共振達標。")
@@ -1053,14 +1053,28 @@ def main_task():
                 boll_bot = float(df5['boll_bot20'].iloc[-1])
                 boll_top = float(df5['boll_top20'].iloc[-1])
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+                # ── 5分鐘內最多2封上限（防吵機制）────────────
+                _now_ts = time.time()
+                if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
+                _can_send = len(send_gmail._futures_log) < 2
+
                 if rsi_now > rsi_prev and mh_now > mh_prev and close <= boll_bot * 1.02:
-                    send_gmail(f"⭐【期貨5分K買進】{ticker} - {now_str_f}",
-                        f"⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
-                    print(f"  ✅ {ticker} 買進訊號已發送")
+                    if not _can_send:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+                    else:
+                        send_gmail._futures_log.append(_now_ts)
+                        send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
+                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
+                        print(f"  ✅ {ticker} 買進訊號已發送")
                 elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top:
-                    send_gmail(f"🔔【期貨5分K平倉】{ticker} - {now_str_f}",
-                        f"🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
-                    print(f"  ✅ {ticker} 平倉訊號已發送")
+                    if not _can_send:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+                    else:
+                        send_gmail._futures_log.append(_now_ts)
+                        send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
+                            f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
+                        print(f"  ✅ {ticker} 平倉訊號已發送")
                 else:
                     print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件，不發信")
             except Exception as e:
@@ -1117,7 +1131,7 @@ def main_task():
                         f"{'─'*30}\n"
                     )
 
-            subject = f"☁️【雲端】❌下市警報 {len(hold_list)}支持有須出清/{len(watch_list)}支觀察 - {now_str}"
+            subject = f"❌❌【下市警報】{len(hold_list)}支持有須出清 / {len(watch_list)}支觀察勿碰 - {now_str}"
             send_gmail(subject, body)
             save_notified(notified)
             print(f"  ❌ 下市警報已發送：持有{len(hold_list)}支 / 觀察{len(watch_list)}支")
@@ -1150,7 +1164,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】⭐買進訊號 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"⭐【買進訊號】{len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 買進訊號 {len(buy_signals)-len(filtered)} 支已通知過")
@@ -1183,7 +1197,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】🔔賣出訊號 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"🔔【賣出訊號】{len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
@@ -1192,7 +1206,10 @@ def main_task():
 # 無訊號
 # =====================
     if not buy_signals and not sell_signals and not delist_signals:
-        print(f"📊 [{now_str}] 本次掃描無符合條件的股票，不發送通知。")
+        send_gmail(
+            f"📊 週K掃描完成 - {now_str}",
+            f"掃描時間：{now_str}\n\n本週無符合條件的股票"
+        )
 
     print("\n✅ 全部完成！請查收Gmail通知。")
 
