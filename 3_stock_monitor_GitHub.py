@@ -19,7 +19,14 @@ DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 #   False  = 正式模式（週K三層嚴格過濾）
 #   True   = 測試模式
 #   '5mk'  = 期貨5分K模式（週一15:01~週三13:30）
-TEST_MODE = False   # 切換：False / True / '5mk'
+# ✅ 兩路控制（任一皆可）：
+#   本機筆電：直接改下方預設值 'False'
+#   GitHub Actions：futures-scan Job 自動帶入 TEST_MODE='5mk'，不需改程式碼
+import os as _os_tm
+_tm_raw = _os_tm.environ.get('TEST_MODE', 'False')
+if   _tm_raw == 'False': TEST_MODE = False
+elif _tm_raw == 'True':  TEST_MODE = True
+else:                    TEST_MODE = _tm_raw   # '5mk' 保持字串
 
 # ── 【期貨5分K專屬設定】──────────────────────────────────────────
 FUTURES_5MK_TARGETS  = ['^TWII']   # 台指期替代標的
@@ -63,6 +70,64 @@ HOLDINGS_US     = ['KO', 'O', 'PFE']
 HOLDINGS_CRYPTO = ['BTC-USD', 'ETH-USD', 'DOGE-USD']
 HOLDINGS_TW     = ['2330', '3037','3147','6188']  # 有台股持有時填入，例如：['2330', '2317']
 
+# ============================================================
+# 【１-1．Firebase 期貨狀態寫入（方案B：Python寫，網頁讀）】
+# 每次期貨5分K掃描結束後，把狀態寫入 Firebase
+# 網頁登入後讀同一路徑，不需要 Token 在前端，F12 看不到敏感資訊
+# Firestore 路徑：artifacts/kj-wealth-manager/public/futures_status
+# ============================================================
+FIREBASE_PROJECT_ID = 'kj-wealth-manager'
+FIREBASE_CRED_ENV   = 'FIREBASE_SERVICE_KEY'
+
+def write_futures_status_to_firebase(status: str, scan_time: str, signal_count: int):
+    cred_json = _os_tm.environ.get(FIREBASE_CRED_ENV, '')
+    if not cred_json:
+        print('  ℹ️ FIREBASE_SERVICE_KEY 未設定，跳過Firebase狀態寫入')
+        return
+    try:
+        import json as _json, urllib.request as _req, urllib.parse as _up
+        import base64 as _b64, time as _time
+        cred = _json.loads(cred_json)
+        token_url = 'https://oauth2.googleapis.com/token'
+        header  = _b64.urlsafe_b64encode(_json.dumps({'alg':'RS256','typ':'JWT'}).encode()).rstrip(b'=')
+        now_ts  = int(_time.time())
+        payload = _b64.urlsafe_b64encode(_json.dumps({
+            'iss': cred['client_email'], 'sub': cred['client_email'],
+            'aud': 'https://oauth2.googleapis.com/token',
+            'iat': now_ts, 'exp': now_ts + 3600,
+            'scope': 'https://www.googleapis.com/auth/datastore'
+        }).encode()).rstrip(b'=')
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.backends import default_backend
+        private_key = serialization.load_pem_private_key(
+            cred['private_key'].encode(), password=None, backend=default_backend())
+        sig_input = header + b'.' + payload
+        signature = private_key.sign(sig_input, padding.PKCS1v15(), hashes.SHA256())
+        jwt_token = sig_input + b'.' + _b64.urlsafe_b64encode(signature).rstrip(b'=')
+        body = _up.urlencode({'grant_type':'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                              'assertion':jwt_token.decode()}).encode()
+        r = _req.urlopen(_req.Request(token_url, data=body,
+                         headers={'Content-Type':'application/x-www-form-urlencoded'}))
+        access_token = _json.loads(r.read())['access_token']
+        fs_url = (f'https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}'
+                  f'/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/futures_status')
+        doc_body = _json.dumps({'fields': {
+            'status':       {'stringValue': status},
+            'scan_time':    {'stringValue': scan_time},
+            'signal_count': {'integerValue': str(signal_count)},
+            'updated_at':   {'stringValue': scan_time},
+        }}).encode()
+        patch_url = fs_url + '?updateMask.fieldPaths=status&updateMask.fieldPaths=scan_time&updateMask.fieldPaths=signal_count&updateMask.fieldPaths=updated_at'
+        req2 = _req.Request(patch_url, data=doc_body, method='PATCH',
+                            headers={'Authorization': f'Bearer {access_token}',
+                                     'Content-Type': 'application/json'})
+        _req.urlopen(req2)
+        print(f'  ✅ Firebase期貨狀態已寫入：{status} / {scan_time} / 訊號{signal_count}支')
+    except Exception as e:
+        print(f'  ⚠️ Firebase狀態寫入失敗（不影響主流程）：{e}')
+
+# ============================================================
 # ============================================================
 # 【２．策略參數設定區】← 所有策略的可調數值都在這裡，不需往下翻
 # ============================================================
@@ -822,7 +887,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
                 f"收盤價：{c_price:.2f}\n"
                 f"RSI轉折：{r_prev:.1f} → {r_now:.1f}\n"
             )
-            send_gmail(f"🔔 基金買進訊號：{fund_name}", msg_body)
+            send_gmail(f"☁️【雲端】🔔基金買進訊號：{fund_name}", msg_body)
             print(f"✅ {fund_name} 已發送觸發買進訊號，已加入今日彙整清單！")
         else:
             print(f"ℹ️ {fund_name}：目前尚未共振達標。")
@@ -879,7 +944,9 @@ def main_task():
 # ============================================================
     # ── 台股掃描 ──────────────────────────────────
     tw_list = []
-    if 'TW' not in active_markets:
+    if TEST_MODE == '5mk':
+        print('\n📊 台股：期貨5分K模式，跳過台股掃描')
+    elif 'TW' not in active_markets:
         print('\n📊 台股：非交易時段，跳過')
     else:
         # 🟢 大盤週K守門員（引用第2-5章ENABLE_INDEX_FILTER）
@@ -967,7 +1034,9 @@ def main_task():
             time.sleep(0.1) # 稍微加快掃描速度
 
 # ── 美股掃描（加入道瓊週K過濾，對應截圖轉折邏輯） ──────────
-    if 'US' not in active_markets:
+    if TEST_MODE == '5mk':
+        print('\n📊 美股：期貨5分K模式，跳過美股掃描')
+    elif 'US' not in active_markets:
         print('\n📊 美股：非交易時段，跳過')
     else:
         # 🔵 美股大盤守門員（引用第2-5章ENABLE_INDEX_FILTER）
@@ -1017,7 +1086,9 @@ def main_task():
         scan_synthetic_fund("SPY / QQQ / HYG三合一追蹤【安聯月配息基金】(合成代標)")
 
     # ── 虛擬幣掃描 ────────────────────────────────
-    if 'CRYPTO' not in active_markets:
+    if TEST_MODE == '5mk':
+        print('\n📊 虛擬幣：期貨5分K模式，跳過虛擬幣掃描')
+    elif 'CRYPTO' not in active_markets:
         print('\n📊 虛擬幣：非交易時段，跳過')
     else:
         print(f'\n📊 虛擬幣掃描：共{len(CRYPTO_LIST)}支')
@@ -1053,14 +1124,28 @@ def main_task():
                 boll_bot = float(df5['boll_bot20'].iloc[-1])
                 boll_top = float(df5['boll_top20'].iloc[-1])
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+                # ── 5分鐘內最多2封上限（防吵機制）────────────
+                _now_ts = time.time()
+                if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
+                _can_send = len(send_gmail._futures_log) < 2
+
                 if rsi_now > rsi_prev and mh_now > mh_prev and close <= boll_bot * 1.02:
-                    send_gmail(f"⭐【期貨5分K買進】{ticker} - {now_str_f}",
-                        f"⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
-                    print(f"  ✅ {ticker} 買進訊號已發送")
+                    if not _can_send:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+                    else:
+                        send_gmail._futures_log.append(_now_ts)
+                        send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
+                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
+                        print(f"  ✅ {ticker} 買進訊號已發送")
                 elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top:
-                    send_gmail(f"🔔【期貨5分K平倉】{ticker} - {now_str_f}",
-                        f"🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
-                    print(f"  ✅ {ticker} 平倉訊號已發送")
+                    if not _can_send:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+                    else:
+                        send_gmail._futures_log.append(_now_ts)
+                        send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
+                            f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
+                        print(f"  ✅ {ticker} 平倉訊號已發送")
                 else:
                     print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件，不發信")
             except Exception as e:
@@ -1117,7 +1202,7 @@ def main_task():
                         f"{'─'*30}\n"
                     )
 
-            subject = f"❌❌【下市警報】{len(hold_list)}支持有須出清 / {len(watch_list)}支觀察勿碰 - {now_str}"
+            subject = f"☁️【雲端】❌下市警報 {len(hold_list)}支持有須出清/{len(watch_list)}支觀察 - {now_str}"
             send_gmail(subject, body)
             save_notified(notified)
             print(f"  ❌ 下市警報已發送：持有{len(hold_list)}支 / 觀察{len(watch_list)}支")
@@ -1150,7 +1235,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"⭐【買進訊號】{len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】⭐買進訊號 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 買進訊號 {len(buy_signals)-len(filtered)} 支已通知過")
@@ -1183,7 +1268,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"🔔【賣出訊號】{len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】🔔賣出訊號 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
@@ -1192,10 +1277,13 @@ def main_task():
 # 無訊號
 # =====================
     if not buy_signals and not sell_signals and not delist_signals:
-        send_gmail(
-            f"📊 週K掃描完成 - {now_str}",
-            f"掃描時間：{now_str}\n\n本週無符合條件的股票"
-        )
+        print(f"📊 [{now_str}] 本次掃描無符合條件的股票，不發送通知。")
+
+    # ── 期貨5分K模式：每次掃描結束後寫入 Firebase 狀態 ──
+    if TEST_MODE == '5mk':
+        _sig_count = len(buy_signals) + len(sell_signals)
+        _status    = 'completed' if _sig_count == 0 else 'signal'
+        write_futures_status_to_firebase(_status, now_str, _sig_count)
 
     print("\n✅ 全部完成！請查收Gmail通知。")
 
@@ -1222,17 +1310,25 @@ if __name__ == "__main__":
         if not in_futures:
             print(f"[{test_now}] ❌ 非期貨5分K時段，直接結束")
             time.sleep(5); exit()
-        print(f"🚀 期貨5分K模式啟動　標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
-        while True:
-            now_l = datetime.now(pytz.timezone('Asia/Taipei'))
-            wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
-            if not((wd_l==0 and tv_l>=15*60+1) or (wd_l==1) or (wd_l==2 and tv_l<=13*60+30)):
-                print("✅ 期貨5分K時段結束，監控結束"); break
+        IS_GITHUB = bool(_os_tm.environ.get('GITHUB_ACTIONS', ''))
+        if IS_GITHUB:
+            print(f"🚀 [☁️GitHub Actions] 期貨5分K單次掃描　標的：{FUTURES_5MK_TARGETS}")
             try: main_task()
             except Exception as e: print(f"掃描發生錯誤: {e}")
-            print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒...")
-            time.sleep(FUTURES_5MK_INTERVAL)
-        exit()
+            print("✅ 單次掃描完成，等待 cron 下次觸發")
+            exit()
+        else:
+            print(f"🚀 [💻本機] 期貨5分K模式啟動　標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
+            while True:
+                now_l = datetime.now(pytz.timezone('Asia/Taipei'))
+                wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
+                if not((wd_l==0 and tv_l>=15*60+1) or (wd_l==1) or (wd_l==2 and tv_l<=13*60+30)):
+                    print("✅ 期貨5分K時段結束，監控結束"); break
+                try: main_task()
+                except Exception as e: print(f"掃描發生錯誤: {e}")
+                print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒...")
+                time.sleep(FUTURES_5MK_INTERVAL)
+            exit()
 
     # === [精準測試模式]：不受交易時間限制，發送兩封關鍵測試信後即結束 ===
     if TEST_MODE:
