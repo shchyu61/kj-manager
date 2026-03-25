@@ -621,6 +621,8 @@
 
         const completeLogin = async (email) => {
             currentUserEmail = email;
+            // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
+            localStorage.setItem('kj_email', email);
             await loadFromCloud(email);
             // ✅ 登入後自動抓取所有未知名稱（解決首次新增顯示「未定義資產」）
             setTimeout(() => {
@@ -633,6 +635,18 @@
             if (_futWrap && currentUserEmail === 'shchyu61@gmail.com') {
                 _futWrap.style.display = 'flex';
                 fetchFuturesStatus();
+                // ✅ Bug2修正：若目前在期貨時段，登入後自動開啟期貨5分K開關
+                const _now = new Date();
+                const _wd  = _now.getDay();
+                const _tv  = _now.getHours() * 60 + _now.getMinutes();
+                const _inFutures = (
+                    (_wd === 1 && _tv >= 15*60+1) ||
+                    (_wd === 2) ||
+                    (_wd === 3 && _tv <= 13*60+30)
+                );
+                if (_inFutures && !_futuresActive) {
+                    setTimeout(() => window.toggleFutures5mk(), 800); // 延遲0.8秒確保DOM就緒
+                }
             }
             document.getElementById('security-overlay').classList.add('hide');
             document.getElementById('main-content').classList.remove('hide');
@@ -662,6 +676,13 @@
             const email = getEmailInput();
             const keyInput = document.getElementById('access-key-input').value.trim();
             const expected = generateDailyKey(email);
+
+            // ✅ 首次登入強制OTP驗證（未在Firebase記錄emailVerified的信箱不可用密碼登入）
+            const isVerified = await checkEmailVerified(email);
+            if (!isVerified) {
+                showError('首次登入請先完成信箱驗證！請使用下方「OTP一次性密碼」驗證您的信箱。');
+                return;
+            }
 
             // ✅ 已移除白名單管控，任何信箱均可嘗試登入
             // 需求4：優先驗證自訂密碼
@@ -753,6 +774,10 @@
             btn.disabled = true;
             otpFailCount = 0;    // 成功登入，重置錯誤次數
             try {
+                // ✅ OTP驗證成功 → 標記此信箱為「已驗證」，日後可用密碼登入
+                await initFirebaseAuth();
+                const verifyPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
+                await setDoc(verifyPath, { emailVerified: true }, { merge: true });
                 await completeLogin(email);
             } catch (e) {
                 btn.disabled = false;
@@ -1742,6 +1767,17 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
             return null; // null = 無自訂密碼，回退到每日密碼
         };
 
+        // ── 首次登入驗證：查詢 Firebase 此信箱是否已通過 OTP 驗證 ──
+        const checkEmailVerified = async (email) => {
+            try {
+                await initFirebaseAuth();
+                const pwPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
+                const snap = await getDoc(pwPath);
+                if (snap.exists() && snap.data().emailVerified === true) return true;
+            } catch(e) {}
+            return false;
+        };
+
         window.renderWatchlist = () => {
             const list = document.getElementById('watchlist-list');
             document.getElementById('watchlist-count').innerText = watchlist.length;
@@ -1807,7 +1843,24 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
             });
         };
 
-        document.getElementById('btn-logout').addEventListener('click', () => location.reload());
+        // ✅ Bug3修正：登出時清除 localStorage，確保下次真正需要重新登入
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            localStorage.removeItem('kj_email');
+            location.reload();
+        });
+
+        // ✅ Bug3修正：頁面載入時檢查 localStorage，若有記錄則自動還原登入狀態
+        (async () => {
+            const savedEmail = localStorage.getItem('kj_email');
+            if (savedEmail) {
+                try {
+                    await completeLogin(savedEmail);
+                } catch(e) {
+                    // 自動登入失敗（例如Firebase異常），清除記錄讓使用者手動登入
+                    localStorage.removeItem('kj_email');
+                }
+            }
+        })();
     </script>
 </body>
 </html>
