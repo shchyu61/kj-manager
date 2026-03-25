@@ -645,7 +645,7 @@
                     (_wd === 3 && _tv <= 13*60+30)
                 );
                 if (_inFutures && !_futuresActive) {
-                    setTimeout(() => window.toggleFutures5mk(), 800); // 延遲0.8秒確保DOM就緒
+                    setTimeout(() => window.toggleFutures5mk(), 800);
                 }
             }
             document.getElementById('security-overlay').classList.add('hide');
@@ -810,7 +810,9 @@
                 list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Active Monitoring</div>`;
                 return;
             }
-            const filtered_st = stCatFilter === 'all' ? stocks : stocks.filter(s => (s.cat||'tw') === stCatFilter);
+            const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
+            const filtered_st = (stCatFilter === 'all' ? stocks : stocks.filter(s => (s.cat||'tw') === stCatFilter))
+                .slice().sort((a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code));
             if (filtered_st.length === 0) {
                 list.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs font-black uppercase">此分類尚無股票</div>`;
                 lucide.createIcons(); return;
@@ -1588,9 +1590,11 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 
         // ── 智能診斷：持股＋觀察兩清單（工作池版）─────────────
         window.startManualScan = async () => {
+            const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
+            const _sortFn = (a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code);
             const all = [
-                ...stocks.map(s => ({ code: s.code, tag: '持股' })),
-                ...watchlist.map(s => ({ code: s.code, tag: '觀察' }))
+                ...stocks.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '持股' })),
+                ...watchlist.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '觀察' }))
             ];
             if (all.length === 0) { window.showAlert('請先新增股票。'); return; }
             // 掃描前預載全額交割清單
@@ -1785,7 +1789,9 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                 list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Watchlist</div>`;
                 return;
             }
-            const filtered_wl = wlCatFilter === 'all' ? watchlist : watchlist.filter(s => (s.cat||'tw') === wlCatFilter);
+            const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
+            const filtered_wl = (wlCatFilter === 'all' ? watchlist : watchlist.filter(s => (s.cat||'tw') === wlCatFilter))
+                .slice().sort((a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code));
             if (filtered_wl.length === 0) {
                 list.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs font-black uppercase">此分類尚無股票</div>`;
                 lucide.createIcons(); return;
@@ -1843,7 +1849,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
             });
         };
 
-        // ✅ Bug3修正：登出時清除 localStorage，確保下次真正需要重新登入
+        // ✅ Bug3修正：登出時清除 localStorage
         document.getElementById('btn-logout').addEventListener('click', () => {
             localStorage.removeItem('kj_email');
             location.reload();
@@ -1856,7 +1862,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                 try {
                     await completeLogin(savedEmail);
                 } catch(e) {
-                    // 自動登入失敗（例如Firebase異常），清除記錄讓使用者手動登入
                     localStorage.removeItem('kj_email');
                 }
             }
