@@ -642,7 +642,7 @@
                 const _inFutures = (
                     (_wd === 1 && _tv >= 15*60+1) ||
                     (_wd === 2) ||
-                    (_wd === 3 && _tv <= 13*60+30)
+                    (_wd === 3 && _tv <= 11*60+30)
                 );
                 if (_inFutures && !_futuresActive) {
                     setTimeout(() => window.toggleFutures5mk(), 800);
@@ -1367,11 +1367,11 @@
             const inFutures = (
                 (wd === 1 && tv >= 15*60+1) ||
                 (wd === 2) ||
-                (wd === 3 && tv <= 13*60+30)
+                (wd === 3 && tv <= 11*60+30)
             );
 
             if (!_futuresActive && !inFutures) {
-                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三13:30）');
+                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三11:30）');
                 return;
             }
 
@@ -1410,18 +1410,18 @@
                 return;
             }
 
-            // 時段檢查（週一15:01~週三13:30）
+            // 時段檢查（週一15:01~週三11:30）
             const now = new Date();
             const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
             const inFutures = (
                 (wd === 1 && tv >= 15*60+1) ||
                 (wd === 2) ||
-                (wd === 3 && tv <= 13*60+30)
+                (wd === 3 && tv <= 11*60+30)
             );
 
             if (!inFutures) {
-                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三13:30）');
+                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三11:30）');
                 return;
             }
 
