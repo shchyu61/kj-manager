@@ -136,7 +136,18 @@ def write_futures_status_to_firebase(status: str, scan_time: str, signal_count: 
 # 條件A：近N根任一最低價 <= 布林下緣 AND RSI上升 AND MACD柱放大
 # 條件B：近N根Low均<布林中軌 AND 近N根High均<布林上軌
 #         AND 前N根MACD柱持續縮小 AND 當根MACD柱放大
-BUY_LOOKBACK_BARS    = 3      # 近幾根K棒回看數（條件A/B共用）
+#
+# ✅【K棒數量等比換算】─ 依K棒換算文件，切換週期時根數同步換算
+#   週K = 3根（基準，3根≈3週）
+#   日K = 15根（3週×5天=15根日K）
+#   5分K = 54根（含夜盤的近期K棒，主力夜盤為主戰場）
+BUY_LOOKBACK_BARS    = 3      # 週K回看根數（條件A/B共用）
+BUY_LOOKBACK_DAILY   = 15     # 日K回看根數（3週×5天，等比換算）
+BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤）
+# ── 【掃描週期模式】切換此處決定scan_stock用哪個週期把關 ──────────
+# 'weekly' = 週K三道關卡（第一道週K/第二道日K eLeader/第三道5分K）
+# 'daily'  = 日K三道關卡（第一道週K/第二道日K 15根/第三道5分K）
+SCAN_MODE = 'weekly'   # 切換：'weekly' / 'daily'
 BUY_RSI_MIN          = 35     # 買進RSI最低門檻（條件A，RSI需 > 此值才視為上升有效）
 BUY_BOLL_TOLERANCE   = 1.02   # 布林下緣容忍度（1.02=允許價格在下緣上方2%內仍觸發）
 
@@ -396,13 +407,16 @@ def get_active_markets():
         active.append('US')      # 美股
         active.append('CRYPTO')  # 虛擬幣
 
-    # 期貨5分K時段：週一15:01~週三13:30
+    # 期貨5分K時段：週一13:00~週三11:30（日盤+夜盤+隔日日盤）
     is_futures_time = False
-    if weekday == 0 and time_val >= 15*60+1:
+    # 週一 13:00 以後（日盤尾盤+夜盤開始）
+    if weekday == 0 and time_val >= 13*60:
         is_futures_time = True
+    # 週二 全天（夜盤延續+日盤）
     elif weekday == 1:
         is_futures_time = True
-    elif weekday == 2 and time_val <= 13*60+30:
+    # 週三 11:30 以前（日盤結束）
+    elif weekday == 2 and time_val <= 11*60+30:
         is_futures_time = True
     if is_futures_time:
         active.append('FUTURES')
@@ -754,62 +768,69 @@ def scan_stock(ticker, is_holding=False):
             else:
                 return ('DELIST_WATCH', risk_msg)
 
-        # 1. 抓取週K (第1層)
+        # ══════════════════════════════════════════════════════════
+        # 【三道關卡】依 SCAN_MODE 選擇對應驗證邏輯
+        # SCAN_MODE='weekly'：週K三道（週K→日K→5分K）
+        # SCAN_MODE='daily' ：日K三道（週K→日K→5分K，日K為第二道）
+        # ══════════════════════════════════════════════════════════
+
+        # ── 共用：抓取週K（第一道 or 賣出判斷用）────────────────
         df_w = get_stock_data(ticker, period='2y', interval='1wk', cache=weekly_cache)
         if df_w is None or len(df_w) < 30: return None
-        
-        # 計算週K技術指標
         df_w['boll_top20'], df_w['boll_mid20'], df_w['boll_bot20'] = ta.bbands(df_w['Close'], length=20).iloc[:, 0:3].values.T
         df_w['rsi14'] = ta.rsi(df_w['Close'], length=14)
-        
-        # 🔴 [優先處理賣出] (使用您 10:01 以來的上緣賣出邏輯)
+
+        # 🔴 [優先處理賣出]
         if is_holding:
             if check_sell_condition(df_w):
                 c_price = float(df_w['Close'].iloc[-1])
-                return ('SELL', c_price, float(df_w['High'].iloc[-1]), float(df_w['boll_top20'].iloc[-1]), 
+                return ('SELL', c_price, float(df_w['High'].iloc[-1]), float(df_w['boll_top20'].iloc[-1]),
                         float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
-            return None # 持有中但未達賣點，跳過買入判斷
+            return None
 
-       # 2. 買入判斷 - 第一層：週K位階 (低檔且超賣)
-        # ✅ [新增測試模式邏輯]：若開啟 TEST_MODE，則跳過此硬性門檻
+        # ── 第一道：週K位階（週K/日K模式共用）──────────────────
         if not TEST_MODE:
-            if not (df_w['Low'].iloc[-1] <= df_w['boll_bot20'].iloc[-1] * BUY_BOLL_TOLERANCE and df_w['rsi14'].iloc[-1] <= BUY_RSI_MIN):  # 引用第2-1章
+            if not check_buy_precondition(df_w):
                 return None
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
 
-        # 3. 買入判斷 - 第二層：日K趨勢 (eLeader 25 條件)
+        # ── 第二道：依SCAN_MODE選擇日K或eLeader ─────────────────
         df_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
         if df_d is None or len(df_d) < 50: return None
         df_d = calc_indicators(df_d)
         if df_d is None: return None
-        
-        # 🎯 [優化 1] 明確型態判斷，避免 Tuple/None 混用風險
-        is_eleader_ok = check_buy_eleader(df_d) is not None
- 
-        # 4. 買入判斷 - 第三層：5分K即時轉折
+
+        if SCAN_MODE == 'daily':
+            # 日K模式第二道：日K 15根條件A/B（BUY_LOOKBACK_DAILY）
+            globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
+            _2nd_ok = check_buy_precondition(df_d)
+            globals()['BUY_LOOKBACK_BARS'] = 3
+            if not _2nd_ok:
+                return None
+        else:
+            # 週K模式第二道：日K eLeader 25條件
+            is_eleader_ok = check_buy_eleader(df_d) is not None
+            if not is_eleader_ok:
+                return None
+
+        # ── 第三道：5分K即時轉折（週K/日K模式共用）─────────────
         now_ts = time.time()
         cache_key = f"5m_{ticker}"
-        
-        # 檢查快取是否在 5 分鐘(300秒)內
         if cache_key in five_min_cache and (now_ts - five_min_cache[cache_key]['ts'] < 300):
             df_5m = five_min_cache[cache_key]['df']
         else:
-            df_5m = yf.download(ticker, period='2d', interval='5m', progress=False)
+            df_5m = yf.download(ticker, period='5d', interval='5m', progress=False)
             if df_5m is not None and not df_5m.empty and len(df_5m) >= 10:
-                # 🎯 [優化 2] 先算好 RSI 與 MACD柱 存入快取（成交量不列入條件，截圖說明是期貨口數）
                 df_5m['rsi14'] = ta.rsi(df_5m['Close'].squeeze(), length=14)
                 _macd_5m = ta.macd(df_5m['Close'].squeeze(), fast=12, slow=26, signal=9)
                 df_5m['macd_hist'] = _macd_5m.iloc[:, 1]
                 five_min_cache[cache_key] = {'df': df_5m, 'ts': now_ts}
- 
-        # 確保資料長度足夠取前一根(-2)與指標皆存在
+
         if df_5m is None or len(df_5m) < 2 or 'rsi14' not in df_5m.columns: return None
- 
-        # 最終邏輯判斷
+
         last_rsi  = float(df_5m['rsi14'].iloc[-1])
         prev_rsi  = float(df_5m['rsi14'].iloc[-2])
-        # 5分K MACD柱（有值才比較，避免NaN錯誤）
         try:
             last_macd = float(df_5m['macd_hist'].iloc[-1])
             prev_macd = float(df_5m['macd_hist'].iloc[-2])
@@ -817,18 +838,24 @@ def scan_stock(ticker, is_holding=False):
         except:
             macd_5m_ok = False
 
-        # 🎯 最終買入守門員（OR 邏輯，兩條路任一成立即可進場）：
-        # 路線A：eLeader 25條件成立 AND 5分K RSI向上轉折（原有邏輯）
-        # 路線B：截圖3/4買進條件 = 5分K RSI向上 AND 5分K MACD柱向上（不看成交量）
-        route_A = is_eleader_ok and (last_rsi > prev_rsi and last_rsi > 35)
-        route_B = (last_rsi > prev_rsi and last_rsi > 35) and macd_5m_ok
+        rsi_5m_ok = (last_rsi > prev_rsi and last_rsi > BUY_RSI_MIN)
 
-        if route_A or route_B:
+        if SCAN_MODE == 'daily':
+            if not (rsi_5m_ok and macd_5m_ok):
+                return None
             c = float(df_5m['Close'].iloc[-1])
-            trigger = 'eLeader+5分K' if route_A else '截圖條件5分K'
-            print(f"🔥 {ticker} 觸發【{trigger}】，成交價：{c}")
-            return ('BUY', c, float(df_w['Low'].iloc[-1]), float(df_w['boll_bot20'].iloc[-1]), 
-                    float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
+            print(f"🔥 {ticker} 觸發【日K三道關卡】，成交價：{c}")
+            return ('BUY', c, float(df_d['Low'].iloc[-1]), float(df_d['boll_bot20'].iloc[-1]),
+                    float(df_d['rsi14'].iloc[-1]), float(df_d['rsi14'].iloc[-2]))
+        else:
+            route_A = rsi_5m_ok
+            route_B = rsi_5m_ok and macd_5m_ok
+            if route_A or route_B:
+                c = float(df_5m['Close'].iloc[-1])
+                trigger = 'eLeader+5分K' if route_A else '截圖條件5分K'
+                print(f"🔥 {ticker} 觸發【{trigger}】，成交價：{c}")
+                return ('BUY', c, float(df_w['Low'].iloc[-1]), float(df_w['boll_bot20'].iloc[-1]),
+                        float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
  
     except Exception as e:
         # 靜默跳過錯誤
@@ -1111,41 +1138,60 @@ def main_task():
         for ticker in FUTURES_5MK_TARGETS:
             try:
                 # ══════════════════════════════════════════════
-                # 5分K掃描：RSI + MACD柱 轉折判斷
-                # 日K門檻：參考用（印出日K位階供參考，但不強制擋住）
+                # ✅【三道關卡】期貨5分K進場先決條件（同本機版）
+                # 第一道：週K位階（check_buy_precondition，3根）
+                # 第二道：日K eLeader（check_buy_eleader，15根）
+                # 第三道：5分K 54根條件A/B + RSI門檻
                 # ══════════════════════════════════════════════
-                df5 = yf.download(ticker, period='2d', interval='5m', progress=False)
-                if df5 is None or df5.empty or len(df5) < 20:
-                    print(f'  ⚠️ {ticker} 5分K資料不足，跳過')
-                    continue
+
+                # ── 第一道：週K位階 ──────────────────────────
+                df5_w = get_stock_data(ticker, period='2y', interval='1wk', cache=weekly_cache)
+                if df5_w is None or len(df5_w) < 30:
+                    print(f'  ⚠️ {ticker} 週K資料不足，跳過'); continue
+                df5_w = calc_indicators(df5_w)
+                if not check_buy_precondition(df5_w):
+                    print(f'  ❌ {ticker} 第一道週K未通過，跳過'); continue
+                print(f'  ✅ {ticker} 第一道週K通過')
+
+                # ── 第二道：日K eLeader ──────────────────────
+                df5_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
+                if df5_d is None or len(df5_d) < 50:
+                    print(f'  ⚠️ {ticker} 日K資料不足，跳過'); continue
+                df5_d = calc_indicators(df5_d)
+                if check_buy_eleader(df5_d) is None:
+                    print(f'  ❌ {ticker} 第二道日K eLeader未通過，跳過'); continue
+                print(f'  ✅ {ticker} 第二道日K eLeader通過')
+
+                # ── 第三道：5分K 54根條件A/B ────────────────
+                # ✅【夜盤保留】主力以夜盤為主戰場
+                df5 = yf.download(ticker, period='5d', interval='5m', progress=False)
+                if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
+                    print(f'  ⚠️ {ticker} 5分K資料不足，跳過'); continue
                 df5 = calc_indicators(df5)
                 if df5 is None: continue
-                rsi_now  = float(df5['rsi14'].iloc[-1])
-                rsi_prev = float(df5['rsi14'].iloc[-2])
-                mh_now   = float(df5['macd_hist'].iloc[-1])
-                mh_prev  = float(df5['macd_hist'].iloc[-2])
-                close    = float(df5['Close'].iloc[-1])
-                boll_bot = float(df5['boll_bot20'].iloc[-1])
-                boll_top = float(df5['boll_top20'].iloc[-1])
+
+                n5 = BUY_LOOKBACK_5MK
+                l5=df5['Low']; h5=df5['High']; bb5=df5['boll_bot20']
+                bt5=df5['boll_top20']; bm5=df5['ma_c_20']; mh5=df5['macd_hist']; rsi5=df5['rsi14']
+                rsi_now=float(rsi5.iloc[-1]); rsi_prev=float(rsi5.iloc[-2])
+                mh_now=float(mh5.iloc[-1]);   mh_prev=float(mh5.iloc[-2])
+                close=float(df5['Close'].iloc[-1]); boll_bot=float(bb5.iloc[-1]); boll_top=float(bt5.iloc[-1])
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
-                # ── 日K位階參考（印出但不擋住掃描）──────────────
-                try:
-                    df_d5 = yf.download(ticker, period='10d', interval='1d', progress=False)
-                    if df_d5 is not None and not df_d5.empty and len(df_d5) >= 5:
-                        df_d5 = calc_indicators(df_d5)
-                        if df_d5 is not None:
-                            _daily_buy  = check_buy_precondition(df_d5)
-                            _daily_sell = check_sell_condition(df_d5)
-                            _zone = '低檔✅' if _daily_buy else ('高檔⚠️' if _daily_sell else '中軌區間')
-                            print(f'  ℹ️ {ticker} 日K位階：{_zone}（供參考，不影響5分K掃描）')
-                except: pass
+
+                _5mk_cond_A = (l5.iloc[-n5:] <= bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE).any() and rsi_now>rsi_prev and mh_now>mh_prev
+                _5mk_low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
+                _5mk_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
+                _5mk_macd_shr = len(mh5)>=n5+1 and all(float(mh5.iloc[-n5-1+j])>float(mh5.iloc[-n5+j]) for j in range(n5-1))
+                _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and mh_now>mh_prev
+                _5mk_buy = (_5mk_cond_A or _5mk_cond_B) and rsi_now > BUY_RSI_MIN
+
                 # ── 5分鐘內最多2封上限（防吵機制）────────────
                 _now_ts = time.time()
                 if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                 send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                 _can_send = len(send_gmail._futures_log) < 2
 
-                if rsi_now > rsi_prev and mh_now > mh_prev and close <= boll_bot * 1.02:
+                if _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE:  # ✅ 三道關卡通過
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
@@ -1321,7 +1367,7 @@ if __name__ == "__main__":
         now_f = datetime.now(tz_f)
         wd_f  = now_f.weekday()
         tv_f  = now_f.hour * 60 + now_f.minute
-        in_futures = ((wd_f==0 and tv_f>=15*60+1) or (wd_f==1) or (wd_f==2 and tv_f<=13*60+30))
+        in_futures = ((wd_f==0 and tv_f>=13*60) or (wd_f==1) or (wd_f==2 and tv_f<=11*60+30))  # 週一13:00~週三11:30
         if not in_futures:
             print(f"[{test_now}] ❌ 非期貨5分K時段，直接結束")
             time.sleep(5); exit()
@@ -1337,7 +1383,7 @@ if __name__ == "__main__":
             while True:
                 now_l = datetime.now(pytz.timezone('Asia/Taipei'))
                 wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
-                if not((wd_l==0 and tv_l>=15*60+1) or (wd_l==1) or (wd_l==2 and tv_l<=13*60+30)):
+                if not((wd_l==0 and tv_l>=13*60) or (wd_l==1) or (wd_l==2 and tv_l<=11*60+30)):
                     print("✅ 期貨5分K時段結束，監控結束"); break
                 try: main_task()
                 except Exception as e: print(f"掃描發生錯誤: {e}")
