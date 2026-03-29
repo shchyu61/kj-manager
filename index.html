@@ -357,6 +357,38 @@
                         <span class="text-[10px] font-bold text-slate-400">目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span></span>
                     </div>
                     <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
+                    <!-- 週K/日K 切換開關：所有帳號可見 -->
+                    <div id="scan-mode-wrap" class="flex flex-col items-center gap-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-500">週K</span>
+                            <button id="btn-scan-weekly" onclick="toggleScanMode('weekly')"
+                                role="switch" aria-checked="true"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
+                                style="min-width:3.5rem; background:#2563eb;">
+                                <span id="weekly-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(28px);">
+                                </span>
+                                <span id="weekly-label"
+                                    class="absolute left-1.5 text-[9px] font-black text-white">ON</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-500">日K</span>
+                            <button id="btn-scan-daily" onclick="toggleScanMode('daily')"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="daily-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="daily-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- 期貨5分K模式：僅 shchyu61@gmail.com 可見 -->
                     <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1.5">
                         <!-- 開關式 Toggle -->
@@ -545,8 +577,8 @@
         //   週K  → interval='1wk', range='2y',  _p1=3
         //   日K  → interval='1d',  range='1y',  _p1=_p1d（15根）
         //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
-        const SCAN_INTERVAL = '1wk';  // 切換：'1wk'週K / '1d'日K
-        const SCAN_RANGE    = '2y';   // 週K建議'2y'，日K建議'1y'
+        let SCAN_INTERVAL = '1wk';  // ✅ let：由週K/日K開關動態切換
+        let SCAN_RANGE    = '2y';   // 週K建議'2y'，日K建議'1y'
 
         // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
         // ============================================================
@@ -678,6 +710,8 @@
             document.getElementById('btn-logout').classList.remove('hide');
             document.getElementById('settings-email').innerText = email;
             if (countdownTimer) clearInterval(countdownTimer);
+            // ✅ 登入後讀取個人掃描模式設定（週K/日K）
+            _loadScanModePref(email).catch(()=>{});
         };
 
         const showError = (msg) => {
@@ -1049,16 +1083,30 @@
 
         // ✅ 5個proxy同時競速，誰最快回應就用誰（Promise.any）
         // 超時從12秒延長到20秒，大幅降低因proxy緩慢造成的失敗率
-        const fetchWithFallback = async (yahooUrl) => {
+        // ✅ 週末自動偵測（Yahoo Finance週末API較嚴格）
+        const _isWeekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
+        // ✅ 週末降低並行數（3→1），避免被封鎖
+        const _poolSize = () => _isWeekend() ? 1 : 5;
+
+        const fetchWithFallback = async (yahooUrl, _retry = 1) => {
             const tryProxy = async (proxyFn) => {
-                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(20000) });
+                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(25000) });
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
                 const result = data.chart && data.chart.result && data.chart.result[0];
                 if (!result) throw new Error('no chart data');
                 return result;
             };
-            return Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
+            try {
+                return await Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
+            } catch(e) {
+                // ✅ 失敗後自動重試一次（等3秒，週末特別容易被限速）
+                if (_retry > 0) {
+                    await new Promise(r => setTimeout(r, 3000));
+                    return fetchWithFallback(yahooUrl, _retry - 1);
+                }
+                throw e;
+            }
         };
 
         // ── 並行工作池（建議3：最多3個同時執行）────────────────
@@ -1442,6 +1490,77 @@
             }
         }
 
+        // ── 週K/日K 切換開關 ────────────────────────────────────
+        // 目前掃描模式（'weekly'=週K / 'daily'=日K），預設週K
+        let _currentScanMode = 'weekly';
+
+        // ✅ 更新開關UI
+        const _updateScanModeUI = (mode) => {
+            const wBtn = document.getElementById('btn-scan-weekly');
+            const dBtn = document.getElementById('btn-scan-daily');
+            const wKnob = document.getElementById('weekly-knob');
+            const dKnob = document.getElementById('daily-knob');
+            const wLbl  = document.getElementById('weekly-label');
+            const dLbl  = document.getElementById('daily-label');
+            if (!wBtn) return;
+            if (mode === 'weekly') {
+                wBtn.style.background = '#2563eb'; wBtn.setAttribute('aria-checked','true');
+                wKnob.style.transform = 'translateX(28px)';
+                wLbl.textContent = 'ON'; wLbl.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                dBtn.style.background = ''; dBtn.className = dBtn.className.replace(/bg-\S+/,'bg-slate-300');
+                dBtn.setAttribute('aria-checked','false');
+                dKnob.style.transform = 'translateX(0px)';
+                dLbl.textContent = 'OFF'; dLbl.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+            } else {
+                dBtn.style.background = '#2563eb'; dBtn.setAttribute('aria-checked','true');
+                dKnob.style.transform = 'translateX(28px)';
+                dLbl.textContent = 'ON'; dLbl.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                wBtn.style.background = ''; wBtn.className = wBtn.className.replace(/bg-\S+/,'bg-slate-300');
+                wBtn.setAttribute('aria-checked','false');
+                wKnob.style.transform = 'translateX(0px)';
+                wLbl.textContent = 'OFF'; wLbl.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+            }
+        };
+
+        // ✅ 切換掃描模式（同步更新SCAN_INTERVAL + 自動重新掃描）
+        window.toggleScanMode = async (mode) => {
+            if (_currentScanMode === mode) return;
+            _currentScanMode = mode;
+            // 同步更新全域 SCAN_INTERVAL 和 SCAN_RANGE
+            SCAN_INTERVAL = mode === 'daily' ? '1d' : '1wk';
+            SCAN_RANGE    = mode === 'daily' ? '1y' : '2y';
+            _updateScanModeUI(mode);
+            window.showAlert(mode === 'daily' ? '切換為日K模式，自動重新掃描...' : '切換為週K模式，自動重新掃描...');
+            // ✅ 儲存設定到 Firebase（綁定個人帳號）
+            if (currentUserEmail && window.db) {
+                try {
+                    await initFirebaseAuth();
+                    const _pref = doc(window.db,'artifacts',window.appId,'users',getSafeDocId(currentUserEmail),'data','settings');
+                    await setDoc(_pref, { scanMode: mode }, { merge: true });
+                } catch(e) {}
+            }
+            // ✅ 清除診斷快取，觸發重新掃描
+            if (typeof diagCache !== 'undefined') diagCache.clear();
+            // 延遲0.5秒讓Alert顯示後再觸發掃描
+            setTimeout(() => window.startManualScan(), 500);
+        };
+
+        // ✅ 登入後從 Firebase 讀取個人掃描模式設定
+        const _loadScanModePref = async (email) => {
+            try {
+                await initFirebaseAuth();
+                const _pref = doc(window.db,'artifacts',window.appId,'users',getSafeDocId(email),'data','settings');
+                const snap = await getDoc(_pref);
+                if (snap.exists() && snap.data().scanMode) {
+                    const saved = snap.data().scanMode;
+                    _currentScanMode = saved;
+                    SCAN_INTERVAL = saved === 'daily' ? '1d' : '1wk';
+                    SCAN_RANGE    = saved === 'daily' ? '1y' : '2y';
+                    _updateScanModeUI(saved);
+                }
+            } catch(e) {}
+        };
+
         // ── 期貨5分K開關 Toggle ────────────────────────────────
         let _futuresActive = false;  // 開關狀態（false=關，true=開）
 
@@ -1710,7 +1829,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 
             // 收集買進訊號
             const wlSignals = [];
-            await runWithPool(tasks, 5, (done, total) => {
+            // ✅ 工作池：平日5支並行，週末1支
+            await runWithPool(tasks, _poolSize(), (done, total) => {
                 txt.innerText = `診斷中（${done}/${total}）...`;
             });
 
@@ -1800,9 +1920,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                 }
             });
 
-            // 需求5：持股優先跑（先診斷最重要的）
-            // ── 工作池擴編：3→5，診斷速度提升約40% ──
-            await runWithPool(tasks, 5, (done, total) => {
+            // ✅ 工作池：平日5支並行，週末1支（避免Yahoo Finance API封鎖）
+            await runWithPool(tasks, _poolSize(), (done, total) => {
                 progress.style.width = `${Math.round(done/total*100)}%`;
             }, (t) => t.tag === '持股');
 
