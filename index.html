@@ -410,6 +410,26 @@
                         <span id="futures-status" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
                             ⏳ 狀態查詢中...
                         </span>
+                        <!-- 方案B：手動持倉開關 -->
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-[10px] font-black text-rose-500">持倉中</span>
+                            <button id="btn-futures-holding" onclick="toggleFuturesHolding()"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="holding-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="holding-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                        <!-- 深夜模式提醒 -->
+                        <div id="night-mode-hint" style="display:none"
+                            class="text-[9px] font-black text-amber-600 text-center leading-tight mt-0.5">
+                            ⚠️ 深夜01~05<br>方案A+B監控出場
+                        </div>
                     </div>
                 </div>
                 <div class="space-y-6">
@@ -696,9 +716,9 @@
                 const _wd  = _now.getDay();
                 const _tv  = _now.getHours() * 60 + _now.getMinutes();
                 const _inFutures = (
-                    (_wd === 1 && _tv >= 13*60) ||       // 週一13:00後
-                    (_wd === 2) ||                        // 週二全天
-                    (_wd === 3 && _tv <= 11*60+30)       // 週三11:30前
+                    (_wd === 1 && _tv >= 13*60) ||                          // 週一13:00後
+                    (_wd === 2 && (_tv < 1*60 || _tv >= 5*60)) ||           // 週二（排除凌晨01:00~05:00）
+                    (_wd === 3 && _tv <= 11*60+30)                          // 週三11:30前
                 );
                 if (_inFutures && !_futuresActive) {
                     setTimeout(() => window.toggleFutures5mk(), 800);
@@ -712,6 +732,8 @@
             if (countdownTimer) clearInterval(countdownTimer);
             // ✅ 登入後讀取個人掃描模式設定（週K/日K）
             _loadScanModePref(email).catch(()=>{});
+            // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
+            if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
         };
 
         const showError = (msg) => {
@@ -1072,17 +1094,17 @@
         const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
 
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
-        // ✅ 選用最穩定的 proxy，超時20秒（原12秒太短，流量大時容易失敗）
+        // ✅ 4個proxy競速（ChatGPT建議4個最佳，5個反而易被封鎖）
+        // 移除thingproxy（最慢且易超時），保留最穩定4個
         const PROXIES = [
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
             (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-            (url) => `https://thingproxy.freeboard.io/fetch/${url}`,
             (url) => `https://proxy.cors.sh/${url}`,
         ];
 
-        // ✅ 5個proxy同時競速，誰最快回應就用誰（Promise.any）
-        // 超時從12秒延長到20秒，大幅降低因proxy緩慢造成的失敗率
+        // ✅ 4個proxy同時競速，誰最快回應就用誰（Promise.any）
+        // 超時25秒，大幅降低因proxy緩慢造成的失敗率
         // ✅ 週末自動偵測（Yahoo Finance週末API較嚴格）
         const _isWeekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
         // ✅ 週末降低並行數（3→1），避免被封鎖
@@ -1561,6 +1583,85 @@
             } catch(e) {}
         };
 
+        // ── 方案B：手動持倉開關 ──────────────────────────────────
+        let _futuresHoldingManual = false;  // 手動持倉開關
+
+        window.toggleFuturesHolding = async () => {
+            _futuresHoldingManual = !_futuresHoldingManual;
+            const btn   = document.getElementById('btn-futures-holding');
+            const knob  = document.getElementById('holding-knob');
+            const label = document.getElementById('holding-label');
+            if (_futuresHoldingManual) {
+                btn.style.backgroundColor = '#dc2626';  // red-600
+                knob.style.transform = 'translateX(28px)';
+                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                btn.setAttribute('aria-checked','true');
+                window.showAlert('🔴 持倉中：深夜01~05仍會監控平倉條件');
+            } else {
+                btn.style.backgroundColor = '';
+                btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
+                knob.style.transform = 'translateX(0px)';
+                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+                btn.setAttribute('aria-checked','false');
+                window.showAlert('⬜ 已清除持倉標記');
+            }
+            // ✅ 方案A：同步寫入Firebase持倉狀態
+            if (currentUserEmail && window.db) {
+                try {
+                    await initFirebaseAuth();
+                    const _hPath = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                    await setDoc(_hPath, { is_futures_holding: _futuresHoldingManual }, { merge: true });
+                } catch(e) {}
+            }
+            _updateNightModeHint();
+        };
+
+        // ✅ 方案A：從Firebase讀取持倉狀態
+        const _loadFuturesHolding = async () => {
+            try {
+                await initFirebaseAuth();
+                const _hPath = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                const snap = await getDoc(_hPath);
+                if (snap.exists() && snap.data().is_futures_holding === true) {
+                    _futuresHoldingManual = true;
+                    const btn  = document.getElementById('btn-futures-holding');
+                    const knob = document.getElementById('holding-knob');
+                    const label= document.getElementById('holding-label');
+                    if (btn) {
+                        btn.style.backgroundColor = '#dc2626';
+                        knob.style.transform = 'translateX(28px)';
+                        label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                        btn.setAttribute('aria-checked','true');
+                    }
+                }
+            } catch(e) {}
+            _updateNightModeHint();
+        };
+
+        // ✅ 深夜模式提醒顯示
+        const _updateNightModeHint = () => {
+            const hint = document.getElementById('night-mode-hint');
+            if (!hint) return;
+            const now = new Date(); const h = now.getHours(); const m = now.getMinutes();
+            const tv  = h*60+m;
+            const isNight = (tv >= 1*60 && tv < 5*60);
+            hint.style.display = (isNight && _futuresHoldingManual) ? 'block' : 'none';
+        };
+
+        // ✅ 深夜01:00~05:00時，判斷是否有持倉（方案A Firebase OR 方案B手動）
+        const _hasFuturesHolding = async () => {
+            // 方案B：手動開關直接判斷
+            if (_futuresHoldingManual) return true;
+            // 方案A：從Firebase讀取
+            try {
+                await initFirebaseAuth();
+                const _hPath = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                const snap = await getDoc(_hPath);
+                if (snap.exists() && snap.data().is_futures_holding === true) return true;
+            } catch(e) {}
+            return false;
+        };
+
         // ── 期貨5分K開關 Toggle ────────────────────────────────
         let _futuresActive = false;  // 開關狀態（false=關，true=開）
 
@@ -1574,13 +1675,13 @@
             const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
             const inFutures = (
-                (wd === 1 && tv >= 13*60) ||         // 週一13:00後
-                (wd === 2) ||                         // 週二全天
-                (wd === 3 && tv <= 11*60+30)         // 週三11:30前
+                (wd === 1 && tv >= 13*60) ||                              // 週一13:00後
+                (wd === 2 && (tv < 1*60 || tv >= 5*60)) ||               // 週二（排除凌晨01:00~05:00）
+                (wd === 3 && tv <= 11*60+30)                              // 週三11:30前
             );
 
             if (!_futuresActive && !inFutures) {
-                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30）');
+                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30，深夜01~05除外）');
                 return;
             }
 
@@ -1624,14 +1725,20 @@
             const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
             const inFutures = (
-                (wd === 1 && tv >= 13*60) ||          // 週一13:00後
-                (wd === 2) ||                           // 週二全天
-                (wd === 3 && tv <= 11*60+30)           // 週三11:30前
+                (wd === 1 && tv >= 13*60) ||                              // 週一13:00後
+                (wd === 2 && (tv < 1*60 || tv >= 5*60)) ||               // 週二（排除凌晨01:00~05:00）
+                (wd === 3 && tv <= 11*60+30)                              // 週三11:30前
             );
+            // ✅ 深夜01:00~05:00：若有持倉（方案A Firebase OR 方案B手動）→ 只掃平倉，不掃買進
+            const _isNightHours = (wd === 2 && tv >= 1*60 && tv < 5*60);
+            const _nightHolding = _isNightHours ? await _hasFuturesHolding() : false;
 
-            if (!inFutures) {
-                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30）');
+            if (!inFutures && !_nightHolding) {
+                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30，深夜01~05除外）');
                 return;
+            }
+            if (_nightHolding) {
+                window.showAlert('🌙 深夜01~05持倉模式：只監控平倉條件（方案A+B）');
             }
 
             const btn = document.getElementById('btn-futures-5mk');
@@ -1752,7 +1859,8 @@
                     const nearUpper   = price >= boll.upper * _p4;
                     const name = stockNameMap[ticker] || ticker;
 
-                    if (_5mk_buy && nearLower) {
+                    // ✅ 深夜01~05持倉模式：只掃平倉，跳過買進
+                    if (_5mk_buy && nearLower && !_nightHolding) {
                         // 買進訊號：發Gmail
                         const body = `⭐【期貨5分K買進訊號】⭐
 標的：${ticker} ${name}
@@ -1767,6 +1875,14 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 signal_body: body,
                             });
                             window.showAlert(`⭐ ${ticker} 期貨5分K買進訊號！Gmail已發送`);
+                            // ✅ 方案A：買進訊號發出 → 自動標記Firebase持倉=true
+                            try {
+                                await initFirebaseAuth();
+                                const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
+                                await setDoc(_hp, { is_futures_holding: true }, { merge: true });
+                                _futuresHoldingManual = true;
+                                document.getElementById('btn-futures-holding') && toggleFuturesHolding();
+                            } catch(e) {}
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else if (rsiRising && macdFalling && nearUpper) {
@@ -1784,6 +1900,18 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 signal_body: body,
                             });
                             window.showAlert(`🔔 ${ticker} 期貨5分K平倉訊號！Gmail已發送`);
+                            // ✅ 方案A：平倉訊號發出 → 自動清除Firebase持倉=false
+                            try {
+                                await initFirebaseAuth();
+                                const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
+                                await setDoc(_hp, { is_futures_holding: false }, { merge: true });
+                                _futuresHoldingManual = false;
+                                const _hb = document.getElementById('btn-futures-holding');
+                                const _hk = document.getElementById('holding-knob');
+                                const _hl = document.getElementById('holding-label');
+                                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
+                                _updateNightModeHint();
+                            } catch(e) {}
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else {

@@ -407,13 +407,13 @@ def get_active_markets():
         active.append('US')      # 美股
         active.append('CRYPTO')  # 虛擬幣
 
-    # 期貨5分K時段：週一13:00~週三11:30（日盤+夜盤+隔日日盤）
+    # 期貨5分K時段：週一13:00~週三11:30（深夜01:00~05:00不觸發，人在睡覺）
     is_futures_time = False
-    # 週一 13:00 以後（日盤尾盤+夜盤開始）
+    # 週一 13:00 以後
     if weekday == 0 and time_val >= 13*60:
         is_futures_time = True
-    # 週二 全天（夜盤延續+日盤）
-    elif weekday == 1:
+    # 週二（排除深夜01:00~05:00）
+    elif weekday == 1 and (time_val < 1*60 or time_val >= 5*60):
         is_futures_time = True
     # 週三 11:30 以前（日盤結束）
     elif weekday == 2 and time_val <= 11*60+30:
@@ -1134,7 +1134,9 @@ def main_task():
 
     # ── 期貨5分K掃描（TEST_MODE='5mk'且FUTURES在active_markets時執行）──
     if 'FUTURES' in active_markets and TEST_MODE == '5mk':
-        print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}')
+        # ✅ 持倉狀態：跨掃描週期持續追蹤（程式重啟會重置，建議搭配方案B手動開關）
+        if '_futures_is_holding' not in dir(): _futures_is_holding = False
+        print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}（持倉狀態：{"持倉中🔴" if _futures_is_holding else "空倉⬜"}）')
         for ticker in FUTURES_5MK_TARGETS:
             try:
                 # ══════════════════════════════════════════════
@@ -1191,7 +1193,9 @@ def main_task():
                 send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                 _can_send = len(send_gmail._futures_log) < 2
 
-                if _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE:  # ✅ 三道關卡通過
+                _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')
+                # ✅ 深夜01~05有持倉：只掃平倉，跳過買進
+                if _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE and not (_is_night_now and _futures_is_holding):
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
@@ -1199,6 +1203,10 @@ def main_task():
                         _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
                             f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
                         print(f"  {'✅' if _ok else '❌'} {ticker} 買進訊號{'已發送' if _ok else '發送失敗'}")
+                        # ✅ 方案A：買進訊號發出 → 記錄持倉狀態
+                        _futures_is_holding = True
+                        write_futures_status_to_firebase('holding', now_str_f, 1)
+                        print(f"  📌 持倉狀態已標記：is_futures_holding=True")
                 elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top * 1.00:
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
@@ -1207,6 +1215,10 @@ def main_task():
                         _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
                             f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
                         print(f"  {'✅' if _ok else '❌'} {ticker} 平倉訊號{'已發送' if _ok else '發送失敗'}")
+                        # ✅ 方案A：平倉訊號發出 → 清除持倉狀態
+                        _futures_is_holding = False
+                        write_futures_status_to_firebase('no_signal', now_str_f, 0)
+                        print(f"  📌 持倉狀態已清除：is_futures_holding=False")
                 else:
                     print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件，不發信")
             except Exception as e:
@@ -1367,7 +1379,7 @@ if __name__ == "__main__":
         now_f = datetime.now(tz_f)
         wd_f  = now_f.weekday()
         tv_f  = now_f.hour * 60 + now_f.minute
-        in_futures = ((wd_f==0 and tv_f>=13*60) or (wd_f==1) or (wd_f==2 and tv_f<=11*60+30))  # 週一13:00~週三11:30
+        in_futures = ((wd_f==0 and tv_f>=13*60) or (wd_f==1 and (tv_f<1*60 or tv_f>=5*60)) or (wd_f==2 and tv_f<=11*60+30))  # 週一13:00~週三11:30，深夜01~05除外
         if not in_futures:
             print(f"[{test_now}] ❌ 非期貨5分K時段，直接結束")
             time.sleep(5); exit()
@@ -1383,7 +1395,8 @@ if __name__ == "__main__":
             while True:
                 now_l = datetime.now(pytz.timezone('Asia/Taipei'))
                 wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
-                if not((wd_l==0 and tv_l>=13*60) or (wd_l==1) or (wd_l==2 and tv_l<=11*60+30)):
+                _is_night_l = (wd_l==1 and 1*60<=tv_l<5*60)
+                if not((wd_l==0 and tv_l>=13*60) or (wd_l==1 and (tv_l<1*60 or tv_l>=5*60)) or (wd_l==2 and tv_l<=11*60+30) or (_is_night_l and _futures_is_holding)):
                     print("✅ 期貨5分K時段結束，監控結束"); break
                 try: main_task()
                 except Exception as e: print(f"掃描發生錯誤: {e}")
