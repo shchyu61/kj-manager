@@ -535,6 +535,30 @@
 
         let stocks = [];
         let watchlist = [];          // 待買觀察清單
+        // ============================================================
+        // 【１．設定區】← 常改的內容都在這裡
+        // ============================================================
+
+        // ── 【１-1】K線週期切換 ──────────────────────────────────────
+        // 切換此處的interval和range，analyzeStock自動使用對應K棒根數
+        // 注意：切換後策略參數區的_p1也要同步換成對應週期的根數
+        //   週K  → interval='1wk', range='2y',  _p1=3
+        //   日K  → interval='1d',  range='1y',  _p1=_p1d（15根）
+        //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
+        const SCAN_INTERVAL = '1wk';  // 切換：'1wk'週K / '1d'日K
+        const SCAN_RANGE    = '2y';   // 週K建議'2y'，日K建議'1y'
+
+        // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
+        // ============================================================
+        // 【２．策略參數設定區】← 加密前改好數字，改完交給Claude加密
+        // ============================================================
+        // ⚠️ 策略參數在 analyzeStock 函數內的【策略參數區】
+        //    因涉及加密保護，請直接在該區修改 _p1/_p1d/_p1m/_p2/_p3/_p4
+
+        // ============================================================
+        // 【３．以下為系統核心，一般不需修改】
+        // ============================================================
+
         let currentUserEmail = "";
         let otpCode = "";
         let otpExpireTime = 0;
@@ -640,9 +664,9 @@
                 const _wd  = _now.getDay();
                 const _tv  = _now.getHours() * 60 + _now.getMinutes();
                 const _inFutures = (
-                    (_wd === 1 && _tv >= 15*60+1) ||
-                    (_wd === 2) ||
-                    (_wd === 3 && _tv <= 11*60+30)
+                    (_wd === 1 && _tv >= 13*60) ||       // 週一13:00後
+                    (_wd === 2) ||                        // 週二全天
+                    (_wd === 3 && _tv <= 11*60+30)       // 週三11:30前
                 );
                 if (_inFutures && !_futuresActive) {
                     setTimeout(() => window.toggleFutures5mk(), 800);
@@ -678,6 +702,13 @@
             const expected = generateDailyKey(email);
 
             // ✅ 首次登入強制OTP驗證（未在Firebase記錄emailVerified的信箱不可用密碼登入）
+            const isVerified = await checkEmailVerified(email);
+            if (!isVerified) {
+                showError('首次登入請先完成信箱驗證！請使用下方「OTP一次性密碼」驗證您的信箱。');
+                return;
+            }
+
+            // ✅ 首次登入強制OTP驗證
             const isVerified = await checkEmailVerified(email);
             if (!isVerified) {
                 showError('首次登入請先完成信箱驗證！請使用下方「OTP一次性密碼」驗證您的信箱。');
@@ -1140,14 +1171,14 @@
             if (isTW) {
                 try {
                     yResult = await fetchWithFallback(
-                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TW?interval=1wk&range=2y`);
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TW?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
                 } catch {
                     yResult = await fetchWithFallback(
-                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=1wk&range=2y`);
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
                 }
             } else {
                 yResult = await fetchWithFallback(
-                    `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=1wk&range=2y`);
+                    `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
             }
 
             const closes = yResult.indicators.quote[0].close.filter(v => v != null);
@@ -1181,7 +1212,7 @@
             }
 
             // 【策略參數區】已加密保護
-            eval(atob('Y29uc3QgX3AxPTMsX3AyPTM1LF9wMz0xLjAzLF9wND0xLjAwOw=='));
+            eval(atob('Y29uc3QgX3AxPTMsX3AxZD0xNSxfcDFtPTU0LF9wMV9hdXRvPVNDQU5fSU5URVJWQUw9PT0iMWQiP19wMWQ6U0NBTl9JTlRFUlZBTD09PSI1bSI/X3AxbTpfcDEsX3AyPTM1LF9wMz0xLjAzLF9wND0xLjAwOw=='));
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
@@ -1199,7 +1230,7 @@
             const rsi_trend = _t1 ? 'rising' : 'falling';
 
             // 條件判斷（混淆）
-            const _n = _p1;
+            const _n = _p1_auto;  // ✅ 自動依SCAN_INTERVAL使用對應週期根數
             const _lows_n  = lows.slice(-_n);
             const _highs_n = highs.slice(-_n);
             // ── 條件A：近N根任一最低價<=布林下緣
@@ -1231,9 +1262,75 @@
             })() : false;
             const _r2 = _x2 && _x3 && _x4 && _t2;  // 條件B成立
 
-            const buy_signal = (_r1 || _r2) && rsiNow > _p2;  // 條件A或B任一成立且RSI>門檻
-
+            // ── 【三道關卡】依 SCAN_INTERVAL 選擇對應驗證邏輯 ──────────
+            let buy_signal = false;
             let conditions = [];
+
+            if (SCAN_INTERVAL === '1wk') {
+                // ══ 週K模式：條件A/B（單層，第一道即為週K本身）══
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+
+            } else if (SCAN_INTERVAL === '1d') {
+                // ══ 日K三道關卡 ══════════════════════════════════
+                // 第一道：週K位階（上層把關）
+                let _1st_pass = false;
+                try {
+                    const _wkSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
+                    const _wkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_wkSuffix}?interval=1wk&range=2y`;
+                    const _wkData = await fetchWithFallback(_wkUrl).catch(async () => {
+                        if (/^\d{4,6}$/.test(code)) {
+                            return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=1wk&range=2y`);
+                        } throw new Error('no wk data');
+                    });
+                    const _wkC = _wkData.indicators.quote[0].close.filter(v=>v!=null);
+                    const _wkL = (_wkData.indicators.quote[0].low||[]).filter(v=>v!=null);
+                    const _wkH = (_wkData.indicators.quote[0].high||[]).filter(v=>v!=null);
+                    if (_wkC.length >= 26) {
+                        const _wn   = _p1;  // 3根週K
+                        const _wkRsiNow = calcRSI(_wkC);
+                        const _wkRsiPrv = calcRSI(_wkC.slice(0,-1));
+                        const _wkMacd   = calcMACDHist(_wkC);
+                        const _wkT1 = _wkRsiNow > _wkRsiPrv;
+                        const _wkT2 = _wkMacd && _wkMacd.now > _wkMacd.prev;
+                        const _wkLn = _wkL.slice(-_wn);
+                        const _wkHn = _wkH.slice(-_wn);
+                        // 週K條件A：近3根任一低點<=布林下緣 AND RSI↑ AND MACD↑
+                        const _wkA = _wkLn.some((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<=_b.lower*_p3; }) && _wkT1 && _wkT2;
+                        // 週K條件B：近3根低均<中軌 AND 高均<上軌
+                        const _wkB = _wkLn.every((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<_b.mid; }) && _wkHn.every((h,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&h<_b.upper; });
+                        _1st_pass = _wkA || _wkB;
+                    }
+                } catch(e) { _1st_pass = false; }
+
+                // 第二道：日K條件A/B（15根，現有_r1/_r2邏輯）
+                const _2nd_pass = (_r1 || _r2) && rsiNow > _p2;
+
+                // 第三道：5分K當根RSI↑ AND MACD柱↑（觸發時機，當根vs前1根）
+                let _3rd_pass = false;
+                try {
+                    const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
+                    const _5mData = await fetchWithFallback(
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_5mSuffix}?interval=5m&range=5d`
+                    ).catch(async () => {
+                        if (/^\d{4,6}$/.test(code)) return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=5m&range=5d`);
+                        throw new Error('no 5m data');
+                    });
+                    const _5mC = _5mData.indicators.quote[0].close.filter(v=>v!=null);
+                    if (_5mC.length >= 3) {
+                        const _5mRsiNow = calcRSI(_5mC);
+                        const _5mRsiPrv = calcRSI(_5mC.slice(0,-1));
+                        const _5mMacd   = calcMACDHist(_5mC);
+                        _3rd_pass = _5mRsiNow > _5mRsiPrv && _5mMacd && _5mMacd.now > _5mMacd.prev;
+                    }
+                } catch(e) { _3rd_pass = false; }
+
+                buy_signal = _1st_pass && _2nd_pass && _3rd_pass;
+
+            } else {
+                // 其他週期：單層條件A/B
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+            }
+
             if (buy_signal) {
                 if (_r1 && price <= boll.lower * _p3) conditions.push('S1');  // 截圖條件A觸發
                 if (_r2) conditions.push('S2');                                    // 截圖條件B觸發
@@ -1365,13 +1462,13 @@
             const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
             const inFutures = (
-                (wd === 1 && tv >= 15*60+1) ||
-                (wd === 2) ||
-                (wd === 3 && tv <= 11*60+30)
+                (wd === 1 && tv >= 13*60) ||         // 週一13:00後
+                (wd === 2) ||                         // 週二全天
+                (wd === 3 && tv <= 11*60+30)         // 週三11:30前
             );
 
             if (!_futuresActive && !inFutures) {
-                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三11:30）');
+                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30）');
                 return;
             }
 
@@ -1410,18 +1507,18 @@
                 return;
             }
 
-            // 時段檢查（週一15:01~週三11:30）
+            // 時段檢查（週一13:00~週三11:30）
             const now = new Date();
             const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
             const inFutures = (
-                (wd === 1 && tv >= 15*60+1) ||
-                (wd === 2) ||
-                (wd === 3 && tv <= 11*60+30)
+                (wd === 1 && tv >= 13*60) ||          // 週一13:00後
+                (wd === 2) ||                           // 週二全天
+                (wd === 3 && tv <= 11*60+30)           // 週三11:30前
             );
 
             if (!inFutures) {
-                window.showAlert('❌ 非期貨5分K時段（週一15:01~週三11:30）');
+                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30）');
                 return;
             }
 
@@ -1434,7 +1531,7 @@
                 const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
 
                 for (const ticker of FUTURES_TARGETS) {
-                    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=5m&range=2d`;
+                    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=5m&range=5d`; // ✅ 含夜盤需更長範圍
                     let yResult = null;
                     try {
                         yResult = await fetchWithFallback(url);
@@ -1443,12 +1540,70 @@
                         continue;
                     }
 
+                    // ✅【夜盤保留】主力以夜盤為主戰場，不剔除夜盤
+                    // range='5d' 確保足夠近期夜盤+日盤K棒（約1000+根）
                     const closes = yResult.indicators.quote[0].close.filter(v => v != null);
-                    if (closes.length < 20) {
-                        window.showAlert(`⚠️ ${ticker} 5分K資料不足`);
+                    const lows   = (yResult.indicators.quote[0].low   || []).map((v,i) => v ?? closes[i]);
+                    const highs  = (yResult.indicators.quote[0].high  || []).map((v,i) => v ?? closes[i]);
+                    const _5MK_LOOKBACK = _p1m; // ✅ 近54根5分K棒（含夜盤）
+                    if (closes.length < _5MK_LOOKBACK + 2) {
+                        window.showAlert(`⚠️ ${ticker} 5分K資料不足（需>=${_5MK_LOOKBACK+2}根）`);
                         continue;
                     }
 
+                    // ── 第一道：週K位階（_p1=3根）──────────────────
+                    let _wkResult = null;
+                    try {
+                        const _wkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&range=2y`;
+                        const _wkData = await fetchWithFallback(_wkUrl);
+                        const _wkC = _wkData.indicators.quote[0].close.filter(v=>v!=null);
+                        const _wkL = _wkData.indicators.quote[0].low.filter(v=>v!=null);
+                        const _wkH = _wkData.indicators.quote[0].high.filter(v=>v!=null);
+                        if (_wkC.length >= 30) {
+                            const _wb = calcBoll(_wkC);
+                            const _wr = calcRSI(_wkC);
+                            const _wm = calcMACDHist(_wkC);
+                            const _wn = _p1;
+                            const _wLows  = _wkL.slice(-_wn);
+                            const _wHighs = _wkH.slice(-_wn);
+                            // 條件A：近3根任一低點<=布林下緣
+                            const _wA = _wLows.some((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<=_b.lower*_p3; }) && calcRSI(_wkC)>calcRSI(_wkC.slice(0,-1)) && _wm&&_wm.now>_wm.prev;
+                            // 條件B：近3根低均<中軌 AND 高均<上軌
+                            const _wB = _wLows.every((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<_b.mid; }) && _wHighs.every((h,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&h<_b.upper; });
+                            _wkResult = (_wA || _wB) ? 'pass' : null;
+                        }
+                    } catch(e) { _wkResult = null; }
+                    if (!_wkResult) {
+                        window.showAlert(`❌ ${ticker} 第一道週K位階未達條件，跳過`);
+                        continue;
+                    }
+
+                    // ── 第二道：日K eLeader（_p1d=15根）─────────────
+                    let _dkResult = null;
+                    try {
+                        const _dkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1y`;
+                        const _dkData = await fetchWithFallback(_dkUrl);
+                        const _dkC = _dkData.indicators.quote[0].close.filter(v=>v!=null);
+                        const _dkL = _dkData.indicators.quote[0].low.filter(v=>v!=null);
+                        const _dkH = _dkData.indicators.quote[0].high.filter(v=>v!=null);
+                        if (_dkC.length >= 50) {
+                            const _dn = _p1d;  // 15根日K
+                            const _dLows  = _dkL.slice(-_dn);
+                            const _dHighs = _dkH.slice(-_dn);
+                            const _db = calcBoll(_dkC); const _dr = calcRSI(_dkC); const _dm = calcMACDHist(_dkC);
+                            // 日K條件A：近15根任一低點<=布林下緣
+                            const _dA = _dLows.some((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<=_b.lower*_p3; }) && _dr>calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now>_dm.prev;
+                            // 日K條件B：近15根低均<中軌 AND 高均<上軌
+                            const _dB = _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<_b.mid; }) && _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h<_b.upper; });
+                            _dkResult = (_dA || _dB) && _dr > _p2 ? 'pass' : null;
+                        }
+                    } catch(e) { _dkResult = null; }
+                    if (!_dkResult) {
+                        window.showAlert(`❌ ${ticker} 第二道日K位階未達條件，跳過`);
+                        continue;
+                    }
+
+                    // ── 第三道：5分K 54根條件A/B ─────────────────────
                     // 計算技術指標
                     const boll    = calcBoll(closes);
                     const rsiNow  = calcRSI(closes);
@@ -1460,14 +1615,32 @@
 
                     const rsiRising   = rsiNow > rsiPrv;
                     const macdRising  = macd.now > macd.prev;
-                    const nearLower   = price <= boll.lower * 1.02;
                     const rsifalling  = rsiNow < rsiPrv;
                     const macdFalling = macd.now < macd.prev;
-                    const nearUpper   = price >= boll.upper * 1.00;
 
+                    // ✅【條件A/B 54根】與週K邏輯一致
+                    const _nm = _5MK_LOOKBACK;
+                    const _lows_m  = lows.slice(-_nm);
+                    const _highs_m = highs.slice(-_nm);
+                    const _cls_m   = closes;
+                    // 條件A：近54根任一最低價<=布林下緣 AND RSI↑ AND MACD↑
+                    const _5mk_x1 = _lows_m.some((l,i) => {
+                        const _b = calcBoll(_cls_m.slice(0, _cls_m.length-_nm+i+1));
+                        return _b && l <= _b.lower * _p3;
+                    });
+                    const _5mk_A = _5mk_x1 && rsiRising && macdRising;
+                    // 條件B：近54根最低均<布林中軌 AND 最高均<布林上軌 AND 前N根MACD縮 AND 當根放大
+                    const _5mk_x2 = _lows_m.every((l,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l<_b.mid; });
+                    const _5mk_x3 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h<_b.upper; });
+                    const _5mk_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now<=_m1.now){_ok=false;break;} } return _ok; })() : false;
+                    const _5mk_B  = _5mk_x2 && _5mk_x3 && _5mk_x4 && macdRising;
+                    const _5mk_buy = (_5mk_A || _5mk_B) && rsiNow > _p2;
+
+                    const nearLower   = price <= boll.lower * _p3;
+                    const nearUpper   = price >= boll.upper * _p4;
                     const name = stockNameMap[ticker] || ticker;
 
-                    if (rsiRising && macdRising && nearLower) {
+                    if (_5mk_buy && nearLower) {
                         // 買進訊號：發Gmail
                         const body = `⭐【期貨5分K買進訊號】⭐
 標的：${ticker} ${name}
