@@ -708,13 +708,6 @@
                 return;
             }
 
-            // ✅ 首次登入強制OTP驗證
-            const isVerified = await checkEmailVerified(email);
-            if (!isVerified) {
-                showError('首次登入請先完成信箱驗證！請使用下方「OTP一次性密碼」驗證您的信箱。');
-                return;
-            }
-
             // ✅ 已移除白名單管控，任何信箱均可嘗試登入
             // 需求4：優先驗證自訂密碼
             const customResult = await checkCustomPassword(email, keyInput);
@@ -1262,9 +1255,75 @@
             })() : false;
             const _r2 = _x2 && _x3 && _x4 && _t2;  // 條件B成立
 
-            const buy_signal = (_r1 || _r2) && rsiNow > _p2;  // 條件A或B任一成立且RSI>門檻
-
+            // ── 【三道關卡】依 SCAN_INTERVAL 選擇對應驗證邏輯 ──────────
+            let buy_signal = false;
             let conditions = [];
+
+            if (SCAN_INTERVAL === '1wk') {
+                // ══ 週K模式：條件A/B（單層，第一道即為週K本身）══
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+
+            } else if (SCAN_INTERVAL === '1d') {
+                // ══ 日K三道關卡 ══════════════════════════════════
+                // 第一道：週K位階（上層把關）
+                let _1st_pass = false;
+                try {
+                    const _wkSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
+                    const _wkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_wkSuffix}?interval=1wk&range=2y`;
+                    const _wkData = await fetchWithFallback(_wkUrl).catch(async () => {
+                        if (/^\d{4,6}$/.test(code)) {
+                            return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=1wk&range=2y`);
+                        } throw new Error('no wk data');
+                    });
+                    const _wkC = _wkData.indicators.quote[0].close.filter(v=>v!=null);
+                    const _wkL = (_wkData.indicators.quote[0].low||[]).filter(v=>v!=null);
+                    const _wkH = (_wkData.indicators.quote[0].high||[]).filter(v=>v!=null);
+                    if (_wkC.length >= 26) {
+                        const _wn   = _p1;  // 3根週K
+                        const _wkRsiNow = calcRSI(_wkC);
+                        const _wkRsiPrv = calcRSI(_wkC.slice(0,-1));
+                        const _wkMacd   = calcMACDHist(_wkC);
+                        const _wkT1 = _wkRsiNow > _wkRsiPrv;
+                        const _wkT2 = _wkMacd && _wkMacd.now > _wkMacd.prev;
+                        const _wkLn = _wkL.slice(-_wn);
+                        const _wkHn = _wkH.slice(-_wn);
+                        // 週K條件A：近3根任一低點<=布林下緣 AND RSI↑ AND MACD↑
+                        const _wkA = _wkLn.some((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<=_b.lower*_p3; }) && _wkT1 && _wkT2;
+                        // 週K條件B：近3根低均<中軌 AND 高均<上軌
+                        const _wkB = _wkLn.every((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<_b.mid; }) && _wkHn.every((h,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&h<_b.upper; });
+                        _1st_pass = _wkA || _wkB;
+                    }
+                } catch(e) { _1st_pass = false; }
+
+                // 第二道：日K條件A/B（15根，現有_r1/_r2邏輯）
+                const _2nd_pass = (_r1 || _r2) && rsiNow > _p2;
+
+                // 第三道：5分K當根RSI↑ AND MACD柱↑（觸發時機，當根vs前1根）
+                let _3rd_pass = false;
+                try {
+                    const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
+                    const _5mData = await fetchWithFallback(
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_5mSuffix}?interval=5m&range=5d`
+                    ).catch(async () => {
+                        if (/^\d{4,6}$/.test(code)) return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=5m&range=5d`);
+                        throw new Error('no 5m data');
+                    });
+                    const _5mC = _5mData.indicators.quote[0].close.filter(v=>v!=null);
+                    if (_5mC.length >= 3) {
+                        const _5mRsiNow = calcRSI(_5mC);
+                        const _5mRsiPrv = calcRSI(_5mC.slice(0,-1));
+                        const _5mMacd   = calcMACDHist(_5mC);
+                        _3rd_pass = _5mRsiNow > _5mRsiPrv && _5mMacd && _5mMacd.now > _5mMacd.prev;
+                    }
+                } catch(e) { _3rd_pass = false; }
+
+                buy_signal = _1st_pass && _2nd_pass && _3rd_pass;
+
+            } else {
+                // 其他週期：單層條件A/B
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+            }
+
             if (buy_signal) {
                 if (_r1 && price <= boll.lower * _p3) conditions.push('S1');  // 截圖條件A觸發
                 if (_r2) conditions.push('S2');                                    // 截圖條件B觸發
