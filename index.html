@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v03310429</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v03310517</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1116,39 +1116,15 @@
         // ✅ 週末降低並行數（3→1），避免被封鎖
         const _poolSize = () => _isWeekend() ? 1 : 5;
 
-        // ✅【Finnhub 優先 + Yahoo 備援】二合一資料來源
-        // 流程：Finnhub（Worker轉發，Key隱藏）→ 失敗 → Yahoo Finance（Proxy）
-        const _WORKER = 'https://yahoo-proxy.shchyu61.workers.dev';
-        const _FINN_RES = { '1wk':'W', '1d':'D', '5m':'5', '15m':'15', '60m':'60' };
-        const _FINN_RANGE = { '2y':63072000, '1y':31536000, '6mo':15552000, '5d':432000, '2d':172800, '1mo':2592000 };
-
+        // ✅ Cloudflare Worker 第一順位（自己的Worker，穩定不被Yahoo封）
+        // 失敗時自動競速fallback到其他proxy
         const fetchWithFallback = async (yahooUrl, _retry = 1) => {
-            // ── 第一步：嘗試 Finnhub（經 Cloudflare Worker，Key不外露）──
-            try {
-                const _u = new URL(yahooUrl);
-                const _sym = _u.pathname.split('/').pop();           // 取出股票代碼
-                const _interval = _u.searchParams.get('interval') || '1wk';
-                const _range    = _u.searchParams.get('range')    || '2y';
-                const _res = _FINN_RES[_interval] || 'W';
-                const _finnUrl = `${_WORKER}/finnhub/${encodeURIComponent(_sym)}/${_res}/${_range}`;
-                const _fr = await fetch(_finnUrl, { signal: AbortSignal.timeout(12000) });
-                if (_fr.ok) {
-                    const _fd = await _fr.json();
-                    if (_fd?.chart?.result?.[0]) {
-                        console.log(`✅ Finnhub成功：${_sym}`);
-                        return _fd.chart.result[0];
-                    }
-                }
-            } catch(e) { /* Finnhub失敗，繼續走Yahoo備援 */ }
-
-            // ── 第二步：Yahoo Finance 備援（Proxy競速）──────────────
             const tryProxy = async (proxyFn) => {
                 const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(25000) });
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
                 const result = data.chart && data.chart.result && data.chart.result[0];
                 if (!result) throw new Error('no chart data');
-                console.log(`✅ Yahoo備援成功`);
                 return result;
             };
             try {
