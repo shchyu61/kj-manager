@@ -1100,13 +1100,13 @@
         const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
 
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
-        // ✅ 4個proxy競速（ChatGPT建議4個最佳，5個反而易被封鎖）
-        // 移除thingproxy（最慢且易超時），保留最穩定4個
+        // ✅ 自己的 Cloudflare Worker（最穩定，不會被Yahoo封鎖）
+        // Worker網址：https://yahoo-proxy.shchyu61.workers.dev
         const PROXIES = [
+            (url) => `https://yahoo-proxy.shchyu61.workers.dev/${encodeURIComponent(url)}`,
             (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
             (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
             (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-            (url) => `https://proxy.cors.sh/${url}`,
         ];
 
         // ✅ 4個proxy同時競速，誰最快回應就用誰（Promise.any）
