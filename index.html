@@ -1,0 +1,2284 @@
+!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>科蓁智能理財管家 | 全能掃描系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- EmailJS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+    <!-- Firebase SDK 導入 -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCnvmKp-2RUjFuiJNlrkoRw5OkTzz-Bbi4",
+            authDomain: "kj-wealth-manager.firebaseapp.com",
+            projectId: "kj-wealth-manager",
+            storageBucket: "kj-wealth-manager.firebasestorage.app",
+            messagingSenderId: "657270829857",
+            appId: "1:657270829857:web:bd43147d24d500eebf8460"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = 'kj-wealth-manager';  // ✅ 固定值，永遠存取同一路徑
+
+        window.db = db;
+        window.appId = appId;
+        window.auth = auth;
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Noto Sans TC', 'sans-serif'] },
+                    colors: {
+                        primary: '#0f172a',
+                        secondary: '#3b82f6',
+                        accent: '#10b981',
+                        danger: '#ef4444'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* ── 響應式基準：手機16px，筆電14px ── */
+        html { font-size: 16px; }
+        /* 手機、平板、筆電統一16px，確保全裝置清晰易讀 */
+
+        body { background-color: #f0e8d8; font-family: 'Noto Sans TC', sans-serif; -webkit-text-size-adjust: 100%; }
+        .hide { display: none !important; }
+
+        /* ── 全裝置：登入卡片字體（手機+筆電統一放大版）── */
+        #auth-card { padding: 1.61rem 1.41rem; }
+        #auth-card h2 { font-size: 1.17rem; line-height: 1.4; }
+        #auth-card p { font-size: 0.9rem; }
+        #auth-card input { font-size: 1.06rem; padding: 0.76rem 1.01rem; }
+        #auth-card button { font-size: 1rem; padding: 0.76rem 1.01rem; }
+        #auth-card label { font-size: 0.85rem; }
+        /* 底部Tab文字 */
+        #tab-bar span { font-size: 0.72rem; }
+        /* 診斷卡片RSI文字 */
+        .diag-rsi { font-size: 0.75rem; }
+        #security-overlay {
+            backdrop-filter: blur(25px);
+            background: rgba(42, 16, 0, 0.97);
+        }
+        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10, 90% { transform: translate3d(-1px, 0, 0); }
+            20, 80% { transform: translate3d(2px, 0, 0); }
+            30, 50, 70% { transform: translate3d(-4px, 0, 0); }
+            40, 60% { transform: translate3d(4px, 0, 0); }
+        }
+        .tab-active { color: #8a4a18; border-top: 3px solid #8a4a18; }
+        .scan-line {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+            width: 100%;
+            position: absolute;
+            animation: scan 2s infinite linear;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        .progress-bar-fill { transition: width 2s ease-in-out; }
+        #custom-alert {
+            display: none;
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 200;
+        }
+        .otp-input {
+            letter-spacing: 0.5em;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 900;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #d4c0a0;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+    <!-- [Security Layer] 驗證介面 -->
+    <div id="security-overlay" class="fixed inset-0 z-[100] flex items-start justify-center p-4 overflow-y-auto">
+        <div id="auth-card" class="max-w-md w-full rounded-3xl p-5 shadow-2xl text-center border my-auto" style="background:#faf4ea; border-color:#c4a878;">
+            <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3">
+                <i data-lucide="shield-check" class="w-6 h-6"></i>
+            </div>
+            <h2 class="text-lg font-black mb-1 tracking-tight">【科蓁智能理財管家】成員身份驗證</h2>
+            <p class="text-slate-500 text-xs mb-3 leading-relaxed">請輸入信箱帳號，選擇任一方式登入。</p>
+
+            <!-- 信箱輸入 -->
+            <div class="space-y-2 text-left mb-3">
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-black text-slate-500 ml-2 tracking-tight uppercase flex justify-between">
+                        <span>User Account / 信箱帳號</span>
+                        <span class="text-blue-500 font-bold normal-case">Gmail 可免輸入 @gmail.com</span>
+                    </label>
+                    <input type="text" id="auth-email" placeholder="如: shchyu61" 
+                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
+                    <p class="text-xs text-slate-400 ml-2 italic">※ Yahoo 或其他信箱請輸入完整地址</p>
+                </div>
+            </div>
+
+            <!-- 方式A：每日密碼 -->
+            <div id="section-daily-key" class="space-y-2 text-left">
+                <div class="divider">方式 A：每日密碼</div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-black text-slate-500 ml-2 tracking-tight uppercase">Daily Key / 每日密碼</label>
+                    <input type="password" id="access-key-input" placeholder="輸入每日密碼" 
+                           class="w-full border-none rounded-xl py-2.5 px-6 text-lg font-bold tracking-widest focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
+                </div>
+                <button id="btn-verify-key" 
+                        class="w-full py-2.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="log-in" class="w-4 h-4"></i>
+                    <span id="login-btn-text">密碼登入</span>
+                </button>
+            </div>
+
+            <!-- 方式B：一次性OTP -->
+            <div id="section-otp" class="space-y-2 text-left mt-3">
+                <div class="divider">方式 B：一次性密碼（OTP）</div>
+                <div id="otp-step1">
+                    <button id="btn-send-otp" 
+                            class="w-full py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="mail" class="w-4 h-4"></i>
+                        <span id="send-otp-text">發送6碼一次性密碼到信箱</span>
+                    </button>
+                </div>
+                <div id="otp-step2" class="hide space-y-2">
+                    <div class="p-2 bg-emerald-50 rounded-xl text-center">
+                        <p class="text-xs font-black text-emerald-700">✅ 密碼已發送！請查收信箱</p>
+                        <p class="text-[10px] text-emerald-600 mt-0.5">有效時間：<span id="otp-countdown" class="font-black">05:00</span></p>
+                    </div>
+                    <input type="text" id="otp-input" placeholder="輸入6碼一次性密碼" maxlength="6"
+                           class="otp-input w-full border-none rounded-xl py-2.5 px-4 focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
+                    <div class="flex gap-2">
+                        <button id="btn-verify-otp" 
+                                class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                            <span id="otp-verify-text">驗證並登入</span>
+                        </button>
+                        <button id="btn-resend-otp" 
+                                class="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all text-xs">
+                            重新發送
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="error-msg" class="text-rose-500 text-xs mt-3 font-bold opacity-0 transition-opacity">身份或密碼錯誤，請重新嘗試。</div>
+        </div>
+    </div>
+
+    <!-- 警報彈窗 -->
+    <div id="custom-alert" class="bg-rose-600 text-white px-8 py-4 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-3 animate-bounce">
+        <i data-lucide="alert-circle" class="w-5 h-5"></i>
+        <span id="alert-text">發生錯誤</span>
+    </div>
+
+    <nav class="fixed top-0 w-full z-50 backdrop-blur-md border-b" style="background:rgba(250,244,234,0.92); border-color:#d4c0a0;">
+        <div class="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow font-black italic">K</div>
+                <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
+            </div>
+            <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
+        </div>
+    </nav>
+
+    <main id="main-content" class="hide pt-24 pb-32 px-4 max-w-4xl mx-auto">
+        <!-- 待買觀察清單頁面 -->
+        <div id="page-watchlist" class="hide space-y-6">
+            <div class="flex justify-between items-end px-2">
+                <div>
+                    <h3 class="text-2xl font-black italic tracking-tight uppercase">Watchlist</h3>
+                    <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">待買觀察清單</p>
+                </div>
+                <div class="text-right">
+                    <span id="watchlist-count" class="text-3xl font-black text-amber-500">0</span>
+                    <span class="text-[10px] font-black text-slate-400 block uppercase">觀察中</span>
+                </div>
+            </div>
+            <div class="rounded-[2.5rem] p-4 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
+                <div class="flex flex-col gap-3 mb-4">
+                    <div class="flex gap-3">
+                        <input type="text" id="new-watchlist-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)"
+                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-400 uppercase transition-all border" style="background:#faf4ea; border-color:#c4a878;">
+                        <select id="new-watchlist-cat" class="rounded-2xl px-3 py-2 text-xs font-black border outline-none" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                            <option value="tw">台股</option>
+                            <option value="us">美股</option>
+                            <option value="fund">基金</option>
+                            <option value="crypto">虛擬幣</option>
+                            <option value="fx">外匯</option>
+                            <option value="gold">黃金/貴金屬</option>
+                        </select>
+                        <button id="btn-add-watchlist" class="bg-amber-500 text-white px-6 py-4 rounded-2xl font-black text-sm hover:bg-amber-600 transition-all">新增</button>
+                    </div>
+                    <!-- 需求2：安聯基金提示 -->
+                    <div id="fund-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fff3cd; color:#7a4a00; border:1px solid #f0c878;">
+                        💡 安聯月配息基金無直接代碼，建議改用三合一追蹤：<br>
+                        請分別新增 <span style="color:#1a5a30; font-weight:900;">SPY（美股）、QQQ（美股）、HYG（基金）</span>，系統將依 3_stock_monitor 策略判斷買賣訊號。
+                    </div>
+                    <!-- 黃金/貴金屬提示 -->
+                    <div id="wl-gold-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fdf6e3; color:#7a5a00; border:1px solid #d4af37;">
+                        🥇 追蹤台灣銀行黃金存摺，建議輸入代碼：<br>
+                        <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
+                        <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
+                        <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
+                    </div>
+                    <!-- 待買觀察：匯出/匯入備份 -->
+                    <div class="flex gap-2">
+                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-xs font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
+                        <label class="flex-1 py-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                            ⬆ 匯入還原 JSON
+                            <input type="file" accept=".json" class="hidden" onchange="importData(event)">
+                        </label>
+                    </div>
+                    <button id="btn-watchlist-scan" onclick="startWatchlistScan()"
+                            class="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-black text-sm hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        <span id="watchlist-scan-text">全部診斷（掃描買進訊號）</span>
+                    </button>
+                </div>
+                <!-- 分類Tab -->
+                <div id="wl-cat-tabs" class="flex gap-2 mb-3 overflow-x-auto pb-1">
+                    <button onclick="filterWatchlist('all')" id="wl-tab-all" class="wl-cat-btn active-cat shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#8a4a18;color:#fff;">全部</button>
+                    <button onclick="filterWatchlist('tw')"   id="wl-tab-tw"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">台股</button>
+                    <button onclick="filterWatchlist('us')"   id="wl-tab-us"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">美股</button>
+                    <button onclick="filterWatchlist('fund')" id="wl-tab-fund" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">基金</button>
+                    <button onclick="filterWatchlist('crypto')" id="wl-tab-crypto" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
+                    <button onclick="filterWatchlist('fx')"   id="wl-tab-fx"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
+                    <button onclick="filterWatchlist('gold')" id="wl-tab-gold" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
+                </div>
+                <div id="watchlist-list" class="grid grid-cols-1 gap-4 min-h-[200px]"></div>
+            </div>
+        </div>
+
+        <!-- 監控頁面 -->
+        <div id="page-monitor" class="space-y-6">
+            <div class="flex justify-between items-end px-2">
+                <div>
+                    <h3 class="text-2xl font-black italic tracking-tight uppercase">Multi-Asset Monitor</h3>
+                    <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">台/美股、虛擬貨幣、基金三合一</p>
+                </div>
+                <div class="text-right">
+                    <span id="stock-count" class="text-3xl font-black text-blue-600">0</span>
+                    <span class="text-[10px] font-black text-slate-400 block uppercase">監控中</span>
+                </div>
+            </div>
+            <div class="rounded-[2.5rem] p-4 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
+                <div class="flex flex-col gap-3 mb-4">
+                    <div class="flex gap-3">
+                        <input type="text" id="new-stock-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)" 
+                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-500 uppercase transition-all border" style="background:#faf4ea; border-color:#c4a878;">
+                        <select id="new-stock-cat" class="rounded-2xl px-3 py-2 text-xs font-black border outline-none" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                            <option value="tw">台股</option>
+                            <option value="us">美股</option>
+                            <option value="fund">基金</option>
+                            <option value="crypto">虛擬幣</option>
+                            <option value="fx">外匯</option>
+                            <option value="gold">黃金/貴金屬</option>
+                        </select>
+                        <button id="btn-add-stock" class="bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-sm hover:bg-blue-600 transition-all">新增</button>
+                    </div>
+                    <!-- 需求3: 匯出/匯入備份 -->
+                    <div class="flex gap-2">
+                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-xs font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
+                        <label class="flex-1 py-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                            ⬆ 匯入還原 JSON
+                            <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+                        </label>
+                    </div>
+                    <!-- 持股清單：安聯基金提示（選基金時顯示）-->
+                    <div id="stock-fund-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fff3cd; color:#7a4a00; border:1px solid #f0c878;">
+                        💡 安聯月配息基金無直接代碼，建議改用三合一追蹤：<br>
+                        請分別新增 <span style="color:#1a5a30; font-weight:900;">SPY（美股）、QQQ（美股）、HYG（基金）</span>，系統將依 3_stock_monitor 策略判斷買賣訊號。
+                    </div>
+                    <!-- 持股清單：黃金/貴金屬提示 -->
+                    <div id="st-gold-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fdf6e3; color:#7a5a00; border:1px solid #d4af37;">
+                        🥇 追蹤台灣銀行黃金存摺，建議輸入代碼：<br>
+                        <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
+                        <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
+                        <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
+                    </div>
+                </div>
+                <!-- 分類Tab -->
+                <div id="st-cat-tabs" class="flex gap-2 mb-3 overflow-x-auto pb-1">
+                    <button onclick="filterStocks('all')"    id="st-tab-all"    class="st-cat-btn active-cat shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#1a3a8a;color:#fff;">全部</button>
+                    <button onclick="filterStocks('tw')"     id="st-tab-tw"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">台股</button>
+                    <button onclick="filterStocks('us')"     id="st-tab-us"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">美股</button>
+                    <button onclick="filterStocks('fund')"   id="st-tab-fund"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">基金</button>
+                    <button onclick="filterStocks('crypto')" id="st-tab-crypto" class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
+                    <button onclick="filterStocks('fx')"     id="st-tab-fx"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
+                    <button onclick="filterStocks('gold')"   id="st-tab-gold"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
+                </div>
+                <div id="stock-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[200px]"></div>
+            </div>
+        </div>
+
+        <!-- 掃描頁面 -->
+        <div id="page-scan" class="hide space-y-6">
+            <div class="text-left px-2">
+                <h3 class="text-2xl font-black italic tracking-tight uppercase">Intelligence Scan</h3>
+                <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">RSI/MACD 技術面自動診斷</p>
+            </div>
+            <div class="bg-white border-2 border-slate-200 rounded-[2.5rem] p-8 relative overflow-hidden">
+                <div id="scan-visual" class="hide scan-line"></div>
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-black text-slate-800">掃描頻率：自動同步全球市場</span>
+                        <span class="text-[10px] font-bold text-slate-400">目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span></span>
+                    </div>
+                    <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
+                    <!-- 週K/日K 切換開關：所有帳號可見 -->
+                    <div id="scan-mode-wrap" class="flex flex-col items-center gap-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-500">週K</span>
+                            <button id="btn-scan-weekly" onclick="toggleScanMode('weekly')"
+                                role="switch" aria-checked="true"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
+                                style="min-width:3.5rem; background:#2563eb;">
+                                <span id="weekly-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(28px);">
+                                </span>
+                                <span id="weekly-label"
+                                    class="absolute left-1.5 text-[9px] font-black text-white">ON</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-500">日K</span>
+                            <button id="btn-scan-daily" onclick="toggleScanMode('daily')"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="daily-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="daily-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 期貨5分K模式：僅 shchyu61@gmail.com 可見 -->
+                    <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1.5">
+                        <!-- 開關式 Toggle -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-500">期貨5分K</span>
+                            <button id="btn-futures-5mk" onclick="toggleFutures5mk()"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="futures-toggle-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="futures-toggle-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                        <!-- GitHub Actions 狀態標籤 -->
+                        <span id="futures-status" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
+                            ⏳ 狀態查詢中...
+                        </span>
+                        <!-- 方案B：手動持倉開關 -->
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-[10px] font-black text-rose-500">持倉中</span>
+                            <button id="btn-futures-holding" onclick="toggleFuturesHolding()"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="holding-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="holding-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                        <!-- 深夜模式提醒 -->
+                        <div id="night-mode-hint" style="display:none"
+                            class="text-[9px] font-black text-amber-600 text-center leading-tight mt-0.5">
+                            ⚠️ 深夜01~05<br>方案A+B監控出場
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-6">
+                    <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div id="scan-progress" class="bg-blue-600 h-full w-0 progress-bar-fill"></div>
+                    </div>
+                    <div id="scan-result-list" class="hide space-y-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 設定頁面 -->
+        <div id="page-settings" class="hide space-y-6">
+            <div class="text-left px-2">
+                <h3 class="text-2xl font-black italic tracking-tight uppercase">Account Management</h3>
+                <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">權限與推播設定</p>
+            </div>
+            <div class="rounded-[2.5rem] p-6 space-y-5 border-2" style="background:#faf4ea; border-color:#c4a878;">
+                <div class="border-b pb-4" style="border-color:#d4c0a0;">
+                    <div class="text-xs font-black mb-2" style="color:#8a6a40;">當前授權帳號</div>
+                    <div id="settings-email" class="font-bold text-lg tracking-tight" style="color:#3a2010;">訪客模式</div>
+                </div>
+                <!-- 需求4：自訂登入密碼 -->
+                <div class="rounded-2xl p-4 space-y-3" style="background:#ede0cc;">
+                    <div class="text-sm font-black" style="color:#3a2010;">🔑 修改登入密碼</div>
+                    <div class="text-xs" style="color:#6a4a20;">設定後每日密碼失效，改用此自訂密碼登入</div>
+                    <input type="password" id="new-pw-input" placeholder="輸入新密碼（至少6位）"
+                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
+                    <input type="password" id="new-pw-confirm" placeholder="再次確認新密碼"
+                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
+                    <button onclick="saveCustomPassword()" class="w-full py-2.5 rounded-xl font-black text-sm text-white transition-all" style="background:#8a4a18;">儲存密碼</button>
+                    <div id="pw-msg" class="text-xs font-black text-center opacity-0" style="color:#1a6a30;"></div>
+                </div>
+                <!-- 匯出匯入（也放帳號頁一份） -->
+                <div class="rounded-2xl p-4 space-y-3" style="background:#ede0cc;">
+                    <div class="text-sm font-black" style="color:#3a2010;">💾 資料備份與還原</div>
+                    <div class="flex gap-2">
+                        <button onclick="exportData()" class="flex-1 py-2.5 rounded-xl text-xs font-black border" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">⬇ 匯出 JSON</button>
+                        <label class="flex-1 py-2.5 rounded-xl text-xs font-black border text-center cursor-pointer" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">
+                            ⬆ 匯入 JSON
+                            <input type="file" accept=".json" class="hidden" onchange="importData(event)">
+                        </label>
+                    </div>
+                </div>
+                <div class="p-4 rounded-2xl flex items-center justify-between" style="background:#e8f0e0;">
+                    <div>
+                        <p class="text-sm font-bold" style="color:#1a4a10;">多終端同步警報</p>
+                        <p class="text-[10px] font-medium" style="color:#4a7030;">當美股、虛擬幣、台股轉折時自動發信</p>
+                    </div>
+                    <div class="w-12 h-6 bg-blue-600 rounded-full flex items-center px-1"><div class="w-4 h-4 bg-white rounded-full ml-auto"></div></div>
+                </div>
+                <div class="text-center">
+                    <p class="text-[10px] font-black uppercase tracking-widest" style="color:#c4a878;">Authorized by AI Security System</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 導航欄 -->
+    <div id="tab-bar" class="hide fixed bottom-0 w-full backdrop-blur-lg border-t pb-8 pt-2" style="background:rgba(250,244,234,0.95); border-color:#d4c0a0;">
+        <div class="max-w-md mx-auto flex justify-around items-center">
+            <button onclick="switchPage('watchlist')" id="tab-watchlist" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
+                <i data-lucide="eye" class="w-6 h-6"></i>
+                <span class="text-[10px] font-black">待買觀察</span>
+            </button>
+            <button onclick="switchPage('monitor')" id="tab-monitor" class="flex flex-col items-center gap-1 py-2 px-3 transition-all tab-active">
+                <i data-lucide="list" class="w-6 h-6"></i>
+                <span class="text-[10px] font-black">持股清單</span>
+            </button>
+            <button onclick="switchPage('scan')" id="tab-scan" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
+                <i data-lucide="brain-circuit" class="w-6 h-6"></i>
+                <span class="text-[10px] font-black">智能診斷</span>
+            </button>
+            <button onclick="switchPage('settings')" id="tab-settings" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
+                <i data-lucide="user-check" class="w-6 h-6"></i>
+                <span class="text-[10px] font-black">帳號權限</span>
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // ✅ 確保盾牌等圖示一定渲染（module script為defer，需手動補觸發）
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+        } else {
+            lucide.createIcons();
+        }
+
+        // EmailJS 初始化
+        emailjs.init('5dk4HoCBYIS7ypwiw');
+        const EMAILJS_SERVICE  = 'service_knhvcfj';
+        const EMAILJS_TEMPLATE        = 'template_oqm4kw9';   // OTP用
+        const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';  // 買進通知用（需在EmailJS建立）
+
+        const ALLOWED_EMAILS = [
+            "shchyu61@gmail.com",
+            "shch61@yahoo.com.tw", "70.2.7wendy@gmail.com",
+            "70.2.7wendy@yahoo.com.tw", "dcyu0905@gmail.com",
+            "dcyu09056@gmail.com", "dzyu1115@gmail.com"
+        ];
+
+        const stockNameMap = {
+            // 台股
+            "2330": "台積電", "2454": "聯發科", "2317": "鴻海", "2308": "台達電",
+            "2881": "富邦金", "2882": "國泰金", "2382": "廣達", "2891": "中信金",
+            "3711": "日月光投控", "2303": "聯電", "3037": "欣興", "3147": "大立光",
+            "6188": "廣明", "2412": "中華電", "2002": "中鋼",
+            // 台股ETF
+            "0050": "元大台灣50", "0056": "元大高股息",
+            "00713": "元大台灣高息低波", "00878": "國泰永續高股息",
+            "00919": "群益台灣精選高息", "00929": "復華台灣科技優息",
+            "006208": "富邦台灣50", "00818": "永豐美國500大",
+            "00646": "元大S&P500", "00662": "富邦NASDAQ",
+            // 美股
+            "AAPL": "Apple", "TSLA": "Tesla", "NVDA": "NVIDIA",
+            "MSFT": "Microsoft", "GOOGL": "Google", "AMZN": "Amazon",
+            "SPY": "標準普爾500指數ETF", "QQQ": "那斯達克100指數ETF",
+            "HYG": "高收益債ETF", "GLD": "黃金ETF",
+            "KO": "可口可樂", "O": "Realty Income", "PFE": "輝瑞",
+            "XOM": "艾克森美孚", "T": "AT&T",
+            // 黃金/貴金屬
+            "GC=F": "黃金期貨(現貨黃金)", "SI=F": "白銀期貨",
+            "GLD": "黃金ETF", "IAU": "iShares黃金ETF",
+            // 虛擬幣
+            "BTC-USD": "比特幣", "ETH-USD": "以太幣", "DOGE-USD": "狗狗幣",
+            "BTC": "比特幣", "ETH": "以太幣", "SOL": "Solana",
+        };
+
+        // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
+        const fetchStockName = async (code) => {
+            if (stockNameMap[code]) return; // 已有名稱，跳過
+            try {
+                const isTW = /^\d{4,6}$/.test(code);
+                const ticker = isTW ? code + '.TW' : code;
+                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+                const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                const resp = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const meta = data?.chart?.result?.[0]?.meta;
+                if (!meta) return;
+                // 優先取 longName，其次 shortName
+                const name = meta.longName || meta.shortName || '';
+                if (name) {
+                    stockNameMap[code] = name;
+                    // 自動重繪清單顯示新名稱
+                    window.renderStocks();
+                    window.renderWatchlist();
+                }
+            } catch(e) { /* 靜默失敗，顯示代碼即可 */ }
+        };
+
+        let stocks = [];
+        let watchlist = [];          // 待買觀察清單
+        // ============================================================
+        // 【１．設定區】← 常改的內容都在這裡
+        // ============================================================
+
+        // ── 【１-1】K線週期切換 ──────────────────────────────────────
+        // 切換此處的interval和range，analyzeStock自動使用對應K棒根數
+        // 注意：切換後策略參數區的_p1也要同步換成對應週期的根數
+        //   週K  → interval='1wk', range='2y',  _p1=3
+        //   日K  → interval='1d',  range='1y',  _p1=_p1d（15根）
+        //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
+        let SCAN_INTERVAL = '1wk';  // ✅ let：由週K/日K開關動態切換
+        let SCAN_RANGE    = '2y';   // 週K建議'2y'，日K建議'1y'
+
+        // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
+        // ============================================================
+        // 【２．策略參數設定區】← 加密前改好數字，改完交給Claude加密
+        // ============================================================
+        // ⚠️ 策略參數在 analyzeStock 函數內的【策略參數區】
+        //    因涉及加密保護，請直接在該區修改 _p1/_p1d/_p1m/_p2/_p3/_p4
+
+        // ============================================================
+        // 【３．以下為系統核心，一般不需修改】
+        // ============================================================
+
+        let currentUserEmail = "";
+        let otpCode = "";
+        let otpExpireTime = 0;
+        let countdownTimer = null;
+        let otpEmail = "";
+        let otpFailCount = 0;       // 🔒 OTP錯誤次數（最多5次，防暴力破解）       // ✅ 發送OTP時鎖定信箱，避免驗證時讀到不同值
+
+        const getSafeDocId = (email) => email.toLowerCase().replace(/[@.]/g, '_');
+        const getSharedDocPath = (email) =>
+            doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'stocks');
+
+        const getEmailInput = () => {
+            const raw = document.getElementById('auth-email').value.trim().toLowerCase();
+            return raw.includes('@') ? raw : raw + '@gmail.com';
+        };
+
+        const generateDailyKey = (email) => {
+            const accountName = email.split('@')[0];
+            const now = new Date();
+            const fmt = new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit' });
+            const parts = fmt.formatToParts(now);
+            const mm = parts.find(p => p.type === 'month').value;
+            const dd = parts.find(p => p.type === 'day').value;
+            return `601${mm}${dd}${accountName}`.toLowerCase();
+        };
+
+        const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+        // 核心修正：獲取權限的 Auth 初始化
+        const initFirebaseAuth = async () => {
+            if (window.auth.currentUser) return window.auth.currentUser;
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(window.auth);
+                }
+                return window.auth.currentUser;
+            } catch (e) {
+                console.error("Auth init failed:", e);
+                throw e;
+            }
+        };
+
+        const saveToCloud = async () => {
+            if (!currentUserEmail || !window.db) return;
+            try {
+                await initFirebaseAuth(); // ✅ 確保 Auth 有效再寫入，避免因 UID 過期被拒絕
+                await setDoc(getSharedDocPath(currentUserEmail), {
+                    email: currentUserEmail,
+                    stocks: stocks,
+                    watchlist: watchlist,
+                    lastUpdated: new Date().toISOString()
+                });
+            } catch (e) {
+                console.error("Cloud save error:", e);
+                window.showAlert("存檔失敗：" + e.message);
+            }
+        };
+
+        const loadFromCloud = async (email) => {
+            if (!email || !window.db) return;
+            try {
+                await initFirebaseAuth();
+                const snap = await getDoc(getSharedDocPath(email));
+                if (snap.exists()) {
+                    const data = snap.data();
+                    // ✅ 改用 toLowerCase 比對，避免大小寫不同導致讀到空陣列
+                    const match = data.email && data.email.toLowerCase() === email.toLowerCase();
+                    stocks    = match ? (data.stocks    || []) : [];
+                    watchlist = match ? (data.watchlist || []) : [];
+                } else {
+                    stocks = []; watchlist = [];
+                }
+                window.renderStocks();
+                window.renderWatchlist();
+            } catch (e) {
+                console.error("Cloud load error:", e);
+                window.showAlert("讀取失敗：" + e.message);
+                window.renderStocks();
+                window.renderWatchlist(); // ✅ catch 也要呼叫，否則 watchlist 永遠空白
+            }
+        };
+
+        const completeLogin = async (email) => {
+            currentUserEmail = email;
+            // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
+            localStorage.setItem('kj_email', email);
+            await loadFromCloud(email);
+            // ✅ 登入後自動抓取所有未知名稱（解決首次新增顯示「未定義資產」）
+            setTimeout(() => {
+                [...stocks, ...watchlist].forEach(s => fetchStockName(s.code));
+            }, 500);
+            // ✅ 登入後背景預載全額交割清單
+            fetchCashDeliveryStocks().catch(() => {});
+            // ✅ 期貨5分K按鈕：只對 shchyu61@gmail.com 顯示，並查詢 GitHub Actions 狀態
+            const _futWrap = document.getElementById('futures-5mk-wrap');
+            if (_futWrap && currentUserEmail === 'shchyu61@gmail.com') {
+                _futWrap.style.display = 'flex';
+                fetchFuturesStatus();
+                // ✅ Bug2修正：若目前在期貨時段，登入後自動開啟期貨5分K開關
+                const _now = new Date();
+                const _wd  = _now.getDay();
+                const _tv  = _now.getHours() * 60 + _now.getMinutes();
+                const _inFutures = (
+                    (_wd === 1 && _tv >= 13*60) ||                          // 週一13:00後
+                    (_wd === 2 && (_tv < 1*60 || _tv >= 5*60)) ||           // 週二（排除凌晨01:00~05:00）
+                    (_wd === 3 && _tv <= 11*60+30)                          // 週三11:30前
+                );
+                if (_inFutures && !_futuresActive) {
+                    setTimeout(() => window.toggleFutures5mk(), 800);
+                }
+            }
+            document.getElementById('security-overlay').classList.add('hide');
+            document.getElementById('main-content').classList.remove('hide');
+            document.getElementById('tab-bar').classList.remove('hide');
+            document.getElementById('btn-logout').classList.remove('hide');
+            document.getElementById('settings-email').innerText = email;
+            if (countdownTimer) clearInterval(countdownTimer);
+            // ✅ 登入後讀取個人掃描模式設定（週K/日K）
+            _loadScanModePref(email).catch(()=>{});
+            // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
+            if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
+        };
+
+        const showError = (msg) => {
+            const el = document.getElementById('error-msg');
+            el.innerText = msg || '身份或密碼錯誤。';
+            el.style.opacity = '1';
+            document.getElementById('auth-card').classList.add('shake');
+            setTimeout(() => document.getElementById('auth-card').classList.remove('shake'), 500);
+        };
+
+        window.showAlert = (msg) => {
+            const alertBox = document.getElementById('custom-alert');
+            document.getElementById('alert-text').innerText = msg;
+            alertBox.style.display = 'flex';
+            setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
+        };
+
+        // 方式A：每日密碼登入
+        document.getElementById('btn-verify-key').addEventListener('click', async () => {
+            const email = getEmailInput();
+            const keyInput = document.getElementById('access-key-input').value.trim();
+            const expected = generateDailyKey(email);
+
+            // ✅ 首次登入強制OTP驗證（未在Firebase記錄emailVerified的信箱不可用密碼登入）
+            const isVerified = await checkEmailVerified(email);
+            if (!isVerified) {
+                showError('首次登入請先完成信箱驗證！請使用下方「OTP一次性密碼」驗證您的信箱。');
+                return;
+            }
+
+            // ✅ 已移除白名單管控，任何信箱均可嘗試登入
+            // 需求4：優先驗證自訂密碼
+            const customResult = await checkCustomPassword(email, keyInput);
+            if (customResult === true) {
+                // 自訂密碼正確
+            } else if (customResult === false) {
+                showError('密碼錯誤。'); return;
+            } else {
+                // 無自訂密碼，回退到每日密碼
+                if (keyInput.toLowerCase() !== expected) { showError('每日密碼錯誤。'); return; }
+            }
+
+            const btn = document.getElementById('btn-verify-key');
+            btn.disabled = true;
+            try {
+                await completeLogin(email);
+            } catch (e) {
+                btn.disabled = false;
+                window.showAlert('登入失敗：' + e.message);
+            }
+        });
+
+        // 方式B：發送OTP（移除白名單，改為1小時3次限制）
+        document.getElementById('btn-send-otp').addEventListener('click', async () => {
+            const email = getEmailInput();
+            if (!email || !email.includes('@')) { showError('請輸入有效信箱。'); return; }
+
+            // 🔒 1小時內最多3次OTP（防止額度耗盡）
+            const _otpKey = `otp_count_${email}`;
+            const _otpData = JSON.parse(sessionStorage.getItem(_otpKey) || '{"count":0,"hour":0}');
+            const _nowHour = new Date().getHours();
+            if (_otpData.hour !== _nowHour) { _otpData.count = 0; _otpData.hour = _nowHour; }
+            if (_otpData.count >= 3) {
+                showError('本小時已發送3次OTP，請改用每日密碼（601+月日+信箱帳號）登入。'); return;
+            }
+
+            // 🔒 60秒冷卻，防止瘋狂點擊
+            if (window.lastOtpSendTime && Date.now() - window.lastOtpSendTime < 60000) {
+                const sec = Math.ceil((60000 - (Date.now() - window.lastOtpSendTime)) / 1000);
+                showError(`請稍候 ${sec} 秒再發送。`); return;
+            }
+
+            const btn = document.getElementById('btn-send-otp');
+            btn.disabled = true;
+            otpCode = generateOTP();
+            otpExpireTime = Date.now() + 5 * 60 * 1000;
+            otpEmail = email;    // ✅ 鎖定信箱，驗證時直接用此值
+            window.lastOtpSendTime = Date.now();
+            otpFailCount = 0;    // 重新發送時重置錯誤次數
+
+            try {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, { to_email: email, otp: otpCode });
+                // 記錄OTP發送次數（1小時3次限制）
+                const _ok = JSON.parse(sessionStorage.getItem(`otp_count_${email}`) || '{"count":0,"hour":0}');
+                _ok.count++; _ok.hour = new Date().getHours();
+                sessionStorage.setItem(`otp_count_${email}`, JSON.stringify(_ok));
+                document.getElementById('otp-step1').classList.add('hide');
+                document.getElementById('otp-step2').classList.remove('hide');
+                startCountdown();
+            } catch (e) {
+                window.showAlert('發送失敗。');
+                btn.disabled = false;
+                otpEmail = "";
+            }
+        });
+
+        // 方式B：驗證OTP
+        document.getElementById('btn-verify-otp').addEventListener('click', async () => {
+            const inputOtp = document.getElementById('otp-input').value.trim();
+            if (Date.now() > otpExpireTime) { showError('密碼已過期。'); return; }
+
+            // 🔒 防暴力破解：最多5次
+            if (otpFailCount >= 5) {
+                showError('錯誤次數過多，請重新取得驗證碼。'); return;
+            }
+            if (inputOtp !== otpCode) {
+                otpFailCount++;
+                if (otpFailCount >= 5)
+                    showError('錯誤次數過多，請重新取得驗證碼。');
+                else
+                    showError(`驗證碼錯誤（${otpFailCount}/5）`);
+                return;
+            }
+
+            // ✅ 使用發送時鎖定的 otpEmail
+            const email = otpEmail || getEmailInput();
+            const btn = document.getElementById('btn-verify-otp');
+            btn.disabled = true;
+            otpFailCount = 0;    // 成功登入，重置錯誤次數
+            try {
+                // ✅ OTP驗證成功 → 標記此信箱為「已驗證」，日後可用密碼登入
+                await initFirebaseAuth();
+                const verifyPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
+                await setDoc(verifyPath, { emailVerified: true }, { merge: true });
+                await completeLogin(email);
+            } catch (e) {
+                btn.disabled = false;
+                window.showAlert('登入失敗：' + e.message);
+            }
+        });
+
+        document.getElementById('btn-resend-otp').addEventListener('click', () => {
+            document.getElementById('otp-step1').classList.remove('hide');
+            document.getElementById('otp-step2').classList.add('hide');
+            document.getElementById('btn-send-otp').disabled = false;
+        });
+
+        const startCountdown = () => {
+            if (countdownTimer) clearInterval(countdownTimer);
+            const el = document.getElementById('otp-countdown');
+            countdownTimer = setInterval(() => {
+                const remaining = Math.max(0, otpExpireTime - Date.now());
+                const mm = String(Math.floor(remaining / 60000)).padStart(2, '0');
+                const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
+                el.innerText = `${mm}:${ss}`;
+                if (remaining === 0) clearInterval(countdownTimer);
+            }, 1000);
+        };
+
+        window.renderStocks = () => {
+            const list = document.getElementById('stock-list');
+            document.getElementById('stock-count').innerText = stocks.length;
+            if (stocks.length === 0) {
+                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Active Monitoring</div>`;
+                return;
+            }
+            const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
+            const filtered_st = (stCatFilter === 'all' ? stocks : stocks.filter(s => (s.cat||'tw') === stCatFilter))
+                .slice().sort((a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code));
+            if (filtered_st.length === 0) {
+                list.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs font-black uppercase">此分類尚無股票</div>`;
+                lucide.createIcons(); return;
+            }
+            list.innerHTML = filtered_st.map(s => {
+                const name = stockNameMap[s.code] || '未定義資產';
+                const cached = getCached(s.code);
+                const rsiHtml = cached ? (() => {
+                    const arrow  = cached.rsi_trend === 'rising' ? '↑' : '↓';
+                    const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
+                    const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
+                    const bollClr = { near_upper:'text-amber-600', mid_zone:'text-slate-500', near_lower:'text-emerald-600' };
+                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
+                        <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
+                        <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
+                    </div>`;
+                })() : `<div class="flex-1"></div>`;
+                return `
+                <div class="flex items-center gap-2 p-2 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <div class="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-black text-blue-600 shadow-inner text-sm">${s.code[0]}</div>
+                        <div>
+                            <div class="font-black text-sm tracking-tight">${s.code}</div>
+                            <div class="text-[9px] font-black text-slate-400 uppercase">${name}</div>
+                        </div>
+                    </div>
+                    ${rsiHtml}
+                    <button onclick="window.removeStock('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2 shrink-0">
+                        <i data-lucide="x-circle" class="w-5 h-5"></i>
+                    </button>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        };
+
+        document.getElementById('btn-add-stock').addEventListener('click', async () => {
+            const input = document.getElementById('new-stock-input');
+            const val = input.value.trim().toUpperCase();
+            const cat = document.getElementById('new-stock-cat')?.value || 'tw';
+            if (val && !stocks.some(s => s.code === val)) {
+                stocks.push({ code: val, cat });
+                fetchStockName(val); // 自動抓取名稱
+                input.value = '';
+                window.renderStocks();
+                await saveToCloud();
+            }
+        });
+
+        window.removeStock = async (code) => {
+            stocks = stocks.filter(s => s.code !== code);
+            window.renderStocks();
+            await saveToCloud();
+        };
+
+        window.switchPage = (pageName) => {
+            document.querySelectorAll('main > div').forEach(div => div.classList.add('hide'));
+            document.getElementById(`page-${pageName}`).classList.remove('hide');
+            ['watchlist', 'monitor', 'scan', 'settings'].forEach(p => {
+                const tab = document.getElementById(`tab-${p}`);
+                if (tab) {
+                    p === pageName ? tab.classList.add('tab-active')       : tab.classList.remove('tab-active');
+                    p === pageName ? tab.classList.remove('text-slate-400') : tab.classList.add('text-slate-400');
+                }
+            });
+        };
+
+        // ── stockNameMap 補充台股ETF ────────────────────────────
+        stockNameMap["00713"] = "元大台灣高息低波";
+        stockNameMap["00878"] = "國泰永續高股息";
+        stockNameMap["00919"] = "群益台灣精選高息";
+        stockNameMap["00929"] = "復華台灣科技優息";
+        stockNameMap["006208"] = "富邦台灣50";
+        stockNameMap["00818"] = "永豐美國500大";
+        stockNameMap["00646"] = "元大S&P500";
+        stockNameMap["00662"] = "富邦NASDAQ";
+        stockNameMap["00850"] = "元大臺灣ESG永續";
+        stockNameMap["00900"] = "富邦特選高股息30";
+        stockNameMap["GC=F"]  = "黃金期貨（現貨黃金參考）";
+        stockNameMap["GLD"]   = "黃金ETF（SPDR Gold）";
+        stockNameMap["IAU"]   = "iShares黃金信託ETF";
+        stockNameMap["SI=F"]  = "白銀期貨";
+
+        // ── 技術指標計算工具函數 ──────────────────────────────────
+        const calcRSI = (closes, period = 14) => {
+            if (closes.length < period + 1) return null;
+            let gains = 0, losses = 0;
+            for (let i = 1; i <= period; i++) {
+                const diff = closes[i] - closes[i - 1];
+                if (diff >= 0) gains += diff; else losses -= diff;
+            }
+            let avgGain = gains / period, avgLoss = losses / period;
+            for (let i = period + 1; i < closes.length; i++) {
+                const diff = closes[i] - closes[i - 1];
+                avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+                avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
+            }
+            if (avgLoss === 0) return 100;
+            return 100 - 100 / (1 + avgGain / avgLoss);
+        };
+
+        const calcBoll = (closes, period = 20) => {
+            if (closes.length < period) return null;
+            const slice = closes.slice(-period);
+            const mean = slice.reduce((a, b) => a + b, 0) / period;
+            const std  = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period);
+            return { upper: mean + 2 * std, mid: mean, lower: mean - 2 * std };
+        };
+
+        const calcEMA = (arr, period) => {
+            const k = 2 / (period + 1);
+            let ema = arr[0];
+            for (let i = 1; i < arr.length; i++) ema = arr[i] * k + ema * (1 - k);
+            return ema;
+        };
+
+        const calcMACDHist = (closes) => {
+            if (closes.length < 27) return null;
+            // 計算最後幾根的EMA12/26
+            const ema12 = (arr) => { const k = 2/13; let e = arr[0]; for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k); return e; };
+            const ema26 = (arr) => { const k = 2/27; let e = arr[0]; for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k); return e; };
+            // 當根 MACD 柱
+            const macd_now  = ema12(closes) - ema26(closes);
+            const macd_prev = ema12(closes.slice(0,-1)) - ema26(closes.slice(0,-1));
+            return { now: macd_now, prev: macd_prev };
+        };
+
+        // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
+
+        // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
+        const makeDiagCard = (code, result, bgDark, isHolding = false) => {
+            const name     = stockNameMap[code] || '未定義資產';
+            const hasBuy   = result.buy_signal;
+            const arrow    = result.rsi_trend === 'rising' ? '↑' : '↓';
+            const rsiClr   = result.rsi_trend === 'rising'
+                             ? (bgDark ? 'text-emerald-400' : 'text-emerald-600')
+                             : (bgDark ? 'text-rose-400'    : 'text-rose-500');
+            const bollMap  = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
+            const bollClr  = { near_upper: bgDark ? 'text-amber-400' : 'text-amber-600',
+                               mid_zone:   bgDark ? 'text-slate-300' : 'text-slate-500',
+                               near_lower: bgDark ? 'text-emerald-400' : 'text-emerald-600' };
+            const condText = hasBuy && result.conditions && result.conditions.length
+                             ? '觸發：' + result.conditions.join('、') : '';
+            // hasSell必須在cardBg之前宣告
+            const hasSell = isHolding && result.sell_signal;
+            const cardBg   = bgDark
+                ? (hasBuy ? 'border-emerald-500 bg-emerald-950' : hasSell ? 'border-rose-600 bg-rose-950' : 'border-slate-700 bg-slate-900')
+                : (hasBuy ? 'border-emerald-300 bg-emerald-50'  : hasSell ? 'border-rose-300 bg-rose-50'  : 'border-slate-200 bg-white');
+            const textMain = bgDark ? 'text-white'     : 'text-slate-800';
+            const textSub  = bgDark ? 'text-slate-400' : 'text-slate-400';
+            const noSignalText = isHolding ? '持續觀察，暫不賣出' : '持續觀察';
+
+            return `<div class="border-2 rounded-[2rem] p-4 ${cardBg}">
+                <div class="flex items-center gap-2">
+                    <!-- 左：icon + 代碼 + 名稱 -->
+                    <div class="flex items-center gap-2 shrink-0 min-w-0">
+                        <div class="w-9 h-9 rounded-xl shrink-0 ${hasBuy ? 'bg-emerald-200 text-emerald-700' : (bgDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500')} flex items-center justify-center font-black text-sm">${code[0]}</div>
+                        <div class="min-w-0">
+                            <div class="font-black text-sm ${textMain} truncate">${code}</div>
+                            <div class="text-[9px] ${textSub} uppercase truncate">${name}</div>
+                        </div>
+                    </div>
+                    <!-- 中：RSI + 布林（固定寬度，防超框）-->
+                    <div class="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-black px-1 min-w-[60px] max-w-[72px]">
+                        <span class="diag-rsi ${rsiClr} whitespace-nowrap">RSI ${result.rsi} ${arrow}</span>
+                        <span class="${bollClr[result.boll_position] || textSub} text-center leading-tight whitespace-nowrap">${bollMap[result.boll_position] || result.boll_position}</span>
+                    </div>
+                    <!-- 右：價格 + 狀態（flex-1自動撐開不截斷）-->
+                    <div class="text-right flex-1 min-w-0">
+                        <div class="font-black text-sm ${textMain}">${result.price}</div>
+                        <div class="text-[9px] font-black leading-tight ${hasBuy ? 'text-emerald-400' : hasSell ? 'text-rose-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : hasSell ? '🔔 賣出訊號' : noSignalText}</div>
+                    </div>
+                </div>
+                ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black text-center">${condText}</div>` : ''}
+            </div>`;
+        };
+
+        const makeLoadingCard = (code, bgDark) => {
+            const textClr = bgDark ? 'text-white' : 'text-slate-800';
+            const bgCard  = bgDark ? 'border-slate-700 bg-slate-900' : 'border-blue-200 bg-blue-50';
+            return `<div id="wl-card-${code}" class="border-2 rounded-[2rem] p-5 ${bgCard}">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl ${bgDark ? 'bg-slate-700 text-slate-300' : 'bg-blue-100 text-blue-600'} flex items-center justify-center font-black">${code[0]}</div>
+                    <div class="font-black ${textClr}">${code}</div>
+                    <div class="ml-auto text-xs text-blue-500 font-black animate-pulse">診斷中...</div>
+                </div>
+            </div>`;
+        };
+
+        // ── 3分鐘快取（建議1：避免重複抓取）────────────────────
+        const diagCache = new Map(); // key=code, value={result, ts}
+        const CACHE_TTL = 3 * 60 * 1000; // 3分鐘
+
+        const getCached = (code) => {
+            const entry = diagCache.get(code);
+            if (!entry) return null;
+            if (Date.now() - entry.ts > CACHE_TTL) { diagCache.delete(code); return null; }
+            return entry.result;
+        };
+        const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
+
+        // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
+        // ✅ 4個proxy競速（ChatGPT建議4個最佳，5個反而易被封鎖）
+        // 移除thingproxy（最慢且易超時），保留最穩定4個
+        const PROXIES = [
+            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+            (url) => `https://proxy.cors.sh/${url}`,
+        ];
+
+        // ✅ 4個proxy同時競速，誰最快回應就用誰（Promise.any）
+        // 超時25秒，大幅降低因proxy緩慢造成的失敗率
+        // ✅ 週末自動偵測（Yahoo Finance週末API較嚴格）
+        const _isWeekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
+        // ✅ 週末降低並行數（3→1），避免被封鎖
+        const _poolSize = () => _isWeekend() ? 1 : 5;
+
+        const fetchWithFallback = async (yahooUrl, _retry = 1) => {
+            const tryProxy = async (proxyFn) => {
+                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(25000) });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                const result = data.chart && data.chart.result && data.chart.result[0];
+                if (!result) throw new Error('no chart data');
+                return result;
+            };
+            try {
+                return await Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
+            } catch(e) {
+                // ✅ 失敗後自動重試一次（等3秒，週末特別容易被限速）
+                if (_retry > 0) {
+                    await new Promise(r => setTimeout(r, 3000));
+                    return fetchWithFallback(yahooUrl, _retry - 1);
+                }
+                throw e;
+            }
+        };
+
+        // ── 並行工作池（建議3：最多3個同時執行）────────────────
+        // ── 需求5：動態工作池 + 優先隊列（持股優先，做完立刻補下一支）──
+        const runWithPool = async (tasks, poolSize = 3, onDone, priorityFn = null) => {
+            // 若有優先函數，持股排前面（參考：5個同事做完自己工作去幫忙）
+            const sorted = priorityFn ? [...tasks].sort((a, b) => (priorityFn(b) ? 1 : 0) - (priorityFn(a) ? 1 : 0)) : [...tasks];
+            const queue = sorted;
+            let running = 0;
+            let completed = 0;
+            const total = tasks.length;
+            if (total === 0) return;
+            return new Promise((resolve) => {
+                const next = () => {
+                    while (running < poolSize && queue.length > 0) {
+                        const task = queue.shift();
+                        running++;
+                        // Promise.resolve 包裝確保同步拋出也能被 catch 接住
+                        Promise.resolve().then(() => task()).then(() => {
+                            running--; completed++;
+                            if (onDone) onDone(completed, total);
+                            if (completed === total) resolve();
+                            else next();
+                        }).catch(() => {
+                            running--; completed++;
+                            if (onDone) onDone(completed, total);
+                            if (completed === total) resolve();
+                            else next();
+                        });
+                    }
+                };
+                next();
+            });
+        };
+
+        // ── 全額交割股清單（來源：TWSE + TPEX OpenAPI）──────────
+        // 策略：掃描前預先載入，diagCache 快取當天不重複抓
+        let _cashDeliverySet  = null;   // null=尚未載入
+        let _cashDeliveryDate = '';     // 載入日期（日期不同就重新抓）
+
+        const fetchCashDeliveryStocks = async () => {
+            const today = new Date().toLocaleDateString('zh-TW');
+            if (_cashDeliverySet !== null && _cashDeliveryDate === today) return _cashDeliverySet;
+
+            const codes = new Set();
+            // 來源1：TWSE OpenAPI 上市全額交割
+            try {
+                const url1 = 'https://openapi.twse.com.tw/v1/company/cashPaymentStocks';
+                const proxy1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url1)}`;
+                const r1 = await fetch(proxy1, { signal: AbortSignal.timeout(8000) });
+                if (r1.ok) {
+                    const d1 = await r1.json();
+                    d1.forEach(item => {
+                        const c = item['公司代號'] || item['Code'] || item['code'] || '';
+                        if (c) codes.add(String(c).trim());
+                    });
+                }
+            } catch(e) { console.warn('TWSE全額交割抓取失敗:', e); }
+
+            // 來源2：TPEX OpenAPI 上櫃全額交割
+            try {
+                const url2 = 'https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks';
+                const proxy2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url2)}`;
+                const r2 = await fetch(proxy2, { signal: AbortSignal.timeout(8000) });
+                if (r2.ok) {
+                    const d2 = await r2.json();
+                    d2.forEach(item => {
+                        const c = item['公司代號'] || item['Code'] || item['code'] || '';
+                        if (c) codes.add(String(c).trim());
+                    });
+                }
+            } catch(e) { console.warn('TPEX全額交割抓取失敗:', e); }
+
+            _cashDeliverySet  = codes;
+            _cashDeliveryDate = today;
+            console.log(`✅ 全額交割股載入完成：${codes.size} 支`);
+            return codes;
+        };
+
+        // ── 主分析函數（含快取+多proxy）────────────────────────
+        const analyzeStock = async (code) => {
+            // 1. 有快取直接回傳
+            const cached = getCached(code);
+            if (cached) return cached;
+
+            // 1-1. 全額交割股判斷（優先於技術分析）
+            const isTWcode = /^\d{4,6}$/.test(code);
+            if (isTWcode && _cashDeliverySet !== null && _cashDeliverySet.has(code)) {
+                const dr = {
+                    price: '0.00', rsi: 0, rsi_trend: 'falling',
+                    boll_position: 'mid_zone', buy_signal: false,
+                    sell_signal: false, conditions: [],
+                    delist_risk: true,
+                    delist_msg: `⚠️ 全額交割股（${code}），財務惡化警訊！下市前最重要早期指標，持股請儘速評估！`
+                };
+                setCache(code, dr);
+                return dr;
+            }
+
+            // 2. 台股代碼加後綴（先.TW再.TWO）
+            const isTW = /^\d{4,6}$/.test(code);
+            let yResult = null;
+            if (isTW) {
+                try {
+                    yResult = await fetchWithFallback(
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TW?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                } catch {
+                    yResult = await fetchWithFallback(
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                }
+            } else {
+                yResult = await fetchWithFallback(
+                    `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+            }
+
+            const closes = yResult.indicators.quote[0].close.filter(v => v != null);
+            if (closes.length < 26) throw new Error('insufficient data');
+
+            // ── 【第4階段】官方公告下市日期偵測（最明確早期警訊）────
+            const _meta = yResult?.chart?.result?.[0]?.meta || {};
+            if (_meta.delistingDate) {
+                try {
+                    const _dDate    = new Date(_meta.delistingDate);
+                    const _today    = new Date();
+                    const _daysLeft = Math.ceil((_dDate - _today) / (1000 * 60 * 60 * 24));
+                    const _dmsg = _daysLeft >= 0
+                        ? `⚠️【第4階段警報】官方公告下市日期：${_meta.delistingDate}（距今 ${_daysLeft} 天），請儘速處理！`
+                        : `❌【已過下市日期】官方公告下市日期：${_meta.delistingDate}，股票已停止交易！`;
+                    const _dr = { price: (closes[closes.length-1]||0).toFixed(2), rsi: 0,
+                        rsi_trend:'falling', boll_position:'mid_zone',
+                        buy_signal:false, sell_signal:false, conditions:[],
+                        delist_risk:true, delist_msg:_dmsg };
+                    setCache(code, _dr); return _dr;
+                } catch { /* 解析失敗不中斷 */ }
+            }
+            // ── 【第5階段】查無即時報價（停牌或已下市）────────────────
+            const _lastPx = _meta.regularMarketPrice || _meta.postMarketPrice || 0;
+            if (_lastPx === 0 && closes.filter(v => v > 0).length === 0) {
+                const _dr5 = { price:'0.00', rsi:0, rsi_trend:'falling',
+                    boll_position:'mid_zone', buy_signal:false, sell_signal:false,
+                    conditions:[], delist_risk:true,
+                    delist_msg:'❌【第5階段警報】查無即時報價，疑似已停牌或下市！' };
+                setCache(code, _dr5); return _dr5;
+            }
+
+            // 【策略參數區】已加密保護
+            eval(atob('Y29uc3QgX3AxPTMsX3AxZD0xNSxfcDFtPTU0LF9wMV9hdXRvPVNDQU5fSU5URVJWQUw9PT0iMWQiP19wMWQ6U0NBTl9JTlRFUlZBTD09PSI1bSI/X3AxbTpfcDEsX3AyPTM1LF9wMz0xLjAzLF9wND0xLjAwOw=='));
+
+            const price  = closes[closes.length - 1];
+            const boll   = calcBoll(closes);
+            const lows   = yResult.indicators.quote[0].low.filter(v => v != null);
+            const highs  = yResult.indicators.quote[0].high.filter(v => v != null);
+            const rsiNow = calcRSI(closes);
+            const rsiPrv = calcRSI(closes.slice(0, -1));
+            const macd   = calcMACDHist(closes);
+            if (!boll || rsiNow === null || rsiPrv === null || !macd) throw new Error('calc fail');
+
+            const _t1 = rsiNow > rsiPrv;
+            const _t2 = macd.now > macd.prev;
+            const boll_position = price >= boll.upper * _p4 ? 'near_upper'
+                                : price <= boll.lower * _p3 ? 'near_lower' : 'mid_zone';
+            const rsi_trend = _t1 ? 'rising' : 'falling';
+
+            // 條件判斷（混淆）
+            const _n = _p1_auto;  // ✅ 自動依SCAN_INTERVAL使用對應週期根數
+            const _lows_n  = lows.slice(-_n);
+            const _highs_n = highs.slice(-_n);
+            // ── 條件A：近N根任一最低價<=布林下緣
+            const _x1 = _lows_n.some((l, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && l <= _b.lower * _p3;
+            });
+            const _r1 = _x1 && _t1 && _t2;   // 條件A成立
+
+            // ── 條件B：近N根最低價均<布林中軌
+            const _x2 = _lows_n.every((l, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && l < _b.mid;
+            });
+            // ── 條件B：近N根最高價均<布林上軌
+            const _x3 = _highs_n.every((h, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && h < _b.upper;
+            });
+            // ── 條件B：前N根MACD柱持續縮小
+            const _x4 = closes.length >= _n + 1 ? (() => {
+                let _ok = true;
+                for (let _j = 0; _j < _n - 1; _j++) {
+                    const _m1 = calcMACDHist(closes.slice(0, closes.length - _n + _j));
+                    const _m2 = calcMACDHist(closes.slice(0, closes.length - _n + _j + 1));
+                    if (!_m1 || !_m2 || _m2.now <= _m1.now) { _ok = false; break; }
+                }
+                return _ok;
+            })() : false;
+            const _r2 = _x2 && _x3 && _x4 && _t2;  // 條件B成立
+
+            // ── 【三道關卡】依 SCAN_INTERVAL 選擇對應驗證邏輯 ──────────
+            let buy_signal = false;
+            let conditions = [];
+
+            if (SCAN_INTERVAL === '1wk') {
+                // ══ 週K模式：條件A/B（單層，第一道即為週K本身）══
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+
+            } else if (SCAN_INTERVAL === '1d') {
+                // ══ 日K三道關卡 ══════════════════════════════════
+                // 第一道：週K位階（上層把關）
+                let _1st_pass = false;
+                try {
+                    const _wkSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
+                    const _wkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_wkSuffix}?interval=1wk&range=2y`;
+                    const _wkData = await fetchWithFallback(_wkUrl).catch(async () => {
+                        if (/^\d{4,6}$/.test(code)) {
+                            return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=1wk&range=2y`);
+                        } throw new Error('no wk data');
+                    });
+                    const _wkC = _wkData.indicators.quote[0].close.filter(v=>v!=null);
+                    const _wkL = (_wkData.indicators.quote[0].low||[]).filter(v=>v!=null);
+                    const _wkH = (_wkData.indicators.quote[0].high||[]).filter(v=>v!=null);
+                    if (_wkC.length >= 26) {
+                        const _wn   = _p1;  // 3根週K
+                        const _wkRsiNow = calcRSI(_wkC);
+                        const _wkRsiPrv = calcRSI(_wkC.slice(0,-1));
+                        const _wkMacd   = calcMACDHist(_wkC);
+                        const _wkT1 = _wkRsiNow > _wkRsiPrv;
+                        const _wkT2 = _wkMacd && _wkMacd.now > _wkMacd.prev;
+                        const _wkLn = _wkL.slice(-_wn);
+                        const _wkHn = _wkH.slice(-_wn);
+                        // 週K條件A：近3根任一低點<=布林下緣 AND RSI↑ AND MACD↑
+                        const _wkA = _wkLn.some((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<=_b.lower*_p3; }) && _wkT1 && _wkT2;
+                        // 週K條件B：近3根低均<中軌 AND 高均<上軌
+                        const _wkB = _wkLn.every((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<_b.mid; }) && _wkHn.every((h,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&h<_b.upper; });
+                        _1st_pass = _wkA || _wkB;
+                    }
+                } catch(e) { _1st_pass = false; }
+
+                // 第二道：日K條件A/B（15根，現有_r1/_r2邏輯）
+                const _2nd_pass = (_r1 || _r2) && rsiNow > _p2;
+
+                // 第三道：5分K當根RSI↑ AND MACD柱↑（觸發時機，當根vs前1根）
+                let _3rd_pass = false;
+                try {
+                    const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
+                    const _5mData = await fetchWithFallback(
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_5mSuffix}?interval=5m&range=5d`
+                    ).catch(async () => {
+                        if (/^\d{4,6}$/.test(code)) return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=5m&range=5d`);
+                        throw new Error('no 5m data');
+                    });
+                    const _5mC = _5mData.indicators.quote[0].close.filter(v=>v!=null);
+                    if (_5mC.length >= 3) {
+                        const _5mRsiNow = calcRSI(_5mC);
+                        const _5mRsiPrv = calcRSI(_5mC.slice(0,-1));
+                        const _5mMacd   = calcMACDHist(_5mC);
+                        _3rd_pass = _5mRsiNow > _5mRsiPrv && _5mMacd && _5mMacd.now > _5mMacd.prev;
+                    }
+                } catch(e) { _3rd_pass = false; }
+
+                buy_signal = _1st_pass && _2nd_pass && _3rd_pass;
+
+            } else {
+                // 其他週期：單層條件A/B
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+            }
+
+            if (buy_signal) {
+                if (_r1 && price <= boll.lower * _p3) conditions.push('S1');  // 截圖條件A觸發
+                if (_r2) conditions.push('S2');                                    // 截圖條件B觸發
+                if (rsiNow < 50 && _t2) conditions.push('E1');                     // eLeader條件觸發
+                if (conditions.length === 0) conditions.push('E2');                // 其他買進條件
+            }
+
+            // ── 賣出條件（截圖1、2）：最高價>=布林上緣 AND RSI下降 AND MACD柱縮
+            const sell_signal = boll_position === 'near_upper' && !_t1 && !_t2;
+
+            const result = {
+                price: price.toFixed(2),
+                rsi: Math.round(rsiNow * 10) / 10,
+                rsi_trend, boll_position, buy_signal, sell_signal, conditions
+            };
+            setCache(code, result);
+            return result;
+        };
+
+        // ── 待買觀察清單：全部診斷（工作池版）──────────────────
+        // ── 系統B：買進訊號自動發Gmail通知 ──────────────────────
+        const notifiedToday = new Set(); // 防止同一標的同一天重複發信
+
+        const sendBuyNotify = async (signals) => {
+            if (!signals || signals.length === 0) return;
+            if (!currentUserEmail) return;
+
+            // 過濾今日已通知過的
+            const newSignals = signals.filter(s => !notifiedToday.has(s.code));
+            if (newSignals.length === 0) return;
+
+            const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            const body = newSignals.map(s => {
+                const name = stockNameMap[s.code] || s.code;
+                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}`;
+            }).join('\n\n' + '─'.repeat(20) + '\n\n');
+
+            try {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                    to_email: currentUserEmail,
+                    scan_time: scanTime,
+                    signal_count: newSignals.length,
+                    signal_body: body,
+                });
+                newSignals.forEach(s => notifiedToday.add(s.code));
+                window.showAlert(`📧 已發送 ${newSignals.length} 支買進訊號通知到 ${currentUserEmail}`);
+                console.log('✅ 買進通知已發送');
+            } catch(e) {
+                console.error('❌ 買進通知發送失敗：', e);
+            }
+        };
+
+        // ── 賣出訊號發信 ──────────────────────────────────────────
+        const notifiedSellToday = new Set(); // 防止同一標的同一天重複發賣出信
+
+        const sendSellNotify = async (signals) => {
+            if (!signals || signals.length === 0) return;
+            if (!currentUserEmail) return;
+            const newSignals = signals.filter(s => !notifiedSellToday.has(s.code));
+            if (newSignals.length === 0) return;
+
+            const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            const body = newSignals.map(s => {
+                const name = stockNameMap[s.code] || s.code;
+                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利`;
+            }).join('\n\n' + '─'.repeat(20) + '\n\n');
+
+            try {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                    to_email: currentUserEmail,
+                    scan_time: scanTime,
+                    signal_count: `賣出 ${newSignals.length}`,
+                    signal_body: body,
+                });
+                newSignals.forEach(s => notifiedSellToday.add(s.code));
+                window.showAlert(`📧 已發送 ${newSignals.length} 支賣出訊號通知到 ${currentUserEmail}`);
+            } catch(e) {
+                console.error('❌ 賣出通知發送失敗：', e);
+            }
+        };
+
+        // ── GitHub Actions 期貨Job狀態查詢 ──────────────────────────
+        // 呼叫 GitHub API 取得最近一次 futures-scan Job 狀態
+        // ── 期貨Job狀態查詢（方案B：從 Firebase 讀取，無需 Token 在前端）──
+        // Python 每次期貨掃描結束後寫入 Firebase，網頁只讀不寫，F12 看不到任何敏感資訊
+        // Firestore 路徑：artifacts/kj-wealth-manager/public/futures_status
+        async function fetchFuturesStatus() {
+            const statusEl = document.getElementById('futures-status');
+            if (!statusEl || !window.db) return;
+            try {
+                const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+                const fsDoc = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                const snap  = await getDoc(fsDoc);
+                if (!snap.exists()) {
+                    statusEl.textContent = '⚪ 尚無執行紀錄';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+                    return;
+                }
+                const d      = snap.data();
+                const status = d.status       || '';
+                const t      = d.scan_time    || '';
+                const cnt    = Number(d.signal_count) || 0;
+                if (status === 'signal' && cnt > 0) {
+                    statusEl.textContent = `🔥 上次有訊號 ${cnt}支 ${t}`;
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700';
+                } else if (status === 'completed') {
+                    statusEl.textContent = `🟢 上次無訊號 ${t}`;
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+                } else {
+                    statusEl.textContent = `⚪ ${t || '待機中'}`;
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+                }
+            } catch(e) {
+                statusEl.textContent = '❓ 狀態查詢失敗';
+                statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+            }
+        }
+
+        // ── 週K/日K 切換開關 ────────────────────────────────────
+        // 目前掃描模式（'weekly'=週K / 'daily'=日K），預設週K
+        let _currentScanMode = 'weekly';
+
+        // ✅ 更新開關UI
+        const _updateScanModeUI = (mode) => {
+            const wBtn = document.getElementById('btn-scan-weekly');
+            const dBtn = document.getElementById('btn-scan-daily');
+            const wKnob = document.getElementById('weekly-knob');
+            const dKnob = document.getElementById('daily-knob');
+            const wLbl  = document.getElementById('weekly-label');
+            const dLbl  = document.getElementById('daily-label');
+            if (!wBtn) return;
+            if (mode === 'weekly') {
+                wBtn.style.background = '#2563eb'; wBtn.setAttribute('aria-checked','true');
+                wKnob.style.transform = 'translateX(28px)';
+                wLbl.textContent = 'ON'; wLbl.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                dBtn.style.background = ''; dBtn.className = dBtn.className.replace(/bg-\S+/,'bg-slate-300');
+                dBtn.setAttribute('aria-checked','false');
+                dKnob.style.transform = 'translateX(0px)';
+                dLbl.textContent = 'OFF'; dLbl.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+            } else {
+                dBtn.style.background = '#2563eb'; dBtn.setAttribute('aria-checked','true');
+                dKnob.style.transform = 'translateX(28px)';
+                dLbl.textContent = 'ON'; dLbl.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                wBtn.style.background = ''; wBtn.className = wBtn.className.replace(/bg-\S+/,'bg-slate-300');
+                wBtn.setAttribute('aria-checked','false');
+                wKnob.style.transform = 'translateX(0px)';
+                wLbl.textContent = 'OFF'; wLbl.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+            }
+        };
+
+        // ✅ 切換掃描模式（同步更新SCAN_INTERVAL + 自動重新掃描）
+        window.toggleScanMode = async (mode) => {
+            if (_currentScanMode === mode) return;
+            _currentScanMode = mode;
+            // 同步更新全域 SCAN_INTERVAL 和 SCAN_RANGE
+            SCAN_INTERVAL = mode === 'daily' ? '1d' : '1wk';
+            SCAN_RANGE    = mode === 'daily' ? '1y' : '2y';
+            _updateScanModeUI(mode);
+            window.showAlert(mode === 'daily' ? '切換為日K模式，自動重新掃描...' : '切換為週K模式，自動重新掃描...');
+            // ✅ 儲存設定到 Firebase（綁定個人帳號）
+            if (currentUserEmail && window.db) {
+                try {
+                    await initFirebaseAuth();
+                    const _pref = doc(window.db,'artifacts',window.appId,'users',getSafeDocId(currentUserEmail),'data','settings');
+                    await setDoc(_pref, { scanMode: mode }, { merge: true });
+                } catch(e) {}
+            }
+            // ✅ 清除診斷快取，觸發重新掃描
+            if (typeof diagCache !== 'undefined') diagCache.clear();
+            // 延遲0.5秒讓Alert顯示後再觸發掃描
+            setTimeout(() => window.startManualScan(), 500);
+        };
+
+        // ✅ 登入後從 Firebase 讀取個人掃描模式設定
+        const _loadScanModePref = async (email) => {
+            try {
+                await initFirebaseAuth();
+                const _pref = doc(window.db,'artifacts',window.appId,'users',getSafeDocId(email),'data','settings');
+                const snap = await getDoc(_pref);
+                if (snap.exists() && snap.data().scanMode) {
+                    const saved = snap.data().scanMode;
+                    _currentScanMode = saved;
+                    SCAN_INTERVAL = saved === 'daily' ? '1d' : '1wk';
+                    SCAN_RANGE    = saved === 'daily' ? '1y' : '2y';
+                    _updateScanModeUI(saved);
+                }
+            } catch(e) {}
+        };
+
+        // ── 方案B：手動持倉開關 ──────────────────────────────────
+        let _futuresHoldingManual = false;  // 手動持倉開關
+
+        window.toggleFuturesHolding = async () => {
+            _futuresHoldingManual = !_futuresHoldingManual;
+            const btn   = document.getElementById('btn-futures-holding');
+            const knob  = document.getElementById('holding-knob');
+            const label = document.getElementById('holding-label');
+            if (_futuresHoldingManual) {
+                btn.style.backgroundColor = '#dc2626';  // red-600
+                knob.style.transform = 'translateX(28px)';
+                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                btn.setAttribute('aria-checked','true');
+                window.showAlert('🔴 持倉中：深夜01~05仍會監控平倉條件');
+            } else {
+                btn.style.backgroundColor = '';
+                btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
+                knob.style.transform = 'translateX(0px)';
+                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+                btn.setAttribute('aria-checked','false');
+                window.showAlert('⬜ 已清除持倉標記');
+            }
+            // ✅ 方案A：同步寫入Firebase持倉狀態
+            if (currentUserEmail && window.db) {
+                try {
+                    await initFirebaseAuth();
+                    const _hPath = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                    await setDoc(_hPath, { is_futures_holding: _futuresHoldingManual }, { merge: true });
+                } catch(e) {}
+            }
+            _updateNightModeHint();
+        };
+
+        // ✅ 方案A：從Firebase讀取持倉狀態
+        const _loadFuturesHolding = async () => {
+            try {
+                await initFirebaseAuth();
+                const _hPath = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                const snap = await getDoc(_hPath);
+                if (snap.exists() && snap.data().is_futures_holding === true) {
+                    _futuresHoldingManual = true;
+                    const btn  = document.getElementById('btn-futures-holding');
+                    const knob = document.getElementById('holding-knob');
+                    const label= document.getElementById('holding-label');
+                    if (btn) {
+                        btn.style.backgroundColor = '#dc2626';
+                        knob.style.transform = 'translateX(28px)';
+                        label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                        btn.setAttribute('aria-checked','true');
+                    }
+                }
+            } catch(e) {}
+            _updateNightModeHint();
+        };
+
+        // ✅ 深夜模式提醒顯示
+        const _updateNightModeHint = () => {
+            const hint = document.getElementById('night-mode-hint');
+            if (!hint) return;
+            const now = new Date(); const h = now.getHours(); const m = now.getMinutes();
+            const tv  = h*60+m;
+            const isNight = (tv >= 1*60 && tv < 5*60);
+            hint.style.display = (isNight && _futuresHoldingManual) ? 'block' : 'none';
+        };
+
+        // ✅ 深夜01:00~05:00時，判斷是否有持倉（方案A Firebase OR 方案B手動）
+        const _hasFuturesHolding = async () => {
+            // 方案B：手動開關直接判斷
+            if (_futuresHoldingManual) return true;
+            // 方案A：從Firebase讀取
+            try {
+                await initFirebaseAuth();
+                const _hPath = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
+                const snap = await getDoc(_hPath);
+                if (snap.exists() && snap.data().is_futures_holding === true) return true;
+            } catch(e) {}
+            return false;
+        };
+
+        // ── 期貨5分K開關 Toggle ────────────────────────────────
+        let _futuresActive = false;  // 開關狀態（false=關，true=開）
+
+        window.toggleFutures5mk = () => {
+            if (currentUserEmail !== 'shchyu61@gmail.com') {
+                window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
+                return;
+            }
+            // 時段檢查
+            const now = new Date();
+            const wd  = now.getDay();
+            const tv  = now.getHours() * 60 + now.getMinutes();
+            const inFutures = (
+                (wd === 1 && tv >= 13*60) ||                              // 週一13:00後
+                (wd === 2 && (tv < 1*60 || tv >= 5*60)) ||               // 週二（排除凌晨01:00~05:00）
+                (wd === 3 && tv <= 11*60+30)                              // 週三11:30前
+            );
+
+            if (!_futuresActive && !inFutures) {
+                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30，深夜01~05除外）');
+                return;
+            }
+
+            _futuresActive = !_futuresActive;
+            const btn    = document.getElementById('btn-futures-5mk');
+            const knob   = document.getElementById('futures-toggle-knob');
+            const label  = document.getElementById('futures-toggle-label');
+
+            if (_futuresActive) {
+                btn.style.backgroundColor   = '#ea580c';  // orange-600
+                knob.style.transform         = 'translateX(28px)';
+                label.textContent            = 'ON';
+                label.style.color            = '#fff';
+                label.style.left             = '6px';
+                label.style.right            = 'auto';
+                btn.setAttribute('aria-checked', 'true');
+                window.showAlert('🔥 期貨5分K監控已開啟！每5分鐘自動掃描');
+                window.startFutures5mk();  // 立刻掃一次
+            } else {
+                btn.style.backgroundColor   = '';
+                btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
+                knob.style.transform         = 'translateX(0px)';
+                label.textContent            = 'OFF';
+                label.style.color            = '';
+                label.style.left             = 'auto';
+                label.style.right            = '6px';
+                btn.setAttribute('aria-checked', 'false');
+                window.showAlert('⏹ 期貨5分K監控已關閉');
+            }
+        };
+
+        // ── 期貨5分K診斷（專屬 shchyu61@gmail.com）────────────────
+        window.startFutures5mk = async () => {
+            if (currentUserEmail !== 'shchyu61@gmail.com') {
+                window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
+                return;
+            }
+
+            // 時段檢查（週一13:00~週三11:30）
+            const now = new Date();
+            const wd  = now.getDay();
+            const tv  = now.getHours() * 60 + now.getMinutes();
+            const inFutures = (
+                (wd === 1 && tv >= 13*60) ||                              // 週一13:00後
+                (wd === 2 && (tv < 1*60 || tv >= 5*60)) ||               // 週二（排除凌晨01:00~05:00）
+                (wd === 3 && tv <= 11*60+30)                              // 週三11:30前
+            );
+            // ✅ 深夜01:00~05:00：若有持倉（方案A Firebase OR 方案B手動）→ 只掃平倉，不掃買進
+            const _isNightHours = (wd === 2 && tv >= 1*60 && tv < 5*60);
+            const _nightHolding = _isNightHours ? await _hasFuturesHolding() : false;
+
+            if (!inFutures && !_nightHolding) {
+                window.showAlert('❌ 非期貨5分K時段（週一13:00~週三11:30，深夜01~05除外）');
+                return;
+            }
+            if (_nightHolding) {
+                window.showAlert('🌙 深夜01~05持倉模式：只監控平倉條件（方案A+B）');
+            }
+
+            const btn = document.getElementById('btn-futures-5mk');
+            btn.disabled = true;
+
+            try {
+                // 使用 ^TWII 作為台指期替代標的，抓5分K
+                const FUTURES_TARGETS = ['^TWII'];
+                const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+                for (const ticker of FUTURES_TARGETS) {
+                    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=5m&range=5d`; // ✅ 含夜盤需更長範圍
+                    let yResult = null;
+                    try {
+                        yResult = await fetchWithFallback(url);
+                    } catch(e) {
+                        window.showAlert(`❌ ${ticker} 資料抓取失敗：${e.message}`);
+                        continue;
+                    }
+
+                    // ✅【夜盤保留】主力以夜盤為主戰場，不剔除夜盤
+                    // range='5d' 確保足夠近期夜盤+日盤K棒（約1000+根）
+                    const closes = yResult.indicators.quote[0].close.filter(v => v != null);
+                    const lows   = (yResult.indicators.quote[0].low   || []).map((v,i) => v ?? closes[i]);
+                    const highs  = (yResult.indicators.quote[0].high  || []).map((v,i) => v ?? closes[i]);
+                    const _5MK_LOOKBACK = _p1m; // ✅ 近54根5分K棒（含夜盤）
+                    if (closes.length < _5MK_LOOKBACK + 2) {
+                        window.showAlert(`⚠️ ${ticker} 5分K資料不足（需>=${_5MK_LOOKBACK+2}根）`);
+                        continue;
+                    }
+
+                    // ── 第一道：週K位階（_p1=3根）──────────────────
+                    let _wkResult = null;
+                    try {
+                        const _wkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&range=2y`;
+                        const _wkData = await fetchWithFallback(_wkUrl);
+                        const _wkC = _wkData.indicators.quote[0].close.filter(v=>v!=null);
+                        const _wkL = _wkData.indicators.quote[0].low.filter(v=>v!=null);
+                        const _wkH = _wkData.indicators.quote[0].high.filter(v=>v!=null);
+                        if (_wkC.length >= 30) {
+                            const _wb = calcBoll(_wkC);
+                            const _wr = calcRSI(_wkC);
+                            const _wm = calcMACDHist(_wkC);
+                            const _wn = _p1;
+                            const _wLows  = _wkL.slice(-_wn);
+                            const _wHighs = _wkH.slice(-_wn);
+                            // 條件A：近3根任一低點<=布林下緣
+                            const _wA = _wLows.some((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<=_b.lower*_p3; }) && calcRSI(_wkC)>calcRSI(_wkC.slice(0,-1)) && _wm&&_wm.now>_wm.prev;
+                            // 條件B：近3根低均<中軌 AND 高均<上軌
+                            const _wB = _wLows.every((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<_b.mid; }) && _wHighs.every((h,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&h<_b.upper; });
+                            _wkResult = (_wA || _wB) ? 'pass' : null;
+                        }
+                    } catch(e) { _wkResult = null; }
+                    if (!_wkResult) {
+                        window.showAlert(`❌ ${ticker} 第一道週K位階未達條件，跳過`);
+                        continue;
+                    }
+
+                    // ── 第二道：日K eLeader（_p1d=15根）─────────────
+                    let _dkResult = null;
+                    try {
+                        const _dkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1y`;
+                        const _dkData = await fetchWithFallback(_dkUrl);
+                        const _dkC = _dkData.indicators.quote[0].close.filter(v=>v!=null);
+                        const _dkL = _dkData.indicators.quote[0].low.filter(v=>v!=null);
+                        const _dkH = _dkData.indicators.quote[0].high.filter(v=>v!=null);
+                        if (_dkC.length >= 50) {
+                            const _dn = _p1d;  // 15根日K
+                            const _dLows  = _dkL.slice(-_dn);
+                            const _dHighs = _dkH.slice(-_dn);
+                            const _db = calcBoll(_dkC); const _dr = calcRSI(_dkC); const _dm = calcMACDHist(_dkC);
+                            // 日K條件A：近15根任一低點<=布林下緣
+                            const _dA = _dLows.some((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<=_b.lower*_p3; }) && _dr>calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now>_dm.prev;
+                            // 日K條件B：近15根低均<中軌 AND 高均<上軌
+                            const _dB = _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<_b.mid; }) && _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h<_b.upper; });
+                            _dkResult = (_dA || _dB) && _dr > _p2 ? 'pass' : null;
+                        }
+                    } catch(e) { _dkResult = null; }
+                    if (!_dkResult) {
+                        window.showAlert(`❌ ${ticker} 第二道日K位階未達條件，跳過`);
+                        continue;
+                    }
+
+                    // ── 第三道：5分K 54根條件A/B ─────────────────────
+                    // 計算技術指標
+                    const boll    = calcBoll(closes);
+                    const rsiNow  = calcRSI(closes);
+                    const rsiPrv  = calcRSI(closes.slice(0, -1));
+                    const macd    = calcMACDHist(closes);
+                    const price   = closes[closes.length - 1];
+
+                    if (!boll || rsiNow === null || !macd) continue;
+
+                    const rsiRising   = rsiNow > rsiPrv;
+                    const macdRising  = macd.now > macd.prev;
+                    const rsifalling  = rsiNow < rsiPrv;
+                    const macdFalling = macd.now < macd.prev;
+
+                    // ✅【條件A/B 54根】與週K邏輯一致
+                    const _nm = _5MK_LOOKBACK;
+                    const _lows_m  = lows.slice(-_nm);
+                    const _highs_m = highs.slice(-_nm);
+                    const _cls_m   = closes;
+                    // 條件A：近54根任一最低價<=布林下緣 AND RSI↑ AND MACD↑
+                    const _5mk_x1 = _lows_m.some((l,i) => {
+                        const _b = calcBoll(_cls_m.slice(0, _cls_m.length-_nm+i+1));
+                        return _b && l <= _b.lower * _p3;
+                    });
+                    const _5mk_A = _5mk_x1 && rsiRising && macdRising;
+                    // 條件B：近54根最低均<布林中軌 AND 最高均<布林上軌 AND 前N根MACD縮 AND 當根放大
+                    const _5mk_x2 = _lows_m.every((l,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l<_b.mid; });
+                    const _5mk_x3 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h<_b.upper; });
+                    const _5mk_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now<=_m1.now){_ok=false;break;} } return _ok; })() : false;
+                    const _5mk_B  = _5mk_x2 && _5mk_x3 && _5mk_x4 && macdRising;
+                    const _5mk_buy = (_5mk_A || _5mk_B) && rsiNow > _p2;
+
+                    const nearLower   = price <= boll.lower * _p3;
+                    const nearUpper   = price >= boll.upper * _p4;
+                    const name = stockNameMap[ticker] || ticker;
+
+                    // ✅ 深夜01~05持倉模式：只掃平倉，跳過買進
+                    if (_5mk_buy && nearLower && !_nightHolding) {
+                        // 買進訊號：發Gmail
+                        const body = `⭐【期貨5分K買進訊號】⭐
+標的：${ticker} ${name}
+收盤：${price.toFixed(2)}　布林下緣：${boll.lower.toFixed(2)}
+RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
+時間：${scanTime}`;
+                        try {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                                to_email: currentUserEmail,
+                                scan_time: scanTime,
+                                signal_count: '期貨買進 1',
+                                signal_body: body,
+                            });
+                            window.showAlert(`⭐ ${ticker} 期貨5分K買進訊號！Gmail已發送`);
+                            // ✅ 方案A：買進訊號發出 → 自動標記Firebase持倉=true
+                            try {
+                                await initFirebaseAuth();
+                                const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
+                                await setDoc(_hp, { is_futures_holding: true }, { merge: true });
+                                _futuresHoldingManual = true;
+                                document.getElementById('btn-futures-holding') && toggleFuturesHolding();
+                            } catch(e) {}
+                        } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
+
+                    } else if (rsiRising && macdFalling && nearUpper) {
+                        // 平倉訊號：發Gmail
+                        const body = `🔔【期貨5分K平倉訊號】🔔
+標的：${ticker} ${name}
+收盤：${price.toFixed(2)}　布林上緣：${boll.upper.toFixed(2)}
+RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
+時間：${scanTime}`;
+                        try {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                                to_email: currentUserEmail,
+                                scan_time: scanTime,
+                                signal_count: '期貨平倉 1',
+                                signal_body: body,
+                            });
+                            window.showAlert(`🔔 ${ticker} 期貨5分K平倉訊號！Gmail已發送`);
+                            // ✅ 方案A：平倉訊號發出 → 自動清除Firebase持倉=false
+                            try {
+                                await initFirebaseAuth();
+                                const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
+                                await setDoc(_hp, { is_futures_holding: false }, { merge: true });
+                                _futuresHoldingManual = false;
+                                const _hb = document.getElementById('btn-futures-holding');
+                                const _hk = document.getElementById('holding-knob');
+                                const _hl = document.getElementById('holding-label');
+                                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
+                                _updateNightModeHint();
+                            } catch(e) {}
+                        } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
+
+                    } else {
+                        window.showAlert(`ℹ️ ${ticker} RSI=${rsiNow.toFixed(1)} 未達進出場條件，不發信`);
+                    }
+                }
+            } catch(e) {
+                window.showAlert(`❌ 期貨5分K掃描失敗：${e.message}`);
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        window.startWatchlistScan = async () => {
+            if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
+            // ✅ 立刻鎖住按鈕，避免使用者以為沒反應連按多次
+            const btn = document.getElementById('btn-watchlist-scan');
+            const txt = document.getElementById('watchlist-scan-text');
+            btn.disabled = true;
+            txt.innerText = '準備中...';
+            // 掃描前預載全額交割清單（台股才需要）
+            await fetchCashDeliveryStocks().catch(() => {});
+            document.getElementById('watchlist-list').innerHTML =
+                watchlist.map(s => makeLoadingCard(s.code, false)).join('');
+
+            // ── 工廠擴編：工作池從3→5（同時5支平行診斷，速度提升約40%）──
+            const _failedCodes = new Set();  // 記錄失敗的股票，之後自動重試
+            const tasks = watchlist.map(s => async () => {
+                const code = s.code;
+                const cached = getCached(code);
+                try {
+                    const result = cached || await analyzeStock(code);
+                    document.getElementById(`wl-card-${code}`).outerHTML = makeDiagCard(code, result, false);
+                } catch(e) {
+                    _failedCodes.add(code);  // 記錄失敗，等第一輪結束後重試
+                    document.getElementById(`wl-card-${code}`).outerHTML =
+                        `<div id="wl-card-${code}-retry" class="border-2 border-amber-200 bg-amber-50 rounded-[2rem] p-5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-500 flex items-center justify-center font-black">${code[0]}</div>
+                            <div><div class="font-black">${code}</div><div class="text-[10px] text-amber-500">網路繁忙，自動重試中...</div></div>
+                        </div>`;
+                }
+            });
+
+            // 收集買進訊號
+            const wlSignals = [];
+            // ✅ 工作池：平日5支並行，週末1支
+            await runWithPool(tasks, _poolSize(), (done, total) => {
+                txt.innerText = `診斷中（${done}/${total}）...`;
+            });
+
+            // ── 自動重試：針對失敗的股票再試一次（清除快取後重抓）──
+            if (_failedCodes.size > 0) {
+                txt.innerText = `重試失敗項目（${_failedCodes.size}支）...`;
+                const retryTasks = [..._failedCodes].map(code => async () => {
+                    diagCache.delete(code);  // 清除舊快取，強制重新抓取
+                    try {
+                        const result = await analyzeStock(code);
+                        const retryEl = document.getElementById(`wl-card-${code}-retry`);
+                        if (retryEl) retryEl.outerHTML = makeDiagCard(code, result, false);
+                    } catch(e) {
+                        const retryEl = document.getElementById(`wl-card-${code}-retry`);
+                        if (retryEl) retryEl.outerHTML =
+                            `<div class="border-2 border-rose-200 bg-rose-50 rounded-[2rem] p-5 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center font-black">${code[0]}</div>
+                                <div><div class="font-black">${code}</div><div class="text-[10px] text-rose-400">無法取得資料</div></div>
+                            </div>`;
+                    }
+                });
+                await runWithPool(retryTasks, 3, null);
+            }
+
+            // 掃描完成後整理買進訊號並發信
+            watchlist.forEach(s => {
+                const cached = getCached(s.code);
+                if (cached && cached.buy_signal) {
+                    wlSignals.push({
+                        code: s.code,
+                        price: cached.price,
+                        rsi: cached.rsi,
+                        boll: { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[cached.boll_position] || '',
+                        conditions: cached.conditions.join('、')
+                    });
+                }
+            });
+            if (wlSignals.length > 0) sendBuyNotify(wlSignals);
+
+            btn.disabled = false;
+            txt.innerText = '全部診斷（掃描買進訊號）';
+        };
+
+        // ── 智能診斷：持股＋觀察兩清單（工作池版）─────────────
+        window.startManualScan = async () => {
+            const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
+            const _sortFn = (a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code);
+            const all = [
+                ...stocks.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '持股' })),
+                ...watchlist.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '觀察' }))
+            ];
+            if (all.length === 0) { window.showAlert('請先新增股票。'); return; }
+            // 掃描前預載全額交割清單
+            await fetchCashDeliveryStocks().catch(() => {});
+
+            const progress  = document.getElementById('scan-progress');
+            const resultDiv = document.getElementById('scan-result-list');
+            progress.style.width = '0%';
+            resultDiv.classList.remove('hide');
+            resultDiv.innerHTML = all.map(({ code, tag }) =>
+                `<div id="sc-card-${code}" class="border-2 border-slate-700 bg-slate-900 rounded-[2rem] p-4 flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-slate-700 text-slate-300 flex items-center justify-center font-black text-sm">${code[0]}</div>
+                    <span class="font-black text-white">${code}</span>
+                    <span class="text-[10px] text-slate-400 ml-1">(${tag})</span>
+                    <span class="ml-auto text-xs text-blue-400 font-black animate-pulse">診斷中...</span>
+                </div>`
+            ).join('');
+            document.getElementById('last-diagnostic-time').innerText = new Date().toLocaleTimeString();
+
+            const tasks = all.map(({ code, tag }) => async () => {
+                try {
+                    const result = await analyzeStock(code); // 有快取自動跳過抓取
+                    const name = stockNameMap[code] || '未定義資產';
+                    const cardHtml = makeDiagCard(code, result, true, tag === '持股')
+                        .replace(
+                            `<div class="text-[10px] ${result.rsi_trend === 'rising' ? 'text-emerald-400' : 'text-rose-400'} uppercase">${name}</div>`,
+                            `<div class="text-[10px] text-slate-400 uppercase">${name} <span class="text-blue-400">(${tag})</span></div>`
+                        );
+                    document.getElementById(`sc-card-${code}`).outerHTML = cardHtml;
+                } catch(e) {
+                    document.getElementById(`sc-card-${code}`).outerHTML =
+                        `<div class="border-2 border-rose-800 bg-slate-900 rounded-[2rem] p-4 flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-xl bg-slate-700 text-rose-400 flex items-center justify-center font-black text-sm">${code[0]}</div>
+                            <span class="font-black text-white">${code}</span>
+                            <span class="text-[10px] text-rose-400 ml-1">無法取得資料</span>
+                        </div>`;
+                }
+            });
+
+            // ✅ 工作池：平日5支並行，週末1支（避免Yahoo Finance API封鎖）
+            await runWithPool(tasks, _poolSize(), (done, total) => {
+                progress.style.width = `${Math.round(done/total*100)}%`;
+            }, (t) => t.tag === '持股');
+
+            // 掃描完成後整理買進+賣出訊號並分別發信
+            const manualBuySignals  = [];
+            const manualSellSignals = [];
+            all.forEach(({ code, tag }) => {
+                const cached = getCached(code);
+                if (!cached) return;
+                const name = stockNameMap[code] || code;
+                const bollText = { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[cached.boll_position] || '';
+                if (cached.buy_signal) {
+                    manualBuySignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: cached.conditions.join('、') });
+                }
+                // 賣出訊號只針對持股
+                if (tag === '持股' && cached.sell_signal) {
+                    manualSellSignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: '賣出條件觸發' });
+                }
+            });
+            if (manualBuySignals.length  > 0) sendBuyNotify(manualBuySignals);
+            if (manualSellSignals.length > 0) sendSellNotify(manualSellSignals);
+        };
+
+        // ── 待買觀察清單：渲染/新增/刪除 ──────────────────────
+        // ── 需求1：分類篩選狀態 ──────────────────────────────────
+        let wlCatFilter = 'all';
+        let stCatFilter = 'all';
+
+        // ── 需求1：分類Tab切換（待買觀察）────────────────────────
+        window.filterWatchlist = (cat) => {
+            wlCatFilter = cat;
+            document.querySelectorAll('.wl-cat-btn').forEach(btn => {
+                btn.style.background = '#ede0cc'; btn.style.color = '#3a2010';
+            });
+            const active = document.getElementById(`wl-tab-${cat}`);
+            if (active) {
+                active.style.background = cat === 'gold' ? '#b8860b' : '#8a4a18';
+                active.style.color = '#fff';
+            }
+            window.renderWatchlist();
+        };
+
+        // ── 需求1：分類Tab切換（持股清單）────────────────────────
+        window.filterStocks = (cat) => {
+            stCatFilter = cat;
+            document.querySelectorAll('.st-cat-btn').forEach(btn => {
+                btn.style.background = '#ede0cc'; btn.style.color = '#3a2010';
+            });
+            const active = document.getElementById(`st-tab-${cat}`);
+            if (active) {
+                active.style.background = cat === 'gold' ? '#b8860b' : '#1a3a8a';
+                active.style.color = '#fff';
+            }
+            window.renderStocks();
+        };
+
+        // ── 需求2：安聯基金提示（選基金分類時顯示）──────────────
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'new-watchlist-cat') {
+                const hint = document.getElementById('fund-hint');
+                if (hint) hint.classList.toggle('hide', e.target.value !== 'fund');
+                const goldHint = document.getElementById('wl-gold-hint');
+                if (goldHint) goldHint.classList.toggle('hide', e.target.value !== 'gold');
+            }
+            if (e.target.id === 'new-stock-cat') {
+                const hint = document.getElementById('stock-fund-hint');
+                if (hint) hint.classList.toggle('hide', e.target.value !== 'fund');
+                const goldHint = document.getElementById('st-gold-hint');
+                if (goldHint) goldHint.classList.toggle('hide', e.target.value !== 'gold');
+            }
+        });
+
+        // ── 需求3：匯出JSON備份 ───────────────────────────────────
+        window.exportData = () => {
+            const data = { email: currentUserEmail, stocks, watchlist, exportedAt: new Date().toISOString() };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `kj-backup-${currentUserEmail.split('@')[0]}-${new Date().toLocaleDateString('zh-TW').replace(/\//g,'-')}.json`;
+            a.click();
+            window.showAlert('✅ 備份已下載！請妥善保管 JSON 檔案。');
+        };
+
+        // ── 需求3：匯入JSON還原 ───────────────────────────────────
+        window.importData = async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                if (!data.stocks && !data.watchlist) throw new Error('格式錯誤');
+                if (data.stocks)    stocks    = data.stocks;
+                if (data.watchlist) watchlist = data.watchlist;
+                await saveToCloud();
+                window.renderStocks();
+                window.renderWatchlist();
+                window.showAlert(`✅ 還原成功！持股${stocks.length}支，觀察${watchlist.length}支`);
+            } catch(e) {
+                window.showAlert('❌ 匯入失敗：' + e.message);
+            }
+            event.target.value = '';
+        };
+
+        // ── 需求4：Firebase儲存自訂密碼 ──────────────────────────
+        window.saveCustomPassword = async () => {
+            const pw  = document.getElementById('new-pw-input').value.trim();
+            const pw2 = document.getElementById('new-pw-confirm').value.trim();
+            const msg = document.getElementById('pw-msg');
+            if (pw.length < 6) { msg.style.color='#8a2020'; msg.innerText='密碼至少6位'; msg.style.opacity='1'; return; }
+            if (pw !== pw2)    { msg.style.color='#8a2020'; msg.innerText='兩次密碼不一致'; msg.style.opacity='1'; return; }
+            try {
+                await initFirebaseAuth();
+                const pwPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(currentUserEmail), 'data', 'settings');
+                await setDoc(pwPath, { customPw: btoa(pw), updatedAt: new Date().toISOString() });
+                msg.style.color='#1a6a30'; msg.innerText='✅ 密碼已儲存！下次可用此密碼登入'; msg.style.opacity='1';
+                document.getElementById('new-pw-input').value='';
+                document.getElementById('new-pw-confirm').value='';
+            } catch(e) { msg.style.color='#8a2020'; msg.innerText='儲存失敗：'+e.message; msg.style.opacity='1'; }
+        };
+
+        // ── 需求4：登入時優先驗證自訂密碼 ───────────────────────
+        const checkCustomPassword = async (email, inputPw) => {
+            try {
+                await initFirebaseAuth();
+                const pwPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
+                const snap = await getDoc(pwPath);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data.customPw) return atob(data.customPw) === inputPw;
+                }
+            } catch(e) {}
+            return null; // null = 無自訂密碼，回退到每日密碼
+        };
+
+        // ── 首次登入驗證：查詢 Firebase 此信箱是否已通過 OTP 驗證 ──
+        const checkEmailVerified = async (email) => {
+            try {
+                await initFirebaseAuth();
+                const pwPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
+                const snap = await getDoc(pwPath);
+                if (snap.exists() && snap.data().emailVerified === true) return true;
+            } catch(e) {}
+            return false;
+        };
+
+        window.renderWatchlist = () => {
+            const list = document.getElementById('watchlist-list');
+            document.getElementById('watchlist-count').innerText = watchlist.length;
+            if (watchlist.length === 0) {
+                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Watchlist</div>`;
+                return;
+            }
+            const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
+            const filtered_wl = (wlCatFilter === 'all' ? watchlist : watchlist.filter(s => (s.cat||'tw') === wlCatFilter))
+                .slice().sort((a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code));
+            if (filtered_wl.length === 0) {
+                list.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs font-black uppercase">此分類尚無股票</div>`;
+                lucide.createIcons(); return;
+            }
+            list.innerHTML = filtered_wl.map(s => {
+                const name = stockNameMap[s.code] || '未定義資產';
+                const cached = getCached(s.code);
+                const catLabel = { tw:'台股', us:'美股', fund:'基金', crypto:'虛擬幣', fx:'外匯' }[s.cat||'tw'] || '';
+                const rsiHtml = cached ? (() => {
+                    const arrow  = cached.rsi_trend === 'rising' ? '↑' : '↓';
+                    const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
+                    const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
+                    const bollClr = { near_upper:'text-amber-600', mid_zone:'text-slate-500', near_lower:'text-emerald-600' };
+                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
+                        <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
+                        <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
+                    </div>`;
+                })() : `<div class="flex-1"></div>`;
+                return `<div class="flex items-center gap-2 p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-3 shrink-0">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
+                        <div><div class="font-black text-lg tracking-tight">${s.code}</div><div class="text-[10px] font-black text-slate-400 uppercase">${name}</div></div>
+                    </div>
+                    ${rsiHtml}
+                    <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2 shrink-0"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        };
+
+        document.getElementById('btn-add-watchlist').addEventListener('click', async () => {
+            const input = document.getElementById('new-watchlist-input');
+            const val = input.value.trim().toUpperCase();
+            const cat = document.getElementById('new-watchlist-cat')?.value || 'tw';
+            if (val && !watchlist.some(s => s.code === val)) {
+                watchlist.push({ code: val, cat }); input.value = '';
+                fetchStockName(val); // 自動抓取名稱
+                window.renderWatchlist(); await saveToCloud();
+            }
+        });
+        window.removeWatchlist = async (code) => {
+            watchlist = watchlist.filter(s => s.code !== code);
+            window.renderWatchlist(); await saveToCloud();
+        };
+
+        window.switchPage = (pageName) => {
+            document.querySelectorAll('main > div').forEach(div => div.classList.add('hide'));
+            document.getElementById(`page-${pageName}`).classList.remove('hide');
+            ['watchlist', 'monitor', 'scan', 'settings'].forEach(p => {
+                const tab = document.getElementById(`tab-${p}`);
+                if (tab) {
+                    p === pageName ? tab.classList.add('tab-active') : tab.classList.remove('tab-active');
+                    p === pageName ? tab.classList.remove('text-slate-400') : tab.classList.add('text-slate-400');
+                }
+            });
+        };
+
+        // ✅ Bug3修正：登出時清除 localStorage
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            localStorage.removeItem('kj_email');
+            location.reload();
+        });
+
+        // ✅ Bug3修正：頁面載入時檢查 localStorage，若有記錄則自動還原登入狀態
+        (async () => {
+            const savedEmail = localStorage.getItem('kj_email');
+            if (savedEmail) {
+                try {
+                    await completeLogin(savedEmail);
+                } catch(e) {
+                    localStorage.removeItem('kj_email');
+                }
+            }
+        })();
+    </script>
+</body>
+</html>
