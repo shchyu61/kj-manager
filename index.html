@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v03301030</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v03301618</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1774,7 +1774,7 @@
                     const closes = yResult.indicators.quote[0].close.filter(v => v != null);
                     const lows   = (yResult.indicators.quote[0].low   || []).map((v,i) => v ?? closes[i]);
                     const highs  = (yResult.indicators.quote[0].high  || []).map((v,i) => v ?? closes[i]);
-                    const _5MK_LOOKBACK = _p1m; // ✅ 近54根5分K棒（含夜盤）
+                    const _5MK_LOOKBACK = 54; // ✅ 近54根5分K棒（含夜盤，固定值不依賴外部變數）
                     if (closes.length < _5MK_LOOKBACK + 2) {
                         window.showAlert(`⚠️ ${ticker} 5分K資料不足（需>=${_5MK_LOOKBACK+2}根）`);
                         continue;
