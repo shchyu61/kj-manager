@@ -1253,11 +1253,11 @@ def main_task():
                 # ── 第一道：週K位階 ──────────────────────────
                 df5_w = get_stock_data(ticker, period='2y', interval='1wk', cache=weekly_cache)
                 if df5_w is None or len(df5_w) < 30:
-                    print(f'  ⚠️ {ticker} 週K資料不足，跳過'); continue
+                    print(f'  ⚠️ {ticker} 第一道資料不足，跳過'); continue
                 df5_w = calc_indicators(df5_w)
                 if not check_buy_precondition(df5_w):
-                    print(f'  ❌ {ticker} 第一道週K未通過，跳過'); continue
-                print(f'  ✅ {ticker} 第一道週K通過')
+                    print(f'  ❌ {ticker} 第一道未通過，跳過'); continue
+                print(f'  ✅ {ticker} 第一道通過')
 
                 # ── 第二道：日K eLeader ──────────────────────
                 df5_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
