@@ -588,8 +588,8 @@ def build_fund_proxy_df(df_spy, df_qqq, df_hyg):
 # ============================================================
 def check_buy_precondition(df):
     try:
-        l   = df['Low']
-        h   = df['High']
+        l   = df['Low'].rolling(54)
+        h   = df['High'].rolling(54)
         rsi = df['rsi14']
         bb  = df['boll_bot20']   # 布林下軌
         bt  = df['boll_top20']   # 布林上軌
@@ -747,7 +747,8 @@ def check_sell_condition(df):
 def check_short_precondition(df):
     """做空第一道：週K位階高檔（買進策略完全鏡像）"""
     try:
-        l   = df['Low'];  h   = df['High']
+        l   = df['Low'].rolling(54)
+        h   = df['High'].rolling(54)
         rsi = df['rsi14']
         bb  = df['boll_bot20']; bt  = df['boll_top20']; bm  = df['ma_c_20']
         mh  = df['macd_hist']
@@ -881,6 +882,9 @@ def scan_stock(ticker, is_holding=False):
         df_w['boll_top20'], df_w['boll_mid20'], df_w['boll_bot20'] = ta.bbands(df_w['Close'], length=20).iloc[:, 0:3].values.T
         df_w['rsi14'] = ta.rsi(df_w['Close'], length=14)
 
+        # ✅ 新增：近5根K棒
+        df_w_5 = df_w.tail(5)
+
         # 🔴 [優先處理賣出]
         if is_holding:
             if check_sell_condition(df_w):
@@ -891,7 +895,9 @@ def scan_stock(ticker, is_holding=False):
 
         # ── 第一道：週K位階（週K/日K模式共用）──────────────────
         if not TEST_MODE:
-            if not check_buy_precondition(df_w):
+            if not check_buy_precondition(df_w_5):
+                return None
+            if not check_short_precondition(df_w_5):
                 return None
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
