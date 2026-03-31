@@ -1092,10 +1092,10 @@ def main_task():
                 tse_macd_down = last_w['macd_hist'] < prev_w['macd_hist']
                 
                 if tse_rsi_down and tse_macd_down:
-                    print(f"⚠️ 警告：台灣加權指數(大盤)週K出現轉折下彎 (RSI:{last_w['rsi14']:.1f})，謹慎觀望，不建議進場")
+                    print(f"⚠️ 警告：台灣加權指數(大盤)第一道出現轉折下彎 (RSI:{last_w['rsi14']:.1f})，謹慎觀望，不建議進場")
                 else:
-                    print(f"✅ 台灣加權指數(大盤)週K趨勢尚穩 (RSI:{last_w['rsi14']:.1f})，持續觀察等個股訊號觸發後，再決定進場")
-# 大盤✅尚穩 → 繼續等個股的3層條件（週K+日K+5分K）全部觸發
+                    print(f"✅ 台灣加權指數(大盤)第一道趨勢尚穩 (RSI:{last_w['rsi14']:.1f})，持續觀察等個股訊號觸發後，再決定進場")
+# 大盤✅尚穩 → 繼續等個股的3層條件（第一道+日K+5分K）全部觸發
 #                       ↓ 才發Gmail通知您
 #                       ↓ 您再決定是否進場
 
@@ -1182,10 +1182,10 @@ def main_task():
                 dji_macd_down = last_dj['macd_hist'] < prev_dj['macd_hist']
 
                 if dji_rsi_down or dji_macd_down:
-                    print(f"⚠️ 警告：道瓊週K出現轉折下彎 (RSI:{last_dj['rsi14']:.1f})，謹慎觀望，不建議進場")
+                    print(f"⚠️ 警告：道瓊第一道出現轉折下彎 (RSI:{last_dj['rsi14']:.1f})，謹慎觀望，不建議進場")
                 else:
-                    print(f"✅ 道瓊週K趨勢尚穩 (RSI:{last_dj['rsi14']:.1f})，持續觀察等個股訊號觸發後，再決定進場")
-# 道瓊✅尚穩 → 繼續等個股的3層條件（週K+日K+5分K）全部觸發
+                    print(f"✅ 道瓊第一道趨勢尚穩 (RSI:{last_dj['rsi14']:.1f})，持續觀察等個股訊號觸發後，再決定進場")
+# 道瓊✅尚穩 → 繼續等個股的3層條件（第一道+日K+5分K）全部觸發
 #                       ↓ 才發Gmail通知您
 #                       ↓ 您再決定是否進場
 
