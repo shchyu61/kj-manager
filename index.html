@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v03310517</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v03311219</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -428,6 +428,21 @@
                                     style="transform:translateX(0px);">
                                 </span>
                                 <span id="holding-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                        <!-- 空倉開關（方案B手動）-->
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-[10px] font-black text-blue-600">空倉中</span>
+                            <button id="btn-futures-short" onclick="toggleFuturesShort()"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="short-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="short-label"
                                     class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
                             </button>
                         </div>
@@ -1673,6 +1688,44 @@
             return false;
         };
 
+        // ── 空倉開關（方案B手動）────────────────────────────────
+        let _futuresShortManual = false;
+
+        window.toggleFuturesShort = async () => {
+            _futuresShortManual = !_futuresShortManual;
+            const btn  = document.getElementById('btn-futures-short');
+            const knob = document.getElementById('short-knob');
+            const label= document.getElementById('short-label');
+            if (_futuresShortManual) {
+                btn.style.backgroundColor = '#2563eb';  // blue-600
+                knob.style.transform = 'translateX(28px)';
+                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                btn.setAttribute('aria-checked','true');
+                // 空倉時自動清除多倉
+                _futuresHoldingManual = false;
+                const _hb=document.getElementById('btn-futures-holding');
+                const _hk=document.getElementById('holding-knob');
+                const _hl=document.getElementById('holding-label');
+                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
+                window.showAlert('🔵 空倉中：深夜01~05仍會監控平空回補條件');
+            } else {
+                btn.style.backgroundColor = '';
+                btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
+                knob.style.transform = 'translateX(0px)';
+                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+                btn.setAttribute('aria-checked','false');
+                window.showAlert('⬜ 已清除空倉標記');
+            }
+            if (currentUserEmail && window.db) {
+                try {
+                    await initFirebaseAuth();
+                    const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
+                    await setDoc(_hp, { is_futures_short: _futuresShortManual }, { merge: true });
+                } catch(e) {}
+            }
+            _updateNightModeHint();
+        };
+
         // ── 期貨5分K開關 Toggle ────────────────────────────────
         let _futuresActive = false;  // 開關狀態（false=關，true=開）
 
@@ -1870,6 +1923,18 @@
                     const nearUpper   = price >= boll.upper * _p4;
                     const name = stockNameMap[ticker] || ticker;
 
+                    // ══ 做空三道關卡（鏡像多方）══════════════════════════
+                    // 第一道：近N根任一最高>=上軌 AND RSI↓ AND MACD↓
+                    const _sh_x1 = _highs_m.some((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>=_b.upper*_p4; });
+                    const _5mk_short_A = _sh_x1 && rsiPrv > rsiNow && macd.prev > macd.now;
+                    // 條件B：近N根最高均>布林中軌 AND 最低均>布林下軌 AND 前N根MACD放大 AND 當根縮小
+                    const _sh_x2 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>_b.mid; });
+                    const _sh_x3 = _lows_m.every((l,i)  => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l>_b.lower; });
+                    const _sh_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now>=_m1.now){_ok=false;break;} } return _ok; })() : false;
+                    const _5mk_short_B = _sh_x2 && _sh_x3 && _sh_x4 && (macd.prev > macd.now);
+                    const _5mk_short = (_5mk_short_A || _5mk_short_B) && rsiNow < (100 - _p2);
+                    const _nightShort = _isNightHours ? _futuresShortManual : false;
+
                     // ✅ 深夜01~05持倉模式：只掃平倉，跳過買進
                     if (_5mk_buy && nearLower && !_nightHolding) {
                         // 買進訊號：發Gmail
@@ -1925,8 +1990,62 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                             } catch(e) {}
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
+                    } else if (_5mk_short && nearUpper && !_nightShort) {
+                        // 做空訊號
+                        const body = `🔻【期貨5分K做空訊號】🔻
+標的：${ticker} ${name}
+收盤：${price.toFixed(2)}　布林上軌：${boll.upper.toFixed(2)}
+RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
+時間：${scanTime}`;
+                        try {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                                to_email: currentUserEmail,
+                                scan_time: scanTime,
+                                signal_count: '期貨做空 1',
+                                signal_body: body,
+                            });
+                            window.showAlert(`🔻 ${ticker} 期貨5分K做空訊號！Gmail已發送`);
+                            // 自動標記空倉+清除多倉
+                            try {
+                                await initFirebaseAuth();
+                                const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
+                                await setDoc(_hp, { is_futures_short: true, is_futures_holding: false }, { merge: true });
+                                _futuresShortManual = true;
+                                _futuresHoldingManual = false;
+                                document.getElementById('btn-futures-short') && toggleFuturesShort();
+                            } catch(e) {}
+                        } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
+
+                    } else if (_futuresShortManual && _5mk_buy && nearLower) {
+                        // 平空回補訊號（空倉中且觸發多方條件）
+                        const body = `🟢【期貨5分K平空回補】🟢
+標的：${ticker} ${name}
+收盤：${price.toFixed(2)}　布林下軌：${boll.lower.toFixed(2)}
+RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
+時間：${scanTime}`;
+                        try {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                                to_email: currentUserEmail,
+                                scan_time: scanTime,
+                                signal_count: '平空回補 1',
+                                signal_body: body,
+                            });
+                            window.showAlert(`🟢 ${ticker} 平空回補訊號！Gmail已發送`);
+                            try {
+                                await initFirebaseAuth();
+                                const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
+                                await setDoc(_hp, { is_futures_short: false }, { merge: true });
+                                _futuresShortManual = false;
+                                const _sb=document.getElementById('btn-futures-short');
+                                const _sk=document.getElementById('short-knob');
+                                const _sl=document.getElementById('short-label');
+                                if (_sb) { _sb.style.backgroundColor=''; _sk.style.transform='translateX(0px)'; _sl.textContent='OFF'; _sl.style.cssText='position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;'; _sb.setAttribute('aria-checked','false'); }
+                            } catch(e) {}
+                        } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
+
                     } else {
-                        window.showAlert(`ℹ️ ${ticker} RSI=${rsiNow.toFixed(1)} 未達進出場條件，不發信`);
+                        const _posStr = _futuresHoldingManual ? '多倉🔴' : (_futuresShortManual ? '空倉🔵' : '空手⬜');
+                        window.showAlert(`ℹ️ ${ticker} RSI=${rsiNow.toFixed(1)} 未達進出場條件（${_posStr}）`);
                     }
                 }
             } catch(e) {

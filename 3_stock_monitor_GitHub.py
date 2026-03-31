@@ -739,6 +739,107 @@ def check_sell_condition(df):
         return False
 
 # ============================================================
+# 【１０-２．做空策略：三道關卡（買進策略完全鏡像）】
+# 第一道：週K觸碰上軌（mirror of 觸碰下軌）
+# 第二道：日K eLeader 25條件全部反向
+# 第三道：5分K RSI↓ AND MACD柱↓
+# ============================================================
+def check_short_precondition(df):
+    """做空第一道：週K位階高檔（買進策略完全鏡像）"""
+    try:
+        l   = df['Low'];  h   = df['High']
+        rsi = df['rsi14']
+        bb  = df['boll_bot20']; bt  = df['boll_top20']; bm  = df['ma_c_20']
+        mh  = df['macd_hist']
+        n   = BUY_LOOKBACK_BARS
+
+        # 鏡像條件A：近N根任一最高價 >= 布林上軌 AND RSI↓ AND MACD柱↓
+        price_near_upper = (h.iloc[-n:] >= bt.iloc[-n:] * SELL_BOLL_TOLERANCE).any()
+        rsi_falling      = float(rsi.iloc[-1]) < float(rsi.iloc[-2])
+        macd_falling     = float(mh.iloc[-1])  < float(mh.iloc[-2])
+        cond_A = price_near_upper and rsi_falling and macd_falling
+
+        # 鏡像條件B：近N根最高均>布林中軌 AND 最低均>布林下軌 AND 前N根MACD柱持續放大 AND 當根縮小
+        high_above_mid = (h.iloc[-n:] > bm.iloc[-n:]).all()
+        low_above_bot  = (l.iloc[-n:] > bb.iloc[-n:]).all()
+        if len(mh) >= n + 1:
+            macd_expand = all(float(mh.iloc[-n-1+j]) < float(mh.iloc[-n+j]) for j in range(n-1))
+        else:
+            macd_expand = False
+        macd_shrink = float(mh.iloc[-1]) < float(mh.iloc[-2])
+        cond_B = high_above_mid and low_above_bot and macd_expand and macd_shrink
+
+        return cond_A or cond_B
+    except:
+        return False
+
+def check_short_eleader(df_d):
+    """做空第二道：日K eLeader 25條件全部反向（多頭訊號→空頭訊號）"""
+    try:
+        if df_d is None or len(df_d) < 5: return None
+        df = df_d
+
+        o=df['Open']; h=df['High']; l=df['Low']; c=df['Close']; v=df['Volume']
+        ma_c2=df['ma_c_2']; ma_c20=df['ma_c_20']
+        ma_o2=df['ma_o_2']; ma_h2=df['ma_h_2']
+        ma_l2=df['ma_l_2']; ma_v5=df['ma_v_5']
+        bt20=df['boll_top20']; bb20=df['boll_bot20']
+        bt2=df['boll_top2']; bb2=df['boll_bot2']
+        rsi=df['rsi14']; ersi=df['ema_rsi9']
+        macd=df['macd_line']; msig=df['macd_signal']
+        mosc=df['macd_hist']; emacd=df['ema_macd9']
+        macd_o=df['macd_open_line']
+
+        # 做空基底條件（eLeader買進base的完全鏡像）
+        # 原: RSI前根<RSI_MAX AND 收>ma_l2 AND High>Open AND Close>Low
+        # 反: RSI前根>RSI_MAX AND 收<ma_h2 AND Low<Open AND Close<High
+        short_base = ((rsi.shift(1) > (100 - ELEADER_RSI_MAX)) & (c < ma_h2) & (l < o) & (c < h))
+
+        # 全部25個條件完全反向（> 改 <，< 改 >，方向全反）
+        SC01 = ((l.shift(1) < bb20.shift(1)) & (bb2.shift(1) > bb20.shift(1)) & (bt2 < bt20))
+        SC02 = (mosc < mosc.shift(1))
+        SC03 = (((ma_c20 < ma_c20.shift(1)) & (bb20 < bb20.shift(1)) & (rsi < rsi.shift(1))) |
+                ((ma_c20 > ma_c20.shift(1)) & ((bt20 > bt20.shift(1)) | ((ma_o2 > ma_o2.shift(1)) & (o < ma_o2))) &
+                 (rsi.shift(2) > rsi.shift(3)) & (rsi.shift(1) < rsi.shift(2)) & (rsi < rsi.shift(1)) & (ersi.shift(1) < ersi.shift(2))))
+        SC04 = (((c.shift(1) < ma_c2.shift(1)) | (c.shift(1) < ma_c20.shift(1))) & (o > ma_c20.shift(1)))
+
+        SC11 = ((bb20.shift(1)>bb20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(rsi.shift(1)>ersi.shift(1))&(rsi<ersi)&(emacd.shift(1)<emacd.shift(2))&(ma_o2.shift(1)>ma_c20.shift(1))&(ma_o2.shift(1)>ma_o2.shift(2))&(ma_o2<ma_o2.shift(1))&(o.shift(1)<ma_o2.shift(1))&(h>ma_o2)&(c<ma_o2))
+        SC12 = ((bb20.shift(1)<bb20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(rsi.shift(1)>ersi.shift(1))&(rsi<ersi)&(emacd.shift(1)>emacd.shift(2))&(ma_o2.shift(1)>ma_c20.shift(1))&(ma_o2.shift(1)>ma_o2.shift(2))&(ma_o2<ma_o2.shift(1))&(o.shift(1)<ma_o2.shift(1))&(c<ma_o2))
+        SC21 = ((ma_c20.shift(1)>ma_c20.shift(2))&(bb20>bb20.shift(1))&(bt20.shift(1)>bt20.shift(2))&(bt20>bt20.shift(1))&(rsi.shift(1)<rsi.shift(2))&(mosc<mosc.shift(1))&(ma_o2.shift(1)>ma_o2.shift(2))&(o.shift(1)<ma_o2.shift(1)))
+        SC22 = ((ma_c20.shift(1)>ma_c20.shift(2))&(bb20.shift(1)>bb20.shift(2))&(bt20.shift(1)>bt20.shift(2))&(ersi.shift(1)<rsi.shift(1))&(emacd<macd)&(ma_o2.shift(1)>ma_c20.shift(1))&(ma_o2.shift(1)>ma_o2.shift(2))&(o.shift(1)<ma_o2.shift(1))&(ma_o2<ma_o2.shift(1))&(ma_h2<ma_h2.shift(1))&(c<ma_h2))
+        SC23 = ((ma_c20.shift(1)>ma_c20.shift(2))&(bb20.shift(1)>bb20.shift(2))&(bb20<bb20.shift(1))&(macd.shift(1)>msig.shift(1))&(macd<macd.shift(1)))
+        SC24 = ((ma_c20.shift(1)>ma_c20.shift(2))&(bb20.shift(1)<bb20.shift(2))&(bt20.shift(1)>bt20.shift(2))&(ma_o2>bt20)&(rsi.shift(1)<rsi.shift(2))&(mosc<mosc.shift(1))&(ma_o2>ma_o2.shift(1))&(o.shift(1)>ma_o2.shift(1))&(o<ma_o2))
+        SC25 = ((ma_c20.shift(1)>ma_c20.shift(2))&(bb20.shift(1)<bb20.shift(2))&(bb20<bb20.shift(1))&(bt20.shift(1)>bt20.shift(2))&(c.shift(1)>bt20.shift(1))&(o>bt20.shift(1))&(mosc.shift(1)>mosc.shift(2))&(mosc<mosc.shift(1))&(c<ma_o2))
+        SC26 = ((ma_c20.shift(1)>ma_c20.shift(2))&(l.shift(1)<bb20.shift(1))&(bb20.shift(1)>bb20.shift(2))&(bt20<bt20.shift(1))&(rsi.shift(1)<ersi.shift(1))&(ersi.shift(1)<ersi.shift(2))&(macd.shift(1)<macd.shift(2))&(ma_o2<ma_o2.shift(1))&(c<ma_o2)&(c<o))
+        SC27 = ((ma_c20.shift(1)>ma_c20.shift(2))&(o.shift(1)>bt20.shift(1))&(macd_o>0)&(rsi.shift(1)>rsi.shift(2))&(ersi.shift(2)>65)&(ma_o2.shift(1)>bt20.shift(1))&(ma_o2>ma_o2.shift(1))&(c<h.shift(1)))
+        SC28 = ((ma_c20.shift(1)>ma_c20.shift(2))&(o.shift(1)>ma_c20.shift(1))&(c.shift(1)<ma_c20.shift(1))&(bb20.shift(1)>bb20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(bt20<bt20.shift(1))&(rsi.shift(1)<rsi.shift(2))&(ersi.shift(1)<ersi.shift(2))&(ma_o2.shift(1)>ma_c20.shift(1))&(ma_o2.shift(1)>ma_o2.shift(2))&(ma_o2<ma_o2.shift(1))&(o.shift(1)>ma_o2.shift(1))&(c<ma_o2)&(c<h))
+        SC41 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bt20<bt20.shift(1))&(bb20>bb20.shift(1))&(ersi.shift(1)<rsi.shift(1))&(emacd.shift(1)<macd.shift(1))&(o.shift(1)>ma_c20.shift(1))&(l.shift(1)<ma_c20.shift(1))&(ma_o2.shift(1)>ma_c20.shift(1))&(ma_o2>ma_o2.shift(1))&(o>ma_o2)&(c<ma_o2)&(h<=h.shift(1)))
+        SC42 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(o>bt20.shift(1))&(o.shift(1)<ma_c20.shift(1))&(ma_o2.shift(1)<h.shift(2))&(ma_o2>ma_o2.shift(1))&(c<ma_o2))
+        SC43 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bb20.shift(1)>bb20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(bb20<bb20.shift(1))&(macd.shift(1)<msig.shift(1))&(macd.shift(1)>macd.shift(2))&(mosc.shift(1)>mosc.shift(2))&(mosc<mosc.shift(1))&(ma_o2.shift(1)>ma_o2.shift(2))&(ma_o2<ma_o2.shift(1))&(c<o))
+        SC44 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bb20.shift(1)>bb20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(emacd.shift(1)<emacd.shift(2))&(o>ma_c20.shift(1))&(ma_o2<ma_c20.shift(1))&(ma_o2.shift(1)<ma_o2.shift(2))&(h>ma_o2)&(ma_h2.shift(1)<=ma_h2.shift(2))&(h>ma_h2)&(c<ma_h2))
+        SC45 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bb20.shift(1)>bb20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(emacd.shift(1)<macd.shift(1))&(ersi.shift(1)<rsi.shift(1))&(o.shift(1)>ma_o2.shift(1))&(rsi.shift(1)<rsi.shift(2))&(o<ma_o2)&(c.shift(1)<ma_o2.shift(1))&(ma_o2>ma_o2.shift(1))&(ma_h2.shift(1)>bt20.shift(1))&(c<o))
+        SC46 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(bb20.shift(1)<bb20.shift(2))&(l.shift(1)<bb20.shift(1))&(c<bb20)&(c.shift(1)<ma_o2.shift(1))&(ma_o2<ma_o2.shift(1))&(o>ma_o2))
+        SC47 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(bb20.shift(1)<bb20.shift(2))&(macd.shift(1)<msig.shift(1))&(macd.shift(1)>macd.shift(2))&(macd<macd.shift(1))&(ma_o2.shift(1)<ma_c20.shift(1))&(ma_o2>ma_o2.shift(1))&(c<ma_o2.shift(1)))
+        SC48 = ((ma_c20.shift(1)<ma_c20.shift(2))&(bt20.shift(2)>bt20.shift(3))&(bt20.shift(1)>bt20.shift(2))&(bb20.shift(1)<bb20.shift(2))&(rsi<rsi.shift(1))&(emacd.shift(1)<emacd.shift(2))&(ma_o2.shift(1)<ma_o2.shift(2))&(ma_o2<ma_o2.shift(1))&(c<ma_o2)&(c<o.shift(1)))
+        SC49 = ((ma_c20.shift(1)<ma_c20.shift(2))&(l.shift(2)>bb20.shift(2))&(bb20.shift(1)<bb20.shift(2))&(bt20.shift(1)<bt20.shift(2))&(ersi<ersi.shift(1))&(macd.shift(1)<macd.shift(2))&(o.shift(1)<ma_o2.shift(1))&(o>ma_o2)&(c<ma_o2))
+        SC50 = ((ma_c20.shift(2)<ma_c20.shift(3))&(rsi<rsi.shift(1))&(ersi.shift(1)>ersi.shift(2))&(rsi>ersi)&(emacd.shift(1)>macd.shift(1))&(bt20.shift(2)<bt20.shift(3))&(bb20.shift(2)<bb20.shift(3))&(ma_o2.shift(1)>ma_o2.shift(2))&(o.shift(1)>ma_o2.shift(1))&(c<ma_o2))
+        SC61 = ((ma_c20.shift(1)>ma_c20.shift(2))&(bb20.shift(1)>bb20.shift(2))&(ma_o2<ma_o2.shift(1))&(c.shift(2)>o.shift(2))&(c.shift(1)<o.shift(1))&(bt20.shift(1)<bt20.shift(2))&(bb2.shift(1)<bb2.shift(2))&(bt2.shift(1)>bt2.shift(2))&(ma_o2.shift(1)>ma_c20.shift(2))&(ma_o2.shift(1)>ma_o2.shift(2))&(ma_v5>ma_v5.shift(1))&(v>ma_v5)&(l<o))
+        SC62 = ((ma_c20.shift(1)>ma_c20.shift(2))&(bb20.shift(1)>bb20.shift(2))&(ma_o2<ma_o2.shift(1))&(c.shift(1)>o.shift(1))&(o.shift(1)<ma_c20.shift(1))&(bt20.shift(1)>bt20.shift(2))&(ma_l2.shift(1)<ma_l2.shift(2))&(ma_h2.shift(1)<ma_h2.shift(2))&(c.shift(1)<=ma_c2.shift(1))&(h>o)&(c<o))
+        SC63 = ((ma_c20<ma_c20.shift(1))&(bt20<bt20.shift(1))&(rsi<rsi.shift(1))&(ersi.shift(1)>ersi.shift(2))&(ersi<ersi.shift(1))&(c<ma_o2.shift(1)))
+        SC66 = ((c.shift(1)<o.shift(1))&(ma_c20.shift(2)<ma_c20.shift(3))&(ma_c20.shift(1)<ma_c20.shift(2))&(h.shift(1)<ma_c20.shift(1))&(bb20.shift(1)<bb20.shift(2))&(bb2.shift(1)<bb20.shift(1))&(bt20>bt20.shift(1))&(o.shift(1)>bb20.shift(1))&(o>bb20)&(macd<msig)&(o.shift(1)>ma_o2.shift(1))&(c.shift(1)<ma_o2.shift(1))&(c.shift(1)<=ma_h2.shift(1))&(ma_h2<ma_h2.shift(1))&(c<o))
+        SC71 = ((c.shift(1)<o.shift(1))&(c.shift(2)>o.shift(2))&(bt2.shift(2)<bt20.shift(2))&(ma_h2.shift(2)<bt20.shift(2))&(bt20<bt20.shift(1))&(o.shift(1)>ma_c20.shift(1))&(((ma_o2<ma_o2.shift(1))&(l.shift(1)>ma_l2.shift(1))&(c<ma_c2))|((ma_o2>ma_o2.shift(1))&(h>ma_o2)&(c<ma_o2)))&(o<ma_o2)&(ma_h2<=ma_h2.shift(1))&(c.shift(1)<=ma_c2.shift(1)))
+
+        short_group_A = (SC01 & SC02 & SC03 & SC04)
+        short_group_B = (SC11|SC12|SC21|SC22|SC23|SC24|SC25|SC26|SC27|SC28|SC41|SC42|SC43|SC44|SC45|SC46|SC47|SC48|SC49|SC50|SC61|SC62|SC63|SC66|SC71)
+
+        is_short = bool((short_base & (short_group_A | short_group_B)).iloc[-1])
+        if is_short:
+            return ('SHORT', c.iloc[-1], bt20.iloc[-1], rsi.iloc[-1])
+        return None
+    except Exception as e:
+        return None
+
+# ============================================================
 # 【１１．主掃描函數：scan_stock（引用第2章策略參數）】
 # ============================================================
 def scan_stock(ticker, is_holding=False):
@@ -1136,7 +1237,10 @@ def main_task():
     if 'FUTURES' in active_markets and TEST_MODE == '5mk':
         # ✅ 持倉狀態：跨掃描週期持續追蹤（程式重啟會重置，建議搭配方案B手動開關）
         if '_futures_is_holding' not in dir(): _futures_is_holding = False
-        print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}（持倉狀態：{"持倉中🔴" if _futures_is_holding else "空倉⬜"}）')
+        if '_futures_is_short'   not in dir(): _futures_is_short   = False
+        _pos_str = '多倉🔴' if _futures_is_holding else ('空倉🔵' if _futures_is_short else '空手⬜')
+        print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}')
+        print(f'   持倉狀態：{_pos_str}')
         for ticker in FUTURES_5MK_TARGETS:
             try:
                 # ══════════════════════════════════════════════
@@ -1193,6 +1297,16 @@ def main_task():
                 send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                 _can_send = len(send_gmail._futures_log) < 2
 
+                # ── 做空三道關卡 ─────────────────────────────
+                _short_1st = check_short_precondition(df5_w)
+                _short_2nd = check_short_eleader(df5_d) is not None if _short_1st else False
+                _5mk_short_A = (h5.iloc[-n5:] >= bt5.iloc[-n5:] * 1.00).any() and rsi_now<rsi_prev and mh_now<mh_prev
+                _5mk_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).all()
+                _5mk_low_bot   = (l5.iloc[-n5:] > bb5.iloc[-n5:]).all()
+                _5mk_macd_exp  = len(mh5)>=n5+1 and all(float(mh5.iloc[-n5-1+j])<float(mh5.iloc[-n5+j]) for j in range(n5-1))
+                _5mk_short_B   = _5mk_high_mid and _5mk_low_bot and _5mk_macd_exp and mh_now<mh_prev
+                _5mk_short = _short_1st and _short_2nd and (_5mk_short_A or _5mk_short_B) and rsi_now < (100 - BUY_RSI_MIN)
+
                 _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')
                 # ✅ 深夜01~05有持倉：只掃平倉，跳過買進
                 if _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE and not (_is_night_now and _futures_is_holding):
@@ -1219,8 +1333,34 @@ def main_task():
                         _futures_is_holding = False
                         write_futures_status_to_firebase('no_signal', now_str_f, 0)
                         print(f"  📌 持倉狀態已清除：is_futures_holding=False")
+                elif _5mk_short and close >= boll_top * 1.00 and not (_is_night_now and _futures_is_short):
+                    if not _can_send:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+                    else:
+                        send_gmail._futures_log.append(_now_ts)
+                        _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}",
+                            f"☁️【雲端】🔻【期貨5分K做空訊號】🔻\n標的：{ticker}\n收盤：{close:.2f}　布林上軌：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
+                        print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
+                        _futures_is_short   = True
+                        _futures_is_holding = False
+                        write_futures_status_to_firebase('short', now_str_f, 1)
+                        print(f"  📌 空倉狀態已標記：is_futures_short=True")
+
+                elif _futures_is_short and _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE:
+                    if not _can_send:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+                    else:
+                        send_gmail._futures_log.append(_now_ts)
+                        _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}",
+                            f"☁️【雲端】🟢【期貨5分K平空回補】🟢\n標的：{ticker}\n收盤：{close:.2f}　布林下軌：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
+                        print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補{'已發送' if _ok else '發送失敗'}")
+                        _futures_is_short = False
+                        write_futures_status_to_firebase('no_signal', now_str_f, 0)
+                        print(f"  📌 空倉狀態已清除：is_futures_short=False")
+
                 else:
-                    print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件，不發信")
+                    _pos = '多倉中' if _futures_is_holding else ('空倉中' if _futures_is_short else '空手')
+                    print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件（{_pos}）")
             except Exception as e:
                 print(f'  ❌ 期貨5分K掃描 {ticker} 失敗：{e}')
 
@@ -1396,7 +1536,7 @@ if __name__ == "__main__":
                 now_l = datetime.now(pytz.timezone('Asia/Taipei'))
                 wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
                 _is_night_l = (wd_l==1 and 1*60<=tv_l<5*60)
-                if not((wd_l==0 and tv_l>=13*60) or (wd_l==1 and (tv_l<1*60 or tv_l>=5*60)) or (wd_l==2 and tv_l<=11*60+30) or (_is_night_l and _futures_is_holding)):
+                if not((wd_l==0 and tv_l>=13*60) or (wd_l==1 and (tv_l<1*60 or tv_l>=5*60)) or (wd_l==2 and tv_l<=11*60+30) or (_is_night_l and (_futures_is_holding or _futures_is_short))):
                     print("✅ 期貨5分K時段結束，監控結束"); break
                 try: main_task()
                 except Exception as e: print(f"掃描發生錯誤: {e}")
