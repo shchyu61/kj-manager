@@ -588,8 +588,8 @@ def build_fund_proxy_df(df_spy, df_qqq, df_hyg):
 # ============================================================
 def check_buy_precondition(df):
     try:
-        l   = df['Low'].rolling(54)
-        h   = df['High'].rolling(54)
+        l   = df['Low']
+        h   = df['High']
         rsi = df['rsi14']
         bb  = df['boll_bot20']   # 布林下軌
         bt  = df['boll_top20']   # 布林上軌
@@ -747,8 +747,8 @@ def check_sell_condition(df):
 def check_short_precondition(df):
     """做空第一道：週K位階高檔（買進策略完全鏡像）"""
     try:
-        l   = df['Low'].rolling(54)
-        h   = df['High'].rolling(54)
+        l   = df['Low']
+        h   = df['High']
         rsi = df['rsi14']
         bb  = df['boll_bot20']; bt  = df['boll_top20']; bm  = df['ma_c_20']
         mh  = df['macd_hist']
@@ -882,9 +882,6 @@ def scan_stock(ticker, is_holding=False):
         df_w['boll_top20'], df_w['boll_mid20'], df_w['boll_bot20'] = ta.bbands(df_w['Close'], length=20).iloc[:, 0:3].values.T
         df_w['rsi14'] = ta.rsi(df_w['Close'], length=14)
 
-        # ✅ 新增：近5根K棒
-        df_w_5 = df_w.tail(5)
-
         # 🔴 [優先處理賣出]
         if is_holding:
             if check_sell_condition(df_w):
@@ -893,12 +890,27 @@ def scan_stock(ticker, is_holding=False):
                         float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
             return None
 
-        # ── 第一道：週K位階（週K/日K模式共用）──────────────────
+        # ── 第一道：依SCAN_MODE選擇對應K棒資料（K棒數量等比換算原則）──
+        # SCAN_MODE='weekly'：用週K 3根（原設計）
+        # SCAN_MODE='daily' ：用日K 15根（等比換算，不用週K）
         if not TEST_MODE:
-            if not check_buy_precondition(df_w_5):
-                return None
-            if not check_short_precondition(df_w_5):
-                return None
+            if SCAN_MODE == 'daily':
+                # 日K模式第一道：先抓日K，用15根判斷多空位階
+                _df1st = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
+                if _df1st is None or len(_df1st) < 50: return None
+                _df1st = calc_indicators(_df1st)
+                if _df1st is None: return None
+                _orig = BUY_LOOKBACK_BARS
+                globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY  # 暫改15根
+                _is_long_ok  = check_buy_precondition(_df1st)
+                _is_short_ok = check_short_precondition(_df1st)
+                globals()['BUY_LOOKBACK_BARS'] = _orig
+            else:
+                # 週K模式第一道：用週K 3根（原設計）
+                _is_long_ok  = check_buy_precondition(df_w)
+                _is_short_ok = check_short_precondition(df_w)
+            if not _is_long_ok and not _is_short_ok:
+                return None   # 多空都不過才跳過
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
 
@@ -1256,20 +1268,23 @@ def main_task():
                 # 第三道：5分K 54根條件A/B + RSI門檻
                 # ══════════════════════════════════════════════
 
-                # ── 第一道：週K位階 ──────────────────────────
-                df5_w = get_stock_data(ticker, period='2y', interval='1wk', cache=weekly_cache)
-                if df5_w is None or len(df5_w) < 30:
-                    print(f'  ⚠️ {ticker} 第一道資料不足，跳過'); continue
-                df5_w = calc_indicators(df5_w)
-                if not check_buy_precondition(df5_w):
-                    print(f'  ❌ {ticker} 第一道未通過，跳過'); continue
-                print(f'  ✅ {ticker} 第一道通過')
-
-                # ── 第二道：日K eLeader ──────────────────────
+                # ── 第一道：日K 15根位階（K棒等比換算，日K15根≈週K3根）──
                 df5_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
                 if df5_d is None or len(df5_d) < 50:
                     print(f'  ⚠️ {ticker} 日K資料不足，跳過'); continue
                 df5_d = calc_indicators(df5_d)
+                if df5_d is None: continue
+                _orig5 = BUY_LOOKBACK_BARS
+                globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
+                _1st_long  = check_buy_precondition(df5_d)
+                _1st_short = check_short_precondition(df5_d)
+                globals()['BUY_LOOKBACK_BARS'] = _orig5
+                if not _1st_long and not _1st_short:
+                    print(f'  ❌ {ticker} 第一道日K15根未通過，跳過'); continue
+                print(f'  ✅ {ticker} 第一道日K15根通過（多:{_1st_long} 空:{_1st_short}）')
+
+                # ── 第二道：日K eLeader ──────────────────────
+                # （df5_d已在上面取得，直接使用）
                 if check_buy_eleader(df5_d) is None:
                     print(f'  ❌ {ticker} 第二道日K eLeader未通過，跳過'); continue
                 print(f'  ✅ {ticker} 第二道日K eLeader通過')
@@ -1304,7 +1319,7 @@ def main_task():
                 _can_send = len(send_gmail._futures_log) < 2
 
                 # ── 做空三道關卡 ─────────────────────────────
-                _short_1st = check_short_precondition(df5_w)
+                _short_1st = _1st_short  # ✅ 已在第一道判斷完成
                 _short_2nd = check_short_eleader(df5_d) is not None if _short_1st else False
                 _5mk_short_A = (h5.iloc[-n5:] >= bt5.iloc[-n5:] * 1.00).any() and rsi_now<rsi_prev and mh_now<mh_prev
                 _5mk_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).all()

@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v03311219</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04051720</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1356,42 +1356,12 @@
                 buy_signal = (_r1 || _r2) && rsiNow > _p2;
 
             } else if (SCAN_INTERVAL === '1d') {
-                // ══ 日K三道關卡 ══════════════════════════════════
-                // 第一道：週K位階（上層把關）
-                let _1st_pass = false;
-                try {
-                    const _wkSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
-                    const _wkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_wkSuffix}?interval=1wk&range=2y`;
-                    const _wkData = await fetchWithFallback(_wkUrl).catch(async () => {
-                        if (/^\d{4,6}$/.test(code)) {
-                            return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=1wk&range=2y`);
-                        } throw new Error('no wk data');
-                    });
-                    const _wkC = _wkData.indicators.quote[0].close.filter(v=>v!=null);
-                    const _wkL = (_wkData.indicators.quote[0].low||[]).filter(v=>v!=null);
-                    const _wkH = (_wkData.indicators.quote[0].high||[]).filter(v=>v!=null);
-                    if (_wkC.length >= 26) {
-                        const _wn   = _p1;  // 3根週K
-                        const _wkRsiNow = calcRSI(_wkC);
-                        const _wkRsiPrv = calcRSI(_wkC.slice(0,-1));
-                        const _wkMacd   = calcMACDHist(_wkC);
-                        const _wkT1 = _wkRsiNow > _wkRsiPrv;
-                        const _wkT2 = _wkMacd && _wkMacd.now > _wkMacd.prev;
-                        const _wkLn = _wkL.slice(-_wn);
-                        const _wkHn = _wkH.slice(-_wn);
-                        // 週K條件A：近3根任一低點<=布林下緣 AND RSI↑ AND MACD↑
-                        const _wkA = _wkLn.some((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<=_b.lower*_p3; }) && _wkT1 && _wkT2;
-                        // 週K條件B：近3根低均<中軌 AND 高均<上軌
-                        const _wkB = _wkLn.every((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<_b.mid; }) && _wkHn.every((h,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&h<_b.upper; });
-                        _1st_pass = _wkA || _wkB;
-                    }
-                } catch(e) { _1st_pass = false; }
+                // ══ 日K兩道關卡（K棒等比換算，不用週K）══════════════
+                // 第一道：日K 15根條件A/B（_r1/_r2已在上方計算，_n=_p1d=15）
+                const _1st_pass = (_r1 || _r2) && rsiNow > _p2;
 
-                // 第二道：日K條件A/B（15根，現有_r1/_r2邏輯）
-                const _2nd_pass = (_r1 || _r2) && rsiNow > _p2;
-
-                // 第三道：5分K當根RSI↑ AND MACD柱↑（觸發時機，當根vs前1根）
-                let _3rd_pass = false;
+                // 第二道：5分K當根RSI↑ AND MACD柱↑
+                let _2nd_pass = false;
                 try {
                     const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
                     const _5mData = await fetchWithFallback(
@@ -1405,11 +1375,11 @@
                         const _5mRsiNow = calcRSI(_5mC);
                         const _5mRsiPrv = calcRSI(_5mC.slice(0,-1));
                         const _5mMacd   = calcMACDHist(_5mC);
-                        _3rd_pass = _5mRsiNow > _5mRsiPrv && _5mMacd && _5mMacd.now > _5mMacd.prev;
+                        _2nd_pass = _5mRsiNow > _5mRsiPrv && _5mMacd && _5mMacd.now > _5mMacd.prev;
                     }
-                } catch(e) { _3rd_pass = false; }
+                } catch(e) { _2nd_pass = false; }
 
-                buy_signal = _1st_pass && _2nd_pass && _3rd_pass;
+                buy_signal = _1st_pass && _2nd_pass;
 
             } else {
                 // 其他週期：單層條件A/B
@@ -1834,34 +1804,7 @@
                         continue;
                     }
 
-                    // ── 第一道：週K位階（_p1=3根）──────────────────
-                    let _wkResult = null;
-                    try {
-                        const _wkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&range=2y`;
-                        const _wkData = await fetchWithFallback(_wkUrl);
-                        const _wkC = _wkData.indicators.quote[0].close.filter(v=>v!=null);
-                        const _wkL = _wkData.indicators.quote[0].low.filter(v=>v!=null);
-                        const _wkH = _wkData.indicators.quote[0].high.filter(v=>v!=null);
-                        if (_wkC.length >= 30) {
-                            const _wb = calcBoll(_wkC);
-                            const _wr = calcRSI(_wkC);
-                            const _wm = calcMACDHist(_wkC);
-                            const _wn = _p1;
-                            const _wLows  = _wkL.slice(-_wn);
-                            const _wHighs = _wkH.slice(-_wn);
-                            // 條件A：近3根任一低點<=布林下緣
-                            const _wA = _wLows.some((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<=_b.lower*_p3; }) && calcRSI(_wkC)>calcRSI(_wkC.slice(0,-1)) && _wm&&_wm.now>_wm.prev;
-                            // 條件B：近3根低均<中軌 AND 高均<上軌
-                            const _wB = _wLows.every((l,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&l<_b.mid; }) && _wHighs.every((h,i)=>{ const _b=calcBoll(_wkC.slice(0,_wkC.length-_wn+i+1)); return _b&&h<_b.upper; });
-                            _wkResult = (_wA || _wB) ? 'pass' : null;
-                        }
-                    } catch(e) { _wkResult = null; }
-                    if (!_wkResult) {
-                        window.showAlert(`❌ ${ticker} 第一道週K位階未達條件，跳過`);
-                        continue;
-                    }
-
-                    // ── 第二道：日K eLeader（_p1d=15根）─────────────
+                    // ── 第一道：日K 15根位階（K棒等比換算，不用週K）──────
                     let _dkResult = null;
                     try {
                         const _dkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1y`;
@@ -1870,19 +1813,25 @@
                         const _dkL = _dkData.indicators.quote[0].low.filter(v=>v!=null);
                         const _dkH = _dkData.indicators.quote[0].high.filter(v=>v!=null);
                         if (_dkC.length >= 50) {
-                            const _dn = _p1d;  // 15根日K
+                            const _dn = _p1d;  // 15根日K（等比換算）
                             const _dLows  = _dkL.slice(-_dn);
                             const _dHighs = _dkH.slice(-_dn);
-                            const _db = calcBoll(_dkC); const _dr = calcRSI(_dkC); const _dm = calcMACDHist(_dkC);
-                            // 日K條件A：近15根任一低點<=布林下緣
+                            const _dr = calcRSI(_dkC); const _dm = calcMACDHist(_dkC);
+                            // 多方日K條件A：近15根任一低點<=布林下緣 AND RSI↑ AND MACD↑
                             const _dA = _dLows.some((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<=_b.lower*_p3; }) && _dr>calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now>_dm.prev;
-                            // 日K條件B：近15根低均<中軌 AND 高均<上軌
+                            // 多方日K條件B：近15根低均<中軌 AND 高均<上軌
                             const _dB = _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<_b.mid; }) && _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h<_b.upper; });
-                            _dkResult = (_dA || _dB) && _dr > _p2 ? 'pass' : null;
+                            // 空方日K條件A：近15根任一高點>=布林上軌 AND RSI↓ AND MACD↓
+                            const _dSA = _dHighs.some((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>=_b.upper*_p4; }) && _dr<calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now<_dm.prev;
+                            // 空方日K條件B：近15根高均>中軌 AND 低均>下軌
+                            const _dSB = _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>_b.mid; }) && _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l>_b.lower; });
+                            const _isLongOk  = (_dA || _dB) && _dr > _p2;
+                            const _isShortOk = (_dSA || _dSB) && _dr < (100 - _p2);
+                            _dkResult = (_isLongOk || _isShortOk) ? {long:_isLongOk, short:_isShortOk} : null;
                         }
                     } catch(e) { _dkResult = null; }
                     if (!_dkResult) {
-                        window.showAlert(`❌ ${ticker} 第二道日K位階未達條件，跳過`);
+                        window.showAlert(`❌ ${ticker} 第一道日K15根未達條件，跳過`);
                         continue;
                     }
 
