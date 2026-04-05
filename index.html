@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04051720</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04052235</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -589,7 +589,7 @@
                 const isTW = /^\d{4,6}$/.test(code);
                 const ticker = isTW ? code + '.TW' : code;
                 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
-                const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                const proxy = `${_WORKER_URL}/${encodeURIComponent(url)}`;
                 const resp = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
                 if (!resp.ok) return;
                 const data = await resp.json();
@@ -1116,41 +1116,26 @@
 
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         // ✅ 自己的 Cloudflare Worker（最穩定，不會被Yahoo封鎖）
-        // Worker網址：https://yahoo-proxy.shchyu61.workers.dev
-        const PROXIES = [
-            (url) => `https://yahoo-proxy.shchyu61.workers.dev/${encodeURIComponent(url)}`,
-            (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-            (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-            (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        ];
-
-        // ✅ 4個proxy同時競速，誰最快回應就用誰（Promise.any）
-        // 超時25秒，大幅降低因proxy緩慢造成的失敗率
-        // ✅ 週末自動偵測（Yahoo Finance週末API較嚴格）
+        // ✅ Cloudflare Worker（唯一資料來源，帶Cookie穿透Yahoo防護）
+        const _WORKER_URL = 'https://yahoo-proxy.shchyu61.workers.dev';
         const _isWeekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
-        // ✅ 週末降低並行數（3→1），避免被封鎖
         const _poolSize = () => _isWeekend() ? 1 : 5;
 
-        // ✅ Cloudflare Worker 第一順位（自己的Worker，穩定不被Yahoo封）
-        // 失敗時自動競速fallback到其他proxy
-        const fetchWithFallback = async (yahooUrl, _retry = 1) => {
-            const tryProxy = async (proxyFn) => {
-                const resp = await fetch(proxyFn(yahooUrl), { signal: AbortSignal.timeout(25000) });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
-                const result = data.chart && data.chart.result && data.chart.result[0];
-                if (!result) throw new Error('no chart data');
-                return result;
-            };
+        const fetchWithFallback = async (yahooUrl, _retry = 2) => {
+            const workerUrl = `${_WORKER_URL}/${encodeURIComponent(yahooUrl)}`;
             try {
-                return await Promise.any(PROXIES.map(proxyFn => tryProxy(proxyFn)));
-            } catch(e) {
-                if (_retry > 0) {
-                    await new Promise(r => setTimeout(r, 3000));
-                    return fetchWithFallback(yahooUrl, _retry - 1);
+                const resp = await fetch(workerUrl, { signal: AbortSignal.timeout(20000) });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const result = data.chart && data.chart.result && data.chart.result[0];
+                    if (result) return result;
                 }
-                throw e;
+            } catch(e) { /* Worker失敗繼續重試 */ }
+            if (_retry > 0) {
+                await new Promise(r => setTimeout(r, 2000));
+                return fetchWithFallback(yahooUrl, _retry - 1);
             }
+            throw new Error('all sources failed');
         };
 
         // ── 並行工作池（建議3：最多3個同時執行）────────────────
@@ -1199,7 +1184,7 @@
             // 來源1：TWSE OpenAPI 上市全額交割
             try {
                 const url1 = 'https://openapi.twse.com.tw/v1/company/cashPaymentStocks';
-                const proxy1 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url1)}`;
+                const proxy1 = `${_WORKER_URL}/${encodeURIComponent(url1)}`;
                 const r1 = await fetch(proxy1, { signal: AbortSignal.timeout(8000) });
                 if (r1.ok) {
                     const d1 = await r1.json();
@@ -1213,7 +1198,7 @@
             // 來源2：TPEX OpenAPI 上櫃全額交割
             try {
                 const url2 = 'https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks';
-                const proxy2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(url2)}`;
+                const proxy2 = `${_WORKER_URL}/${encodeURIComponent(url2)}`;
                 const r2 = await fetch(proxy2, { signal: AbortSignal.timeout(8000) });
                 if (r2.ok) {
                     const d2 = await r2.json();
