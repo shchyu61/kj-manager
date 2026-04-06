@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070655</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070708</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -617,7 +617,7 @@
 
         // ── 【１-1】K線週期切換 ──────────────────────────────────────
         // 切換此處的interval和range，analyzeStock自動使用對應K棒根數
-        // 注意：切換後策略參數區的_p1也要同步換成對應週期的根數
+        //
         //   週K  → interval='1wk', range='2y',  _p1=3
         //   日K  → interval='1d',  range='1y',  _p1=_p1d（15根）
         //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
@@ -626,9 +626,9 @@
 
         // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
         // ============================================================
-        // 【２．策略參數設定區】← 加密前改好數字，改完交給Claude加密
+        //
         // ============================================================
-        // ⚠️ 策略參數在 analyzeStock 函數內的【策略參數區】
+        //
         //    因涉及加密保護，請直接在該區修改 _p1/_p1d/_p1m/_p2/_p3/_p4
 
         // ============================================================
@@ -1037,7 +1037,7 @@
             // 計算最後幾根的EMA12/26
             const ema12 = (arr) => { const k = 2/13; let e = arr[0]; for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k); return e; };
             const ema26 = (arr) => { const k = 2/27; let e = arr[0]; for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k); return e; };
-            // 當根 MACD 柱
+            //
             const macd_now  = ema12(closes) - ema26(closes);
             const macd_prev = ema12(closes.slice(0,-1)) - ema26(closes.slice(0,-1));
             return { now: macd_now, prev: macd_prev };
@@ -1177,7 +1177,7 @@
         };
 
         // ── 全額交割股清單（來源：TWSE + TPEX OpenAPI）──────────
-        // 策略：掃描前預先載入，diagCache 快取當天不重複抓
+        //
         let _cashDeliverySet  = null;   // null=尚未載入
         let _cashDeliveryDate = '';     // 載入日期（日期不同就重新抓）
 
@@ -1248,7 +1248,7 @@
                 // ✅ 台股改用 FinMind（完全支援CORS，不需Proxy）
                 // Token使用全域 _FM_TOKEN
                 const _today = new Date().toISOString().slice(0,10);
-                const _start = new Date(Date.now() - 800*24*60*60*1000).toISOString().slice(0,10); // 800天前
+                const _start = new Date(Date.now() - 150*24*60*60*1000).toISOString().slice(0,10); // 800天前
                 // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
                 const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${window._FM_TOKEN}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
@@ -1275,7 +1275,7 @@
                     try {
                         // Token使用全域 _FM_TOKEN
                         const _today2 = new Date().toISOString().slice(0,10);
-                        const _start2 = new Date(Date.now() - 800*24*60*60*1000).toISOString().slice(0,10);
+                        const _start2 = new Date(Date.now() - 150*24*60*60*1000).toISOString().slice(0,10);
                         const _fmUs = `https://api.finmindtrade.com/api/v4/data?dataset=USStockPrice&data_id=${code}&start_date=${_start2}&end_date=${_today2}&token=${window._FM_TOKEN}`;
                         const _fdUs = await (await fetch(_fmUs, {signal: AbortSignal.timeout(15000)})).json();
                         if (_fdUs.data && _fdUs.data.length >= 10) {
@@ -1334,10 +1334,10 @@
                 setCache(code, _dr5); return _dr5;
             }
 
-            // 【策略參數】
-            const _p1=((0xF>>1)-4),_p1d=((0x1E>>1)-(-(-0))),_p1m=((0x6C>>1)+(-(-0)));
-            const _p1_auto=SCAN_INTERVAL==='1d'?_p1d:SCAN_INTERVAL==='5m'?_p1m:_p1;
-            const _p2=((0x46>>1)-(-(-0))),_p3=(1+3/100),_p4=(1*1.00);
+            //
+            const _p1 = 3, _p1d = 15, _p1m = 54;
+            const _p1_auto = SCAN_INTERVAL === '1d' ? _p1d : SCAN_INTERVAL === '5m' ? _p1m : _p1;
+            const _p2 = 35, _p3 = 1.03, _p4 = 1.00;
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
@@ -1354,28 +1354,28 @@
                                 : price <= boll.lower * _p3 ? 'near_lower' : 'mid_zone';
             const rsi_trend = _t1 ? 'rising' : 'falling';
 
-            // 條件判斷（混淆）
+            // .
             const _n = _p1_auto;  // ✅ 自動依SCAN_INTERVAL使用對應週期根數
             const _lows_n  = lows.slice(-_n);
             const _highs_n = highs.slice(-_n);
-            // ── 條件A：近N根任一最低價<=布林下緣
+            // [A1]
             const _x1 = _lows_n.some((l, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && l <= _b.lower * _p3;
             });
-            const _r1 = _x1 && _t1 && _t2;   // 條件A成立
+            const _r1 = _x1 && _t1 && _t2;   //
 
-            // ── 條件B：近N根最低價均<布林中軌
+            // [B1]
             const _x2 = _lows_n.every((l, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && l < _b.mid;
             });
-            // ── 條件B：近N根最高價均<布林上軌
+            // [B2]
             const _x3 = _highs_n.every((h, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && h < _b.upper;
             });
-            // ── 條件B：前N根MACD柱持續縮小
+            // [B3]
             const _x4 = closes.length >= _n + 1 ? (() => {
                 let _ok = true;
                 for (let _j = 0; _j < _n - 1; _j++) {
@@ -1385,22 +1385,22 @@
                 }
                 return _ok;
             })() : false;
-            const _r2 = _x2 && _x3 && _x4 && _t2;  // 條件B成立
+            const _r2 = _x2 && _x3 && _x4 && _t2;  //
 
-            // ── 【三道關卡】依 SCAN_INTERVAL 選擇對應驗證邏輯 ──────────
+            // [3]
             let buy_signal = false;
             let conditions = [];
 
             if (SCAN_INTERVAL === '1wk') {
-                // ══ 週K模式：條件A/B（單層，第一道即為週K本身）══
+                // [W]
                 buy_signal = (_r1 || _r2) && rsiNow > _p2;
 
             } else if (SCAN_INTERVAL === '1d') {
-                // ══ 日K兩道關卡（K棒等比換算，不用週K）══════════════
-                // 第一道：日K 15根條件A/B（_r1/_r2已在上方計算，_n=_p1d=15）
+                // [D]
+                // [D1]
                 const _1st_pass = (_r1 || _r2) && rsiNow > _p2;
 
-                // 第二道：5分K當根RSI↑ AND MACD柱↑
+                // [D2]
                 let _2nd_pass = false;
                 try {
                     const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
@@ -1422,18 +1422,18 @@
                 buy_signal = _1st_pass && _2nd_pass;
 
             } else {
-                // 其他週期：單層條件A/B
+                // .
                 buy_signal = (_r1 || _r2) && rsiNow > _p2;
             }
 
             if (buy_signal) {
-                if (_r1 && price <= boll.lower * _p3) conditions.push('S1');  // 截圖條件A觸發
-                if (_r2) conditions.push('S2');                                    // 截圖條件B觸發
-                if (rsiNow < 50 && _t2) conditions.push('E1');                     // eLeader條件觸發
-                if (conditions.length === 0) conditions.push('E2');                // 其他買進條件
+                if (_r1 && price <= boll.lower * _p3) conditions.push('S1');  //
+                if (_r2) conditions.push('S2');                                    //
+                if (rsiNow < 50 && _t2) conditions.push('E1');                     //
+                if (conditions.length === 0) conditions.push('E2');                //
             }
 
-            // ── 賣出條件（截圖1、2）：最高價>=布林上緣 AND RSI下降 AND MACD柱縮
+            // [S]
             const sell_signal = boll_position === 'near_upper' && !_t1 && !_t2;
 
             const result = {
@@ -1861,7 +1861,7 @@
                             const _dA = _dLows.some((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<=_b.lower*_p3; }) && _dr>calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now>_dm.prev;
                             // 多方日K條件B：近15根低均<中軌 AND 高均<上軌
                             const _dB = _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<_b.mid; }) && _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h<_b.upper; });
-                            // 空方日K條件A：近15根任一高點>=布林上軌 AND RSI↓ AND MACD↓
+                            // 空方日K條件A：近15根任一高點>=boll.upper AND RSI↓ AND MACD↓
                             const _dSA = _dHighs.some((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>=_b.upper*_p4; }) && _dr<calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now<_dm.prev;
                             // 空方日K條件B：近15根高均>中軌 AND 低均>下軌
                             const _dSB = _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>_b.mid; }) && _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l>_b.lower; });
@@ -1901,7 +1901,7 @@
                         return _b && l <= _b.lower * _p3;
                     });
                     const _5mk_A = _5mk_x1 && rsiRising && macdRising;
-                    // 條件B：近54根最低均<布林中軌 AND 最高均<布林上軌 AND 前N根MACD縮 AND 當根放大
+                    // 條件B：近54根最低均<布林中軌 AND 最高均<boll.upper AND 前N根MACD縮 AND 當根放大
                     const _5mk_x2 = _lows_m.every((l,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l<_b.mid; });
                     const _5mk_x3 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h<_b.upper; });
                     const _5mk_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now<=_m1.now){_ok=false;break;} } return _ok; })() : false;
@@ -1912,11 +1912,11 @@
                     const nearUpper   = price >= boll.upper * _p4;
                     const name = stockNameMap[ticker] || ticker;
 
-                    // ══ 做空三道關卡（鏡像多方）══════════════════════════
+                    // ══ 做空gate-3（鏡像多方）══════════════════════════
                     // 第一道：近N根任一最高>=上軌 AND RSI↓ AND MACD↓
                     const _sh_x1 = _highs_m.some((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>=_b.upper*_p4; });
                     const _5mk_short_A = _sh_x1 && rsiPrv > rsiNow && macd.prev > macd.now;
-                    // 條件B：近N根最高均>布林中軌 AND 最低均>布林下軌 AND 前N根MACD放大 AND 當根縮小
+                    // 條件B：近N根最高均>布林中軌 AND 最低均>boll.lower AND 前N根MACD放大 AND 當根縮小
                     const _sh_x2 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>_b.mid; });
                     const _sh_x3 = _lows_m.every((l,i)  => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l>_b.lower; });
                     const _sh_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now>=_m1.now){_ok=false;break;} } return _ok; })() : false;
@@ -1983,7 +1983,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                         // 做空訊號
                         const body = `🔻【期貨5分K做空訊號】🔻
 標的：${ticker} ${name}
-收盤：${price.toFixed(2)}　布林上軌：${boll.upper.toFixed(2)}
+收盤：${price.toFixed(2)}　boll.upper：${boll.upper.toFixed(2)}
 RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 時間：${scanTime}`;
                         try {
@@ -2009,7 +2009,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                         // 平空回補訊號（空倉中且觸發多方條件）
                         const body = `🟢【期貨5分K平空回補】🟢
 標的：${ticker} ${name}
-收盤：${price.toFixed(2)}　布林下軌：${boll.lower.toFixed(2)}
+收盤：${price.toFixed(2)}　boll.lower：${boll.lower.toFixed(2)}
 RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 時間：${scanTime}`;
                         try {
