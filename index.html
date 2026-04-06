@@ -35,6 +35,9 @@
     </script>
 
     <script>
+        // ✅ 全域常數（所有script可存取）
+        window._WORKER_URL = 'https://yahoo-proxy.shchyu61.workers.dev';
+        window._FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
         tailwind.config = {
             theme: {
                 extend: {
@@ -210,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070542</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070551</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -589,7 +592,7 @@
                 const isTW = /^\d{4,6}$/.test(code);
                 const ticker = isTW ? code + '.TW' : code;
                 const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
-                const proxy = `${_WORKER_URL}/${encodeURIComponent(url)}`;
+                const proxy = `${window._WORKER_URL}/${encodeURIComponent(url)}`;
                 const resp = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
                 if (!resp.ok) return;
                 const data = await resp.json();
@@ -1117,14 +1120,14 @@
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         // ✅ 自己的 Cloudflare Worker（最穩定，不會被Yahoo封鎖）
         // ✅ Cloudflare Worker（唯一資料來源，帶Cookie穿透Yahoo防護）
-        const _WORKER_URL = 'https://yahoo-proxy.shchyu61.workers.dev';
+        window._WORKER_URL = 'https://yahoo-proxy.shchyu61.workers.dev';
         // ✅ FinMind API Token（全域）
-        const _FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
+        window._FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
         const _isWeekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
         const _poolSize = () => _isWeekend() ? 1 : 5;
 
         const fetchWithFallback = async (yahooUrl, _retry = 2) => {
-            const workerUrl = `${_WORKER_URL}/${encodeURIComponent(yahooUrl)}`;
+            const workerUrl = `${window._WORKER_URL}/${encodeURIComponent(yahooUrl)}`;
             try {
                 const resp = await fetch(workerUrl, { signal: AbortSignal.timeout(20000) });
                 if (resp.ok) {
@@ -1247,7 +1250,7 @@
                 const _today = new Date().toISOString().slice(0,10);
                 const _start = new Date(Date.now() - 800*24*60*60*1000).toISOString().slice(0,10); // 800天前
                 // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
-                const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${_FM_TOKEN}`;
+                const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${window._FM_TOKEN}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
                 const _fmData = await _fmResp.json();
                 if (!_fmData.data || _fmData.data.length < 10) throw new Error('FinMind no data for ' + code);
@@ -1273,7 +1276,7 @@
                         // Token使用全域 _FM_TOKEN
                         const _today2 = new Date().toISOString().slice(0,10);
                         const _start2 = new Date(Date.now() - 800*24*60*60*1000).toISOString().slice(0,10);
-                        const _fmUs = `https://api.finmindtrade.com/api/v4/data?dataset=USStockPrice&data_id=${code}&start_date=${_start2}&end_date=${_today2}&token=${_FM_TOKEN}`;
+                        const _fmUs = `https://api.finmindtrade.com/api/v4/data?dataset=USStockPrice&data_id=${code}&start_date=${_start2}&end_date=${_today2}&token=${window._FM_TOKEN}`;
                         const _fdUs = await (await fetch(_fmUs, {signal: AbortSignal.timeout(15000)})).json();
                         if (_fdUs.data && _fdUs.data.length >= 10) {
                             const _r = _fdUs.data;
