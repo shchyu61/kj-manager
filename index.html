@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070648</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070655</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1334,8 +1334,10 @@
                 setCache(code, _dr5); return _dr5;
             }
 
-            // 【策略參數區】已加密保護
-            eval(atob('dmFyIF9wMT0zLF9wMWQ9MTUsX3AxbT01NCxfcDFfYXV0bz1TQ0FOX0lOVEVSVkFMPT09JzFkJz9fcDFkOlNDQU5fSU5URVJWQUw9PT0nNW0nP19wMW06X3AxLF9wMj0zNSxfcDM9MS4wMyxfcDQ9MS4wMDs='));
+            // 【策略參數】
+            const _p1=((0xF>>1)-4),_p1d=((0x1E>>1)-(-(-0))),_p1m=((0x6C>>1)+(-(-0)));
+            const _p1_auto=SCAN_INTERVAL==='1d'?_p1d:SCAN_INTERVAL==='5m'?_p1m:_p1;
+            const _p2=((0x46>>1)-(-(-0))),_p3=(1+3/100),_p4=(1*1.00);
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
