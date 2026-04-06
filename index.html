@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070503</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070524</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1244,26 +1244,18 @@
                 const _fm_token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
                 const _today = new Date().toISOString().slice(0,10);
                 const _start = new Date(Date.now() - 800*24*60*60*1000).toISOString().slice(0,10); // 800天前
-                const _interval = SCAN_INTERVAL === '1wk' ? 'week' : 'day';
-                const _dataset  = _interval === 'week' ? 'TaiwanStockWeekPrice' : 'TaiwanStockPrice';
-                const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=${_dataset}&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${_fm_token}`;
+                // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
+                const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${_fm_token}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
                 const _fmData = await _fmResp.json();
-                if (!_fmData.data || _fmData.data.length < 10) {
-                    // FinMind失敗（上櫃股票）→ 改用 TaiwanStockPrice日K手動計算週K
-                    const _fmUrl2 = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${_fm_token}`;
-                    const _fmResp2 = await fetch(_fmUrl2, {signal: AbortSignal.timeout(15000)});
-                    const _fmData2 = await _fmResp2.json();
-                    if (!_fmData2.data || _fmData2.data.length < 10) throw new Error('FinMind no data');
-                    _fmData.data = _fmData2.data; // 用日K繼續
-                }
-                // 轉換成內部格式（與Yahoo格式相容）
+                if (!_fmData.data || _fmData.data.length < 10) throw new Error('FinMind no data for ' + code);
+                // 轉換成內部格式（FinMind欄位：open/max/min/close/Trading_Volume）
                 const _rows = _fmData.data;
                 const _closes = _rows.map(r => parseFloat(r.close));
                 const _opens  = _rows.map(r => parseFloat(r.open));
-                const _highs  = _rows.map(r => parseFloat(r.max||r.high||r.close));
-                const _lows   = _rows.map(r => parseFloat(r.min||r.low||r.close));
-                const _vols   = _rows.map(r => parseInt(r.Trading_Volume||r.volume||0));
+                const _highs  = _rows.map(r => parseFloat(r.max));   // FinMind高點是max
+                const _lows   = _rows.map(r => parseFloat(r.min));   // FinMind低點是min
+                const _vols   = _rows.map(r => parseInt(r.Trading_Volume||0));
                 const _ts     = _rows.map(r => Math.floor(new Date(r.date).getTime()/1000));
                 yResult = {
                     indicators: { quote: [{close:_closes, open:_opens, high:_highs, low:_lows, volume:_vols}], adjclose:[{adjclose:_closes}] },
