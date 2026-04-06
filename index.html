@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070531</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070542</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1301,6 +1301,7 @@
             }
 
             const closes = yResult.indicators.quote[0].close.filter(v => v != null);
+            console.log(`[${code}] 抓到資料：${closes.length}筆，最新：${closes[closes.length-1]}`);
             if (closes.length < 26) throw new Error('insufficient data');
 
             // ── 【第4階段】官方公告下市日期偵測（最明確早期警訊）────
@@ -1335,8 +1336,8 @@
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
-            const lows   = yResult.indicators.quote[0].low.filter(v => v != null);
-            const highs  = yResult.indicators.quote[0].high.filter(v => v != null);
+            const lows   = (yResult.indicators.quote[0].low  ||[]).filter(v => v != null && !isNaN(v));
+            const highs  = (yResult.indicators.quote[0].high ||[]).filter(v => v != null && !isNaN(v));
             const rsiNow = calcRSI(closes);
             const rsiPrv = calcRSI(closes.slice(0, -1));
             const macd   = calcMACDHist(closes);
