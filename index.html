@@ -210,7 +210,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04060523</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070503</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1235,27 +1235,82 @@
                 return dr;
             }
 
-            // 2. 台股代碼加後綴（先.TW再.TWO）
+            // 2. 台股→FinMind，非台股→Worker
             const isTW = /^\d{4,6}$/.test(code);
             let yResult = null;
+
             if (isTW) {
-                try {
-                    yResult = await fetchWithFallback(
-                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TW?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
-                } catch {
-                    yResult = await fetchWithFallback(
-                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                // ✅ 台股改用 FinMind（完全支援CORS，不需Proxy）
+                const _fm_token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
+                const _today = new Date().toISOString().slice(0,10);
+                const _start = new Date(Date.now() - 800*24*60*60*1000).toISOString().slice(0,10); // 800天前
+                const _interval = SCAN_INTERVAL === '1wk' ? 'week' : 'day';
+                const _dataset  = _interval === 'week' ? 'TaiwanStockWeekPrice' : 'TaiwanStockPrice';
+                const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=${_dataset}&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${_fm_token}`;
+                const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
+                const _fmData = await _fmResp.json();
+                if (!_fmData.data || _fmData.data.length < 10) {
+                    // FinMind失敗（上櫃股票）→ 改用 TaiwanStockPrice日K手動計算週K
+                    const _fmUrl2 = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${_fm_token}`;
+                    const _fmResp2 = await fetch(_fmUrl2, {signal: AbortSignal.timeout(15000)});
+                    const _fmData2 = await _fmResp2.json();
+                    if (!_fmData2.data || _fmData2.data.length < 10) throw new Error('FinMind no data');
+                    _fmData.data = _fmData2.data; // 用日K繼續
                 }
+                // 轉換成內部格式（與Yahoo格式相容）
+                const _rows = _fmData.data;
+                const _closes = _rows.map(r => parseFloat(r.close));
+                const _opens  = _rows.map(r => parseFloat(r.open));
+                const _highs  = _rows.map(r => parseFloat(r.max||r.high||r.close));
+                const _lows   = _rows.map(r => parseFloat(r.min||r.low||r.close));
+                const _vols   = _rows.map(r => parseInt(r.Trading_Volume||r.volume||0));
+                const _ts     = _rows.map(r => Math.floor(new Date(r.date).getTime()/1000));
+                yResult = {
+                    indicators: { quote: [{close:_closes, open:_opens, high:_highs, low:_lows, volume:_vols}], adjclose:[{adjclose:_closes}] },
+                    timestamp: _ts,
+                    meta: { symbol: code+'.TW', regularMarketPrice: _closes[_closes.length-1] }
+                };
             } else {
-                yResult = await fetchWithFallback(
-                    `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                // 非台股（美股ETF/虛擬幣/黃金/外匯）→ FinMind優先，失敗才走Worker
+                const _isCrypto = code.includes('-');
+                const _isIndex  = code.startsWith('^') || code.endsWith('=F');
+                if (!_isCrypto && !_isIndex) {
+                    try {
+                        const _fm_token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
+                        const _today2 = new Date().toISOString().slice(0,10);
+                        const _start2 = new Date(Date.now() - 800*24*60*60*1000).toISOString().slice(0,10);
+                        const _fmUs = `https://api.finmindtrade.com/api/v4/data?dataset=USStockPrice&data_id=${code}&start_date=${_start2}&end_date=${_today2}&token=${_fm_token}`;
+                        const _fdUs = await (await fetch(_fmUs, {signal: AbortSignal.timeout(15000)})).json();
+                        if (_fdUs.data && _fdUs.data.length >= 10) {
+                            const _r = _fdUs.data;
+                            const _cl = _r.map(x => parseFloat(x.Close||x.close));
+                            const _op = _r.map(x => parseFloat(x.Open||x.open));
+                            const _hi = _r.map(x => parseFloat(x.High||x.high||x.close));
+                            const _lo = _r.map(x => parseFloat(x.Low||x.low||x.close));
+                            const _vo = _r.map(x => parseInt(x.Volume||x.volume||0));
+                            const _ts2 = _r.map(x => Math.floor(new Date(x.date).getTime()/1000));
+                            yResult = {
+                                indicators: { quote:[{close:_cl,open:_op,high:_hi,low:_lo,volume:_vo}], adjclose:[{adjclose:_cl}] },
+                                timestamp: _ts2,
+                                meta: { symbol: code, regularMarketPrice: _cl[_cl.length-1] }
+                            };
+                        } else { throw new Error('FinMind US no data'); }
+                    } catch(_e) {
+                        yResult = await fetchWithFallback(
+                            `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                    }
+                } else {
+                    // 虛擬幣/指數/期貨 → Worker
+                    yResult = await fetchWithFallback(
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                }
             }
 
             const closes = yResult.indicators.quote[0].close.filter(v => v != null);
             if (closes.length < 26) throw new Error('insufficient data');
 
             // ── 【第4階段】官方公告下市日期偵測（最明確早期警訊）────
-            const _meta = yResult?.chart?.result?.[0]?.meta || {};
+            const _meta = yResult?.meta || yResult?.chart?.result?.[0]?.meta || {};
             if (_meta.delistingDate) {
                 try {
                     const _dDate    = new Date(_meta.delistingDate);
