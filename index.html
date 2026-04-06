@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070551</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070639</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -2063,6 +2063,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     const result = cached || await analyzeStock(code);
                     document.getElementById(`wl-card-${code}`).outerHTML = makeDiagCard(code, result, false);
                 } catch(e) {
+                    console.error(`[analyzeStock ${code}] 失敗:`, e.message, e.stack?.split('\n')[1]);
                     _failedCodes.add(code);  // 記錄失敗，等第一輪結束後重試
                     document.getElementById(`wl-card-${code}`).outerHTML =
                         `<div id="wl-card-${code}-retry" class="border-2 border-amber-200 bg-amber-50 rounded-[2rem] p-5 flex items-center gap-3">
