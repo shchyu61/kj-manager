@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04072144</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04080250</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -288,6 +288,43 @@
                         <i data-lucide="search" class="w-4 h-4"></i>
                         <span id="watchlist-scan-text">全部診斷（掃描買進訊號）</span>
                     </button>
+                    <!-- ✅ GitHub Actions 自動通知提醒卡 -->
+                    <div class="rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
+                        <div class="text-xs font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
+                        <div class="text-[10px] leading-relaxed" style="color:#5a3a00;">
+                            ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
+                            ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
+                            <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
+                        </div>
+                    </div>
+                    <!-- ✅ 待買觀察：自動掃描控制面板（需開著瀏覽器）-->
+                    <div class="rounded-2xl p-4 space-y-3" style="background:#f0f8ff; border:1px solid #90c0f0;">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
+                                <div class="text-[10px]" style="color:#4a6a9a;">定時掃描觀察清單，符合條件自動發 Gmail</div>
+                            </div>
+                            <button id="btn-wl-auto-scan" onclick="toggleWlAutoScan()"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="wl-auto-scan-knob" class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style="transform:translateX(0px);"></span>
+                                <span id="wl-auto-scan-label" class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
+                        <div id="wl-auto-scan-settings" style="opacity:0.4;pointer-events:none;" class="flex items-center gap-3">
+                            <span class="text-xs font-black" style="color:#1a3a6a;">間隔</span>
+                            <select id="wl-auto-scan-interval" class="text-xs font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
+                                <option value="5">5 分鐘</option>
+                                <option value="10">10 分鐘</option>
+                                <option value="15">15 分鐘</option>
+                                <option value="30">30 分鐘</option>
+                                <option value="60">60 分鐘</option>
+                            </select>
+                            <span class="text-xs" style="color:#4a6a9a;">下次：<span id="wl-auto-scan-countdown" class="font-black">--:--</span></span>
+                        </div>
+                        <div id="wl-auto-scan-status" class="text-[10px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
+                    </div>
                 </div>
                 <!-- 分類Tab -->
                 <div id="wl-cat-tabs" class="flex gap-2 mb-3 overflow-x-auto pb-1">
@@ -477,6 +514,44 @@
                         <div id="scan-progress" class="bg-blue-600 h-full w-0 progress-bar-fill"></div>
                     </div>
                     <div id="scan-result-list" class="hide space-y-3"></div>
+                </div>
+                <!-- ✅ GitHub Actions 自動通知提醒卡 -->
+                <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
+                    <div class="text-xs font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
+                    <div class="text-[10px] leading-relaxed" style="color:#5a3a00;">
+                        ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
+                        ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
+                        <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
+                    </div>
+                </div>
+                <!-- ✅ 自動掃描控制面板（需開著瀏覽器）-->
+                <div class="mt-3 rounded-2xl p-4 space-y-3" style="background:#f0f8ff; border:1px solid #90c0f0;">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
+                            <div class="text-[10px]" style="color:#4a6a9a;">開著網頁時自動定時掃描並發通知</div>
+                        </div>
+                        <button id="btn-auto-scan" onclick="toggleAutoScan()"
+                            role="switch" aria-checked="false"
+                            class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                            style="min-width:3.5rem;">
+                            <span id="auto-scan-knob" class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style="transform:translateX(0px);"></span>
+                            <span id="auto-scan-label" class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                        </button>
+                    </div>
+                    <!-- 間隔設定（OFF時灰化）-->
+                    <div id="auto-scan-settings" style="opacity:0.4;pointer-events:none;" class="flex items-center gap-3">
+                        <span class="text-xs font-black" style="color:#1a3a6a;">間隔</span>
+                        <select id="auto-scan-interval" class="text-xs font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
+                            <option value="5">5 分鐘</option>
+                            <option value="10">10 分鐘</option>
+                            <option value="15">15 分鐘</option>
+                            <option value="30">30 分鐘</option>
+                            <option value="60">60 分鐘</option>
+                        </select>
+                        <span class="text-xs" style="color:#4a6a9a;">下次掃描：<span id="auto-scan-countdown" class="font-black">--:--</span></span>
+                    </div>
+                    <div id="auto-scan-status" class="text-[10px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
                 </div>
             </div>
         </div>
@@ -1405,7 +1480,7 @@
 
             // 【策略參數】
             const _p1=((0xF>>1)-4),_p1d=((0xF>>1)-4),_p1m=((0x6C>>1)+(-(-0)));
-            const _p1_auto=SCAN_INTERVAL==='1d'?_p1d:SCAN_INTERVAL==='5m'?_p1m:_p1;
+            const _p1_auto=SCAN_INTERVAL==="1d"?_p1d:SCAN_INTERVAL==="5m"?_p1m:_p1;
             const _p2=((0x46>>1)-(-(-0))),_p3=(1+3/100),_p4=(1*1.00);
 
             const price  = closes[closes.length - 1];
@@ -2531,6 +2606,210 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
 
         // ✅ Bug3修正：登出時清除 localStorage
+        // ╔══════════════════════════════════════════════════════════╗
+        // ║        自動掃描系統（開著網頁時定時觸發）                ║
+        // ╚══════════════════════════════════════════════════════════╝
+        let _autoScanTimer    = null;   // setInterval handle
+        let _autoScanCdTimer  = null;   // 倒計時 setInterval
+        let _autoScanSecsLeft = 0;      // 倒計時秒數
+        let _autoScanActive   = false;
+
+        window.toggleAutoScan = () => {
+            _autoScanActive = !_autoScanActive;
+            const btn      = document.getElementById('btn-auto-scan');
+            const knob     = document.getElementById('auto-scan-knob');
+            const label    = document.getElementById('auto-scan-label');
+            const settings = document.getElementById('auto-scan-settings');
+            const status   = document.getElementById('auto-scan-status');
+
+            if (_autoScanActive) {
+                // ── 開啟 ──
+                btn.style.background = '#2563eb';
+                knob.style.transform = 'translateX(28px)';
+                label.textContent    = 'ON';
+                label.style.color    = '#fff';
+                label.className      = 'absolute left-1.5 text-[9px] font-black text-white';
+                settings.style.opacity = '1';
+                settings.style.pointerEvents = 'auto';
+                _startAutoScanLoop();
+                status.textContent = '✅ 自動掃描已啟動';
+                status.style.color = '#1a6a30';
+            } else {
+                // ── 關閉 ──
+                btn.style.background = '';
+                btn.className = btn.className.replace('bg-blue-600','') + ' bg-slate-300';
+                knob.style.transform = 'translateX(0px)';
+                label.textContent = 'OFF';
+                label.style.color = '';
+                label.className = 'absolute right-1.5 text-[9px] font-black text-slate-400';
+                settings.style.opacity = '0.4';
+                settings.style.pointerEvents = 'none';
+                _stopAutoScanLoop();
+                status.textContent = '⏸ 自動掃描已停止';
+                status.style.color = '#4a6a9a';
+                document.getElementById('auto-scan-countdown').textContent = '--:--';
+            }
+        };
+
+        const _startAutoScanLoop = () => {
+            _stopAutoScanLoop();  // 先清除舊的
+            const mins = parseInt(document.getElementById('auto-scan-interval').value) || 5;
+            _autoScanSecsLeft = mins * 60;
+
+            // 立刻執行一次
+            _runAutoScan();
+
+            // 設定倒計時顯示
+            _autoScanCdTimer = setInterval(() => {
+                _autoScanSecsLeft--;
+                if (_autoScanSecsLeft <= 0) _autoScanSecsLeft = 0;
+                const m = String(Math.floor(_autoScanSecsLeft / 60)).padStart(2,'0');
+                const s = String(_autoScanSecsLeft % 60).padStart(2,'0');
+                const cd = document.getElementById('auto-scan-countdown');
+                if (cd) cd.textContent = `${m}:${s}`;
+            }, 1000);
+
+            // 設定定時掃描
+            _autoScanTimer = setInterval(() => {
+                _autoScanSecsLeft = mins * 60;
+                _runAutoScan();
+            }, mins * 60 * 1000);
+        };
+
+        const _stopAutoScanLoop = () => {
+            if (_autoScanTimer)   { clearInterval(_autoScanTimer);   _autoScanTimer   = null; }
+            if (_autoScanCdTimer) { clearInterval(_autoScanCdTimer); _autoScanCdTimer = null; }
+        };
+
+        const _runAutoScan = async () => {
+            const status = document.getElementById('auto-scan-status');
+            if (status) {
+                status.textContent = '🔍 掃描中...';
+                status.style.color = '#1a3a8a';
+            }
+            try {
+                // 呼叫現有的 startManualScan（智能診斷掃描所有持股+觀察清單）
+                await window.startManualScan();
+                const now = new Date().toLocaleTimeString('zh-TW');
+                if (status) {
+                    status.textContent = `✅ 上次掃描：${now}`;
+                    status.style.color = '#1a6a30';
+                }
+            } catch(e) {
+                if (status) {
+                    status.textContent = `❌ 掃描失敗：${e.message}`;
+                    status.style.color = '#8a2020';
+                }
+            }
+        };
+
+        // 間隔改變時自動重啟
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'auto-scan-interval' && _autoScanActive) {
+                _startAutoScanLoop();
+            }
+        });
+
+        // 分頁可見度偵測：分頁切回來時重置倒計時
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                if (_autoScanActive) {
+                    const status = document.getElementById('auto-scan-status');
+                    if (status) status.textContent = '👁 分頁重新活躍，繼續自動掃描';
+                }
+                if (_wlAutoScanActive) {
+                    const status = document.getElementById('wl-auto-scan-status');
+                    if (status) status.textContent = '👁 分頁重新活躍，繼續自動掃描';
+                }
+            }
+        });
+
+        // ╔══════════════════════════════════════════════════════════╗
+        // ║    待買觀察清單：自動掃描系統                             ║
+        // ╚══════════════════════════════════════════════════════════╝
+        let _wlAutoScanTimer    = null;
+        let _wlAutoScanCdTimer  = null;
+        let _wlAutoScanSecsLeft = 0;
+        let _wlAutoScanActive   = false;
+
+        window.toggleWlAutoScan = () => {
+            _wlAutoScanActive = !_wlAutoScanActive;
+            const btn      = document.getElementById('btn-wl-auto-scan');
+            const knob     = document.getElementById('wl-auto-scan-knob');
+            const label    = document.getElementById('wl-auto-scan-label');
+            const settings = document.getElementById('wl-auto-scan-settings');
+            const status   = document.getElementById('wl-auto-scan-status');
+
+            if (_wlAutoScanActive) {
+                btn.style.background = '#2563eb';
+                knob.style.transform = 'translateX(28px)';
+                label.textContent    = 'ON';
+                label.className      = 'absolute left-1.5 text-[9px] font-black text-white';
+                settings.style.opacity = '1';
+                settings.style.pointerEvents = 'auto';
+                _startWlAutoScanLoop();
+                status.textContent = '✅ 自動掃描已啟動';
+                status.style.color = '#1a6a30';
+            } else {
+                btn.style.background = '';
+                knob.style.transform = 'translateX(0px)';
+                label.textContent = 'OFF';
+                label.className = 'absolute right-1.5 text-[9px] font-black text-slate-400';
+                settings.style.opacity = '0.4';
+                settings.style.pointerEvents = 'none';
+                _stopWlAutoScanLoop();
+                status.textContent = '⏸ 自動掃描已停止';
+                status.style.color = '#4a6a9a';
+                document.getElementById('wl-auto-scan-countdown').textContent = '--:--';
+            }
+        };
+
+        const _startWlAutoScanLoop = () => {
+            _stopWlAutoScanLoop();
+            const mins = parseInt(document.getElementById('wl-auto-scan-interval').value) || 5;
+            _wlAutoScanSecsLeft = mins * 60;
+
+            _runWlAutoScan();  // 立刻執行一次
+
+            _wlAutoScanCdTimer = setInterval(() => {
+                _wlAutoScanSecsLeft--;
+                if (_wlAutoScanSecsLeft < 0) _wlAutoScanSecsLeft = 0;
+                const m = String(Math.floor(_wlAutoScanSecsLeft / 60)).padStart(2,'0');
+                const s = String(_wlAutoScanSecsLeft % 60).padStart(2,'0');
+                const cd = document.getElementById('wl-auto-scan-countdown');
+                if (cd) cd.textContent = `${m}:${s}`;
+            }, 1000);
+
+            _wlAutoScanTimer = setInterval(() => {
+                _wlAutoScanSecsLeft = mins * 60;
+                _runWlAutoScan();
+            }, mins * 60 * 1000);
+        };
+
+        const _stopWlAutoScanLoop = () => {
+            if (_wlAutoScanTimer)   { clearInterval(_wlAutoScanTimer);   _wlAutoScanTimer   = null; }
+            if (_wlAutoScanCdTimer) { clearInterval(_wlAutoScanCdTimer); _wlAutoScanCdTimer = null; }
+        };
+
+        const _runWlAutoScan = async () => {
+            const status = document.getElementById('wl-auto-scan-status');
+            if (status) { status.textContent = '🔍 掃描中...'; status.style.color = '#1a3a8a'; }
+            try {
+                await window.startWatchlistScan();
+                const now = new Date().toLocaleTimeString('zh-TW');
+                if (status) { status.textContent = `✅ 上次掃描：${now}`; status.style.color = '#1a6a30'; }
+            } catch(e) {
+                if (status) { status.textContent = `❌ 掃描失敗：${e.message}`; status.style.color = '#8a2020'; }
+            }
+        };
+
+        // 間隔改變時自動重啟
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'wl-auto-scan-interval' && _wlAutoScanActive) {
+                _startWlAutoScanLoop();
+            }
+        });
+
         document.getElementById('btn-logout').addEventListener('click', () => {
             localStorage.removeItem('kj_email');
             location.reload();
