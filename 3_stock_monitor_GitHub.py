@@ -139,14 +139,14 @@ def write_futures_status_to_firebase(status: str, scan_time: str, signal_count: 
 #
 # ✅【K棒數量等比換算】─ 依K棒換算文件，切換週期時根數同步換算
 #   週K = 3根（基準，3根≈3週）
-#   日K = 15根（3週×5天=15根日K）
+#   日K = 3根（與週K統一，確認當下位階即可）
 #   5分K = 54根（含夜盤的近期K棒，主力夜盤為主戰場）
 BUY_LOOKBACK_BARS    = 3      # 週K回看根數（條件A/B共用）
-BUY_LOOKBACK_DAILY   = 15     # 日K回看根數（3週×5天，等比換算）
+BUY_LOOKBACK_DAILY   = 3      # 日K回看根數（與週K統一，3根即可確認位階）
 BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤）
 # ── 【掃描週期模式】切換此處決定scan_stock用哪個週期把關 ──────────
-# 'weekly' = 週K三道關卡（第一道週K/第二道日K eLeader/第三道5分K）
-# 'daily'  = 日K三道關卡（第一道週K/第二道日K 15根/第三道5分K）
+# 'weekly' = 週K三道關卡（第一道週K3根/第二道日K eLeader/第三道5分K3根）
+# 'daily'  = 日K三道關卡（第一道日K3根/第二道日K eLeader/第三道5分K3根）
 SCAN_MODE = 'weekly'   # 切換：'weekly' / 'daily'
 BUY_RSI_MIN          = 35     # 買進RSI最低門檻（條件A，RSI需 > 此值才視為上升有效）
 BUY_BOLL_TOLERANCE   = 1.02   # 布林下緣容忍度（1.02=允許價格在下緣上方2%內仍觸發）
@@ -890,47 +890,36 @@ def scan_stock(ticker, is_holding=False):
                         float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
             return None
 
-        # ── 第一道：依SCAN_MODE選擇對應K棒資料（K棒數量等比換算原則）──
-        # SCAN_MODE='weekly'：用週K 3根（原設計）
-        # SCAN_MODE='daily' ：用日K 15根（等比換算，不用週K）
+        # ── 第一道：週K/日K統一用3根（條件A or B）────────────────
         if not TEST_MODE:
             if SCAN_MODE == 'daily':
-                # 日K模式第一道：先抓日K，用15根判斷多空位階
                 _df1st = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
                 if _df1st is None or len(_df1st) < 50: return None
                 _df1st = calc_indicators(_df1st)
                 if _df1st is None: return None
-                _orig = BUY_LOOKBACK_BARS
-                globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY  # 暫改15根
-                _is_long_ok  = check_buy_precondition(_df1st)
+                _is_long_ok  = check_buy_precondition(_df1st)   # 日K 3根
                 _is_short_ok = check_short_precondition(_df1st)
-                globals()['BUY_LOOKBACK_BARS'] = _orig
             else:
-                # 週K模式第一道：用週K 3根（原設計）
-                _is_long_ok  = check_buy_precondition(df_w)
+                _is_long_ok  = check_buy_precondition(df_w)     # 週K 3根
                 _is_short_ok = check_short_precondition(df_w)
             if not _is_long_ok and not _is_short_ok:
-                return None   # 多空都不過才跳過
+                return None
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
 
-        # ── 第二道：依SCAN_MODE選擇日K或eLeader ─────────────────
+        # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
         df_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
         if df_d is None or len(df_d) < 50: return None
         df_d = calc_indicators(df_d)
         if df_d is None: return None
 
-        if SCAN_MODE == 'daily':
-            # 日K模式第二道：日K 15根條件A/B（BUY_LOOKBACK_DAILY）
-            globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
-            _2nd_ok = check_buy_precondition(df_d)
-            globals()['BUY_LOOKBACK_BARS'] = 3
-            if not _2nd_ok:
-                return None
-        else:
-            # 週K模式第二道：日K eLeader 25條件
+        if _is_long_ok:
             is_eleader_ok = check_buy_eleader(df_d) is not None
             if not is_eleader_ok:
+                return None
+        else:
+            is_eleader_short_ok = check_short_eleader(df_d) is not None
+            if not is_eleader_short_ok:
                 return None
 
         # ── 第三道：5分K即時轉折（週K/日K模式共用）─────────────
@@ -958,24 +947,30 @@ def scan_stock(ticker, is_holding=False):
             macd_5m_ok = False
 
         rsi_5m_ok = (last_rsi > prev_rsi and last_rsi > BUY_RSI_MIN)
+        rsi_5m_falling  = (last_rsi < prev_rsi and last_rsi < (100 - BUY_RSI_MIN))
+        macd_5m_falling = not macd_5m_ok
+        cond_5m_buy   = check_buy_precondition(df_5m)
+        cond_5m_short = check_short_precondition(df_5m)
 
-        if SCAN_MODE == 'daily':
-            if not (rsi_5m_ok and macd_5m_ok):
+        if _is_long_ok:
+            # 多頭第三道：（RSI↑ AND MACD↑）AND（5分K買進條件A or B）
+            if not (rsi_5m_ok and macd_5m_ok and cond_5m_buy):
                 return None
             c = float(df_5m['Close'].iloc[-1])
-            print(f"🔥 {ticker} 觸發【日K三道關卡】，成交價：{c}")
-            return ('BUY', c, float(df_d['Low'].iloc[-1]), float(df_d['boll_bot20'].iloc[-1]),
-                    float(df_d['rsi14'].iloc[-1]), float(df_d['rsi14'].iloc[-2]))
+            ref_df = df_d if SCAN_MODE == 'daily' else df_w
+            mode_tag = '日K' if SCAN_MODE == 'daily' else '週K'
+            print(f"🔥 {ticker} 觸發【{mode_tag}三道關卡 多頭買進】，成交價：{c}")
+            return ('BUY', c, float(ref_df['Low'].iloc[-1]), float(ref_df['boll_bot20'].iloc[-1]),
+                    float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
         else:
-            route_A = rsi_5m_ok
-            route_B = rsi_5m_ok and macd_5m_ok
-            if route_A or route_B:
-                c = float(df_5m['Close'].iloc[-1])
-                trigger = 'eLeader+5分K' if route_A else '截圖條件5分K'
-                print(f"🔥 {ticker} 觸發【{trigger}】，成交價：{c}")
-                return ('BUY', c, float(df_w['Low'].iloc[-1]), float(df_w['boll_bot20'].iloc[-1]),
-                        float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
- 
+            if not (rsi_5m_falling and macd_5m_falling and cond_5m_short):
+                return None
+            c = float(df_5m['Close'].iloc[-1])
+            ref_df = df_d if SCAN_MODE == 'daily' else df_w
+            mode_tag = '日K' if SCAN_MODE == 'daily' else '週K'
+            print(f"🔥 {ticker} 觸發【{mode_tag}三道關卡 空頭做空】，成交價：{c}")
+            return ('SHORT', c, float(ref_df['High'].iloc[-1]), float(ref_df['boll_top20'].iloc[-1]),
+                    float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
     except Exception as e:
         # 靜默跳過錯誤
         return None
@@ -1264,11 +1259,11 @@ def main_task():
                 # ══════════════════════════════════════════════
                 # ✅【三道關卡】期貨5分K進場先決條件（同本機版）
                 # 第一道：週K位階（check_buy_precondition，3根）
-                # 第二道：日K eLeader（check_buy_eleader，15根）
+                # 第二道：日K eLeader（check_buy_eleader）
                 # 第三道：5分K 54根條件A/B + RSI門檻
                 # ══════════════════════════════════════════════
 
-                # ── 第一道：日K 15根位階（K棒等比換算，日K15根≈週K3根）──
+                # ── 第一道：日K 3根位階──
                 df5_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
                 if df5_d is None or len(df5_d) < 50:
                     print(f'  ⚠️ {ticker} 日K資料不足，跳過'); continue
@@ -1280,8 +1275,8 @@ def main_task():
                 _1st_short = check_short_precondition(df5_d)
                 globals()['BUY_LOOKBACK_BARS'] = _orig5
                 if not _1st_long and not _1st_short:
-                    print(f'  ❌ {ticker} 第一道日K15根未通過，跳過'); continue
-                print(f'  ✅ {ticker} 第一道日K15根通過（多:{_1st_long} 空:{_1st_short}）')
+                    print(f'  ❌ {ticker} 第一道日K3根未通過，跳過'); continue
+                print(f'  ✅ {ticker} 第一道日K3根通過（多:{_1st_long} 空:{_1st_short}）')
 
                 # ── 第二道：日K eLeader ──────────────────────
                 # （df5_d已在上面取得，直接使用）
