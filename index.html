@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070708</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04071031</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -258,6 +258,22 @@
                         <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
                         <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
+                    </div>
+                    <!-- 虛擬幣提示 -->
+                    <div id="wl-crypto-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
+                        🪙 虛擬幣建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#f7931a; font-weight:900;">BTC-USD</span>（比特幣）　
+                        <span style="color:#627eea; font-weight:900;">ETH-USD</span>（以太幣）<br>
+                        <span style="color:#c2a633; font-weight:900;">DOGE-USD</span>（狗狗幣）　
+                        <span style="color:#2775ca; font-weight:900;">USDT-USD</span>（泰達幣）
+                    </div>
+                    <!-- 外匯提示 -->
+                    <div id="wl-fx-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
+                        💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
+                        <span style="color:#1a6a2a; font-weight:900;">JPY=X</span>（美元/日圓）<br>
+                        <span style="color:#1a6a2a; font-weight:900;">CHFUSD=X</span>（美元/瑞郎）　
+                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）
                     </div>
                     <!-- 待買觀察：匯出/匯入備份 -->
                     <div class="flex gap-2">
@@ -505,6 +521,16 @@
                     </div>
                     <div class="w-12 h-6 bg-blue-600 rounded-full flex items-center px-1"><div class="w-4 h-4 bg-white rounded-full ml-auto"></div></div>
                 </div>
+                <!-- 登入記錄（僅管理員可見）-->
+                <div id="login-log-section" class="hide rounded-2xl p-4 space-y-3" style="background:#f0e8ff; border:1px solid #c4a0e8;">
+                    <div class="flex items-center justify-between">
+                        <div class="text-sm font-black" style="color:#3a1060;">📋 登入記錄（最近10筆）</div>
+                        <button onclick="refreshLoginLog()" class="text-[10px] font-black px-2 py-1 rounded-lg" style="background:#c4a0e8; color:#3a1060;">重新整理</button>
+                    </div>
+                    <div id="login-log-list" class="space-y-1.5 text-[10px]">
+                        <div style="color:#6a4080;">載入中...</div>
+                    </div>
+                </div>
                 <div class="text-center">
                     <p class="text-[10px] font-black uppercase tracking-widest" style="color:#c4a878;">Authorized by AI Security System</p>
                 </div>
@@ -556,6 +582,12 @@
             "shch61@yahoo.com.tw", "70.2.7wendy@gmail.com",
             "70.2.7wendy@yahoo.com.tw", "dcyu0905@gmail.com",
             "dcyu09056@gmail.com", "dzyu1115@gmail.com"
+        ];
+        // ── 【第1章：黑名單設定】手動輸入要封鎖的信箱 ──────────────
+        // 格式："信箱",（可填多個，用逗號分隔）
+        // 被封鎖的信箱即使知道密碼也無法登入
+        const BLOCKED_EMAILS = [
+            // "ex_tenant@gmail.com",  // 範例：搬離房客的信箱
         ];
 
         const stockNameMap = {
@@ -719,8 +751,26 @@
             }
         };
 
+        // ── 登入記錄寫入Firebase ──────────────────────────────
+        const _writeLoginLog = async (email, success, reason='') => {
+            try {
+                await initFirebaseAuth();
+                const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
+                const _existing = await getDoc(_logRef);
+                const _logs = (_existing.exists() ? _existing.data().logs : []) || [];
+                _logs.unshift({
+                    email, success, reason,
+                    time: new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'}),
+                    ts: Date.now()
+                });
+                // 只保留最近100筆
+                await setDoc(_logRef, { logs: _logs.slice(0,100) }, { merge: true });
+            } catch(e) { /* 不影響登入流程 */ }
+        };
+
         const completeLogin = async (email) => {
             currentUserEmail = email;
+            _writeLoginLog(email, true);  // ✅ 記錄成功登入
             // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
             localStorage.setItem('kj_email', email);
             await loadFromCloud(email);
@@ -730,6 +780,12 @@
             }, 500);
             // ✅ 登入後背景預載全額交割清單
             fetchCashDeliveryStocks().catch(() => {});
+            // 管理員專屬：顯示登入記錄
+            const _logSec = document.getElementById('login-log-section');
+            if (_logSec && currentUserEmail === 'shchyu61@gmail.com') {
+                _logSec.classList.remove('hide');
+                refreshLoginLog();
+            }
             // ✅ 期貨5分K按鈕：只對 shchyu61@gmail.com 顯示，並查詢 GitHub Actions 狀態
             const _futWrap = document.getElementById('futures-5mk-wrap');
             if (_futWrap && currentUserEmail === 'shchyu61@gmail.com') {
@@ -781,6 +837,12 @@
             const keyInput = document.getElementById('access-key-input').value.trim();
             const expected = generateDailyKey(email);
 
+            // ── 黑名單檢查（優先於一切驗證）──────────────────
+            if (BLOCKED_EMAILS.includes(email.toLowerCase())) {
+                showError('此信箱已被停用，請聯絡管理員。');
+                _writeLoginLog(email, false, '黑名單封鎖');
+                return;
+            }
             // ✅ 首次登入強制OTP驗證（未在Firebase記錄emailVerified的信箱不可用密碼登入）
             const isVerified = await checkEmailVerified(email);
             if (!isVerified) {
@@ -2226,13 +2288,14 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             window.renderStocks();
         };
 
-        // ── 需求2：安聯基金提示（選基金分類時顯示）──────────────
+        // ── 需求2：分類提示（選分類時顯示對應提示）──────────────
         document.addEventListener('change', (e) => {
             if (e.target.id === 'new-watchlist-cat') {
-                const hint = document.getElementById('fund-hint');
-                if (hint) hint.classList.toggle('hide', e.target.value !== 'fund');
-                const goldHint = document.getElementById('wl-gold-hint');
-                if (goldHint) goldHint.classList.toggle('hide', e.target.value !== 'gold');
+                const v = e.target.value;
+                const ids = ['fund-hint','wl-gold-hint','wl-crypto-hint','wl-fx-hint'];
+                const maps = { 'fund':'fund-hint', 'gold':'wl-gold-hint', 'crypto':'wl-crypto-hint', 'fx':'wl-fx-hint' };
+                ids.forEach(id => { const el=document.getElementById(id); if(el) el.classList.add('hide'); });
+                if (maps[v]) { const el=document.getElementById(maps[v]); if(el) el.classList.remove('hide'); }
             }
             if (e.target.id === 'new-stock-cat') {
                 const hint = document.getElementById('stock-fund-hint');
@@ -2380,6 +2443,32 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     p === pageName ? tab.classList.remove('text-slate-400') : tab.classList.add('text-slate-400');
                 }
             });
+        };
+
+        // ── 登入記錄查看（僅管理員）──────────────────────────
+        window.refreshLoginLog = async () => {
+            const logList = document.getElementById('login-log-list');
+            if (!logList) return;
+            try {
+                await initFirebaseAuth();
+                const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
+                const _snap = await getDoc(_logRef);
+                if (!_snap.exists() || !_snap.data().logs?.length) {
+                    logList.innerHTML = '<div style="color:#6a4080;">尚無記錄</div>'; return;
+                }
+                const logs = _snap.data().logs.slice(0,10);
+                logList.innerHTML = logs.map(l => {
+                    const icon = l.success ? '✅' : '❌';
+                    const color = l.success ? '#1a5a30' : '#8a2020';
+                    const reason = l.reason ? ` <span style="color:#888;">(${l.reason})</span>` : '';
+                    return `<div style="background:rgba(255,255,255,0.6);border-radius:0.5rem;padding:0.4rem 0.6rem;">
+                        <span style="color:${color};font-weight:900;">${icon} ${l.email}</span>${reason}<br>
+                        <span style="color:#6a4080;">${l.time}</span>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                logList.innerHTML = `<div style="color:#8a2020;">載入失敗：${e.message}</div>`;
+            }
         };
 
         // ✅ Bug3修正：登出時清除 localStorage
