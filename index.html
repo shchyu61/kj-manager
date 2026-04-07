@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04071632</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04072144</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -523,11 +523,18 @@
                 </div>
                 <!-- 登入記錄（僅管理員可見）-->
                 <div id="login-log-section" class="hide rounded-2xl p-4 space-y-3" style="background:#f0e8ff; border:1px solid #c4a0e8;">
-                    <div class="flex items-center justify-between">
-                        <div class="text-sm font-black" style="color:#3a1060;">📋 登入記錄（最近10筆）</div>
-                        <button onclick="refreshLoginLog()" class="text-[10px] font-black px-2 py-1 rounded-lg" style="background:#c4a0e8; color:#3a1060;">重新整理</button>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-black" style="color:#3a1060;">🔐 登入紀錄（最近200筆）</div>
+                        <button onclick="clearLoginLog()" class="text-[10px] font-black px-2 py-1 rounded-lg" style="background:#e8a0a0; color:#6a0000;">🗑 清除紀錄</button>
                     </div>
-                    <div id="login-log-list" class="space-y-1.5 text-[10px]">
+                    <!-- 篩選按鈕 -->
+                    <div class="flex gap-2 flex-wrap">
+                        <button onclick="refreshLoginLog('all')" id="log-btn-all" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#3a1060;color:#fff;border-color:#3a1060;">全部</button>
+                        <button onclick="refreshLoginLog('success')" id="log-btn-success" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#1a5a30;border-color:#6cd47e;">✅ 成功</button>
+                        <button onclick="refreshLoginLog('fail')" id="log-btn-fail" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#8a2020;border-color:#e88888;">❌ 失敗/封鎖</button>
+                        <button onclick="refreshLoginLog('blocked')" id="log-btn-blocked" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#6a4000;border-color:#e8a020;">🚫 黑名單</button>
+                    </div>
+                    <div id="login-log-list" class="space-y-2 text-xs" style="max-height:400px;overflow-y:auto;">
                         <div style="color:#6a4080;">載入中...</div>
                     </div>
                 </div>
@@ -752,25 +759,25 @@
         };
 
         // ── 登入記錄寫入Firebase ──────────────────────────────
-        const _writeLoginLog = async (email, success, reason='') => {
+        const _writeLoginLog = async (email, success, reason='', method='') => {
             try {
                 await initFirebaseAuth();
                 const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
                 const _existing = await getDoc(_logRef);
                 const _logs = (_existing.exists() ? _existing.data().logs : []) || [];
                 _logs.unshift({
-                    email, success, reason,
+                    email, success, reason, method,
                     time: new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'}),
                     ts: Date.now()
                 });
                 // 只保留最近100筆
-                await setDoc(_logRef, { logs: _logs.slice(0,100) }, { merge: true });
+                await setDoc(_logRef, { logs: _logs.slice(0,200) }, { merge: true });
             } catch(e) { /* 不影響登入流程 */ }
         };
 
-        const completeLogin = async (email) => {
+        const completeLogin = async (email, method='OTP') => {
             currentUserEmail = email;
-            _writeLoginLog(email, true);  // ✅ 記錄成功登入
+            _writeLoginLog(email, true, '', method);  // ✅ 記錄成功登入
             // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
             localStorage.setItem('kj_email', email);
             await loadFromCloud(email);
@@ -865,7 +872,7 @@
             const btn = document.getElementById('btn-verify-key');
             btn.disabled = true;
             try {
-                await completeLogin(email);
+                await completeLogin(email, '每日密碼');
             } catch (e) {
                 btn.disabled = false;
                 window.showAlert('登入失敗：' + e.message);
@@ -2458,29 +2465,69 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
 
         // ── 登入記錄查看（僅管理員）──────────────────────────
-        window.refreshLoginLog = async () => {
+        // 登入記錄篩選狀態
+        let _logFilter = 'all';
+        window.refreshLoginLog = async (filter) => {
+            if (filter) {
+                _logFilter = filter;
+                // 更新按鈕樣式
+                ['all','success','fail','blocked'].forEach(f => {
+                    const btn = document.getElementById(`log-btn-${f}`);
+                    if (!btn) return;
+                    const isActive = f === filter;
+                    btn.style.background = isActive ? '#3a1060' : '#f0e8ff';
+                    btn.style.color = isActive ? '#fff' : (f==='success'?'#1a5a30':f==='fail'?'#8a2020':f==='blocked'?'#6a4000':'#3a1060');
+                });
+            }
             const logList = document.getElementById('login-log-list');
             if (!logList) return;
+            logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">載入中...</div>';
             try {
                 await initFirebaseAuth();
                 const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
                 const _snap = await getDoc(_logRef);
                 if (!_snap.exists() || !_snap.data().logs?.length) {
-                    logList.innerHTML = '<div style="color:#6a4080;">尚無記錄</div>'; return;
+                    logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">尚無紀錄</div>'; return;
                 }
-                const logs = _snap.data().logs.slice(0,10);
+                let logs = _snap.data().logs || [];
+                // 篩選
+                if (_logFilter === 'success')  logs = logs.filter(l => l.success);
+                if (_logFilter === 'fail')      logs = logs.filter(l => !l.success);
+                if (_logFilter === 'blocked')   logs = logs.filter(l => l.reason && l.reason.includes('黑名單'));
+                if (!logs.length) {
+                    logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">此類別無紀錄</div>'; return;
+                }
                 logList.innerHTML = logs.map(l => {
-                    const icon = l.success ? '✅' : '❌';
-                    const color = l.success ? '#1a5a30' : '#8a2020';
-                    const reason = l.reason ? ` <span style="color:#888;">(${l.reason})</span>` : '';
-                    return `<div style="background:rgba(255,255,255,0.6);border-radius:0.5rem;padding:0.4rem 0.6rem;">
-                        <span style="color:${color};font-weight:900;">${icon} ${l.email}</span>${reason}<br>
-                        <span style="color:#6a4080;">${l.time}</span>
+                    const isBlocked = l.reason && l.reason.includes('黑名單');
+                    const icon  = l.success ? '✅ 成功' : (isBlocked ? '🚫 黑名單' : '❌ 失敗');
+                    const bg    = l.success ? '#f0fff4' : (isBlocked ? '#fff8e8' : '#fff0f0');
+                    const bdr   = l.success ? '#6cd47e' : (isBlocked ? '#e8a020' : '#e88888');
+                    const methodTag = l.method ? `<span style="background:#e0d0f0;color:#3a1060;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:900;">${l.method}</span>` : '';
+                    const reasonTag = (l.reason && !isBlocked) ? `<span style="color:#8a4040;font-size:10px;">(${l.reason})</span>` : '';
+                    return `<div style="background:${bg};border:1px solid ${bdr};border-radius:0.75rem;padding:0.6rem 0.8rem;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                            <span style="font-weight:900;font-size:12px;">${icon}</span>
+                            <span style="color:#888;font-size:10px;">${l.time}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="color:#1a1060;font-weight:700;font-size:12px;">🔵 ${l.email}</span>
+                            ${methodTag}${reasonTag}
+                        </div>
                     </div>`;
                 }).join('');
             } catch(e) {
-                logList.innerHTML = `<div style="color:#8a2020;">載入失敗：${e.message}</div>`;
+                logList.innerHTML = `<div style="color:#8a2020;padding:0.5rem;">載入失敗：${e.message}</div>`;
             }
+        };
+
+        window.clearLoginLog = async () => {
+            if (!confirm('確定要清除所有登入紀錄嗎？')) return;
+            try {
+                await initFirebaseAuth();
+                const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
+                await setDoc(_logRef, { logs: [] }, { merge: false });
+                document.getElementById('login-log-list').innerHTML = '<div style="color:#6a4080;padding:0.5rem;">紀錄已清除</div>';
+            } catch(e) { window.showAlert('清除失敗：' + e.message); }
         };
 
         // ✅ Bug3修正：登出時清除 localStorage
