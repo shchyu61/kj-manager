@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04080250</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04081819</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -834,6 +834,17 @@
         };
 
         // ── 登入記錄寫入Firebase ──────────────────────────────
+
+        const _notifyBlacklist = (email, method) => {
+            const now = new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'});
+            try {
+                emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+                    to_email: 'shchyu61@gmail.com',
+                    otp: `🚫【黑名單警示 ${now}】\n已封鎖帳號嘗試登入「科蓁股票篩選系統」！\n帳號：${email}\n方式：${method}\n請確認是否需要進一步處理。`
+                });
+            } catch(e) {}
+        };
+
         const _writeLoginLog = async (email, success, reason='', method='') => {
             try {
                 await initFirebaseAuth();
@@ -852,7 +863,10 @@
 
         const completeLogin = async (email, method='OTP') => {
             currentUserEmail = email;
-            _writeLoginLog(email, true, '', method);  // ✅ 記錄成功登入
+            // ✅ 自動登入（沿用Session）不寫登入記錄，避免每次重整都產生記錄
+            if (method !== '自動登入') {
+                _writeLoginLog(email, true, '', method);
+            }
             // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
             localStorage.setItem('kj_email', email);
             await loadFromCloud(email);
@@ -923,6 +937,8 @@
             if (BLOCKED_EMAILS.includes(email.toLowerCase())) {
                 showError('此信箱已被停用，請聯絡管理員。');
                 _writeLoginLog(email, false, '黑名單封鎖');
+                // 即時通知管理員
+                _notifyBlacklist(email, '每日密碼');
                 return;
             }
             // ✅ 首次登入強制OTP驗證（未在Firebase記錄emailVerified的信箱不可用密碼登入）
@@ -958,6 +974,14 @@
         document.getElementById('btn-send-otp').addEventListener('click', async () => {
             const email = getEmailInput();
             if (!email || !email.includes('@')) { showError('請輸入有效信箱。'); return; }
+
+            // ── 黑名單檢查 ──
+            if (BLOCKED_EMAILS.includes(email.toLowerCase())) {
+                showError('此信箱已被停用，請聯絡管理員。');
+                _writeLoginLog(email, false, '黑名單封鎖');
+                _notifyBlacklist(email, 'OTP');
+                return;
+            }
 
             // 🔒 1小時內最多3次OTP（防止額度耗盡）
             const _otpKey = `otp_count_${email}`;
@@ -1026,7 +1050,7 @@
                 await initFirebaseAuth();
                 const verifyPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
                 await setDoc(verifyPath, { emailVerified: true }, { merge: true });
-                await completeLogin(email);
+                await completeLogin(email, 'OTP一次性密碼');
             } catch (e) {
                 btn.disabled = false;
                 window.showAlert('登入失敗：' + e.message);
@@ -1480,7 +1504,7 @@
 
             // 【策略參數】
             const _p1=((0xF>>1)-4),_p1d=((0xF>>1)-4),_p1m=((0x6C>>1)+(-(-0)));
-            const _p1_auto=SCAN_INTERVAL==="1d"?_p1d:SCAN_INTERVAL==="5m"?_p1m:_p1;
+            const _p1_auto=SCAN_INTERVAL==='1d'?_p1d:SCAN_INTERVAL==='5m'?_p1m:_p1;
             const _p2=((0x46>>1)-(-(-0))),_p3=(1+3/100),_p4=(1*1.00);
 
             const price  = closes[closes.length - 1];
@@ -2820,7 +2844,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             const savedEmail = localStorage.getItem('kj_email');
             if (savedEmail) {
                 try {
-                    await completeLogin(savedEmail);
+                    // ✅ 自動登入：method標示為「自動登入」，不記錄為OTP或密碼
+                    await completeLogin(savedEmail, '自動登入');
                 } catch(e) {
                     localStorage.removeItem('kj_email');
                 }
