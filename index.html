@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04081819</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04081835</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -600,7 +600,7 @@
                 <div id="login-log-section" class="hide rounded-2xl p-4 space-y-3" style="background:#f0e8ff; border:1px solid #c4a0e8;">
                     <div class="flex items-center justify-between mb-2">
                         <div class="text-sm font-black" style="color:#3a1060;">🔐 登入紀錄（最近200筆）</div>
-                        <button onclick="clearLoginLog()" class="text-[10px] font-black px-2 py-1 rounded-lg" style="background:#e8a0a0; color:#6a0000;">🗑 清除紀錄</button>
+                        <button onclick="clearLoginLog()" class="text-[10px] font-black px-2 py-1 rounded-lg" title="清除一般登入記錄，黑名單封鎖記錄永久保留" style="background:#e8a0a0; color:#6a0000;">🗑 清除一般記錄</button>
                     </div>
                     <!-- 篩選按鈕 -->
                     <div class="flex gap-2 flex-wrap">
@@ -1504,7 +1504,7 @@
 
             // 【策略參數】
             const _p1=((0xF>>1)-4),_p1d=((0xF>>1)-4),_p1m=((0x6C>>1)+(-(-0)));
-            const _p1_auto=SCAN_INTERVAL==='1d'?_p1d:SCAN_INTERVAL==='5m'?_p1m:_p1;
+            const _p1_auto=SCAN_INTERVAL==="1d"?_p1d:SCAN_INTERVAL==="5m"?_p1m:_p1;
             const _p2=((0x46>>1)-(-(-0))),_p3=(1+3/100),_p4=(1*1.00);
 
             const price  = closes[closes.length - 1];
@@ -2620,12 +2620,20 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
 
         window.clearLoginLog = async () => {
-            if (!confirm('確定要清除所有登入紀錄嗎？')) return;
+            if (!confirm('確定要清除一般登入紀錄嗎？\n（黑名單封鎖紀錄將永久保留，不會被清除）')) return;
             try {
                 await initFirebaseAuth();
                 const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
-                await setDoc(_logRef, { logs: [] }, { merge: false });
-                document.getElementById('login-log-list').innerHTML = '<div style="color:#6a4080;padding:0.5rem;">紀錄已清除</div>';
+                const _snap = await getDoc(_logRef);
+                const _allLogs = _snap.exists() ? (_snap.data().logs || []) : [];
+                // ✅ 只保留黑名單封鎖記錄，清除其他所有記錄
+                const _keepLogs = _allLogs.filter(l => l.reason && l.reason.includes('黑名單'));
+                await setDoc(_logRef, { logs: _keepLogs }, { merge: false });
+                const _msg = _keepLogs.length > 0
+                    ? `一般紀錄已清除。已保留 ${_keepLogs.length} 筆黑名單封鎖紀錄（永久保存）。`
+                    : '一般紀錄已清除。';
+                document.getElementById('login-log-list').innerHTML = `<div style="color:#6a4080;padding:0.5rem;">${_msg}</div>`;
+                window.showAlert('✅ ' + _msg);
             } catch(e) { window.showAlert('清除失敗：' + e.message); }
         };
 
