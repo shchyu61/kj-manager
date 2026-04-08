@@ -1324,16 +1324,42 @@ def main_task():
                 _5mk_short = _short_1st and _short_2nd and (_5mk_short_A or _5mk_short_B) and rsi_now < (100 - BUY_RSI_MIN)
 
                 _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')
-                # ✅ 深夜01~05有持倉：只掃平倉，跳過買進
-                if _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE and not (_is_night_now and _futures_is_holding):
+
+                # ★ 深夜嚴格買進條件：RSI>55、MACD柱>0且上升、當根漲幅>0.5%
+                _candle_pct = 0.0
+                try:
+                    _open5 = float(df5m['Open'].iloc[-1])
+                    if _open5 > 0: _candle_pct = (close - _open5) / _open5 * 100
+                except: pass
+                _night_strict_buy = (rsi_now > 55 and mh_now > 0 and mh_now > mh_prev and _candle_pct > 0.5)
+                _allow_night_buy  = not _is_night_now or _night_strict_buy
+                _night_buy_tag = ''
+                if _is_night_now and _night_strict_buy:
+                    _wd_name = {0:'週日',1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六'}.get(now_tz.weekday(),'')
+                    _night_buy_tag = f"\n🌙【{_wd_name}深夜大行情】漲幅:{_candle_pct:.1f}% RSI:{rsi_now:.0f} 立即查看！"
+
+                # ★ 深夜嚴格做空條件：RSI<45、MACD柱<0且下降、當根跌幅>0.5%
+                _candle_pct_s = 0.0
+                try:
+                    _open5s = float(df5m['Open'].iloc[-1])
+                    if _open5s > 0: _candle_pct_s = (_open5s - close) / _open5s * 100
+                except: pass
+                _night_strict_short = (rsi_now < 45 and mh_now < 0 and mh_now < mh_prev and _candle_pct_s > 0.5)
+                _allow_night_short  = not _is_night_now or _night_strict_short
+                _night_short_tag = ''
+                if _is_night_now and _night_strict_short:
+                    _wd_name2 = {0:'週日',1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六'}.get(now_tz.weekday(),'')
+                    _night_short_tag = f"\n🌙【{_wd_name2}深夜大跌】跌幅:{_candle_pct_s:.1f}% RSI:{rsi_now:.0f} 立即查看！"
+
+                # ── 買進 ──
+                if _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE and _allow_night_buy and not _futures_is_holding:
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
-                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
+                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n漲幅：{_candle_pct:+.2f}%\n時間：{now_str_f}{_night_buy_tag}")
                         print(f"  {'✅' if _ok else '❌'} {ticker} 買進訊號{'已發送' if _ok else '發送失敗'}")
-                        # ✅ 方案A：買進訊號發出 → 記錄持倉狀態
                         _futures_is_holding = True
                         write_futures_status_to_firebase('holding', now_str_f, 1)
                         print(f"  📌 持倉狀態已標記：is_futures_holding=True")
@@ -1345,17 +1371,17 @@ def main_task():
                         _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
                             f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
                         print(f"  {'✅' if _ok else '❌'} {ticker} 平倉訊號{'已發送' if _ok else '發送失敗'}")
-                        # ✅ 方案A：平倉訊號發出 → 清除持倉狀態
                         _futures_is_holding = False
                         write_futures_status_to_firebase('no_signal', now_str_f, 0)
                         print(f"  📌 持倉狀態已清除：is_futures_holding=False")
-                elif _5mk_short and close >= boll_top * 1.00 and not (_is_night_now and _futures_is_short):
+                # ── 做空 ──
+                elif _5mk_short and close >= boll_top * 1.00 and _allow_night_short and not _futures_is_short:
                     if not _can_send:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}",
-                            f"☁️【雲端】🔻【期貨5分K做空訊號】🔻\n標的：{ticker}\n收盤：{close:.2f}　布林上軌：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
+                            f"☁️【雲端】🔻【期貨5分K做空訊號】🔻\n標的：{ticker}\n收盤：{close:.2f}　布林上軌：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n跌幅：{_candle_pct_s:+.2f}%\n時間：{now_str_f}{_night_short_tag}")
                         print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short   = True
                         _futures_is_holding = False
