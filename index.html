@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04082238</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04081755</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -415,14 +415,14 @@
                         <span class="text-sm font-black text-slate-800">掃描頻率：自動同步全球市場</span>
                         <span class="text-[10px] font-bold text-slate-400">
                             目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span>
-                            &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-blue-600">週K</span>
+                            &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-blue-600">長期投資</span>
                         </span>
                     </div>
                     <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                     <!-- 週K/日K 切換開關：所有帳號可見 -->
                     <div id="scan-mode-wrap" class="flex flex-col items-center gap-1.5">
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-slate-500">週K</span>
+                            <span class="text-[10px] font-black text-slate-500">長期投資</span>
                             <button id="btn-scan-weekly" onclick="toggleScanMode('weekly')"
                                 role="switch" aria-checked="true"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
@@ -436,7 +436,7 @@
                             </button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-slate-500">日K</span>
+                            <span class="text-[10px] font-black text-slate-500">中期投資</span>
                             <button id="btn-scan-daily" onclick="toggleScanMode('daily')"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -665,7 +665,6 @@
             "70.2.7wendy@yahoo.com.tw", "dcyu0905@gmail.com",
             "dcyu09056@gmail.com", "dzyu1115@gmail.com"
         ];
-        // ── 【第1章：黑名單設定】手動輸入要封鎖的信箱 ──────────────
         // 格式："信箱",（可填多個，用逗號分隔）
         // 被封鎖的信箱即使知道密碼也無法登入
         const BLOCKED_EMAILS = [
@@ -699,7 +698,6 @@
             "BTC": "比特幣", "ETH": "以太幣", "SOL": "Solana",
         };
 
-        // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
         const fetchStockName = async (code) => {
             if (stockNameMap[code]) return; // 已有名稱，跳過
             try {
@@ -729,14 +727,10 @@
         // 【１．設定區】← 常改的內容都在這裡
         // ============================================================
 
-        // ── 【１-1】K線週期切換 ──────────────────────────────────────
         // 切換此處的interval和range，analyzeStock自動使用對應K棒根數
         //
-        //   週K  → interval='1wk', range='2y',  _p1=3
-        //   日K  → interval='1d',  range='1y',  _p1=_p1d（15根）
         //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
-        let SCAN_INTERVAL = '1wk';  // ✅ let：由週K/日K開關動態切換
-        let SCAN_RANGE    = '2y';   // 週K建議'2y'，日K建議'1y'
+        eval(atob('bGV0IFNDQU5fSU5URVJWQUw9JzF3ayc7bGV0IFNDQU5fUkFOR0U9JzJ5Jzs='));
 
         // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
         // ============================================================
@@ -904,7 +898,6 @@
             document.getElementById('btn-logout').classList.remove('hide');
             document.getElementById('settings-email').innerText = email;
             if (countdownTimer) clearInterval(countdownTimer);
-            // ✅ 登入後讀取個人掃描模式設定（週K/日K）
             _loadScanModePref(email).catch(()=>{});
             // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
             if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
@@ -931,7 +924,6 @@
             const keyInput = document.getElementById('access-key-input').value.trim();
             const expected = generateDailyKey(email);
 
-            // ── 黑名單檢查（優先於一切驗證）──────────────────
             if (BLOCKED_EMAILS.includes(email.toLowerCase())) {
                 showError('此信箱已被停用，請聯絡管理員。');
                 _writeLoginLog(email, false, '黑名單封鎖');
@@ -1149,7 +1141,6 @@
             });
         };
 
-        // ── stockNameMap 補充台股ETF ────────────────────────────
         stockNameMap["00713"] = "元大台灣高息低波";
         stockNameMap["00878"] = "國泰永續高股息";
         stockNameMap["00919"] = "群益台灣精選高息";
@@ -1165,7 +1156,6 @@
         stockNameMap["IAU"]   = "iShares黃金信託ETF";
         stockNameMap["SI=F"]  = "白銀期貨";
 
-        // ── 技術指標計算工具函數 ──────────────────────────────────
         const calcRSI = (closes, period = 14) => {
             if (closes.length < period + 1) return null;
             let gains = 0, losses = 0;
@@ -1209,9 +1199,126 @@
             return { now: macd_now, prev: macd_prev };
         };
 
-        // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
+        const _rollingMean = (arr, n) => arr.map((_, i) => {
+            if (i < n - 1) return null;
+            let s = 0; for (let j = i-n+1; j <= i; j++) s += arr[j]; return s / n;
+        });
+        const _rollingStd = (arr, n) => arr.map((_, i) => {
+            if (i < n - 1) return null;
+            const m = arr.slice(i-n+1, i+1).reduce((a,b)=>a+b,0)/n;
+            let v = 0; for (let j = i-n+1; j <= i; j++) v += (arr[j]-m)**2;
+            return Math.sqrt(v/(n-1));
+        });
+        const _emaArr = (arr, n) => {
+            const k = 2/(n+1), r = new Array(arr.length).fill(null);
+            let si = 0; while (si < arr.length && arr[si] === null) si++;
+            if (si >= arr.length) return r;
+            r[si] = arr[si];
+            for (let i = si+1; i < arr.length; i++)
+                r[i] = (arr[i]!==null && r[i-1]!==null) ? arr[i]*k+r[i-1]*(1-k) : null;
+            return r;
+        };
+        const _rsiArr = (arr, n=14) => {
+            const r = new Array(arr.length).fill(null);
+            if (arr.length < n+1) return r;
+            let g=0, ls=0;
+            for (let i=1; i<=n; i++) {
+                const d = arr[i]-arr[i-1];
+                if (d>=0) g+=d; else ls-=d;
+            }
+            let ag=g/n, al=ls/n;
+            r[n] = al===0 ? 100 : 100-100/(1+ag/al);
+            for (let i=n+1; i<arr.length; i++) {
+                const d = arr[i]-arr[i-1];
+                ag=(ag*(n-1)+Math.max(d,0))/n; al=(al*(n-1)+Math.max(-d,0))/n;
+                r[i] = al===0 ? 100 : 100-100/(1+ag/al);
+            }
+            return r;
+        };
+        const _macdArr = (arr, f=12, sl=26, sg=9) => {
+            const kf=2/(f+1), ks=2/(sl+1), kg=2/(sg+1);
+            const ml=new Array(arr.length).fill(null);
+            const sgl=new Array(arr.length).fill(null);
+            const hl=new Array(arr.length).fill(null);
+            let ef=arr[0], es=arr[0];
+            for (let i=1; i<arr.length; i++) {
+                ef=arr[i]*kf+ef*(1-kf); es=arr[i]*ks+es*(1-ks);
+                if (i>=sl-1) ml[i]=ef-es;
+            }
+            const fi=ml.findIndex(v=>v!==null);
+            if (fi>=0) {
+                sgl[fi]=ml[fi];
+                for (let i=fi+1; i<arr.length; i++)
+                    if (ml[i]!==null&&sgl[i-1]!==null) sgl[i]=ml[i]*kg+sgl[i-1]*(1-kg);
+                for (let i=fi; i<arr.length; i++)
+                    if (ml[i]!==null&&sgl[i]!==null) hl[i]=ml[i]-sgl[i];
+            }
+            return { ml, sgl, hl };
+        };
+        const _g = (arr, sh=0) => { const i=arr.length-1-sh; return i>=0?arr[i]:null; };
+        const calcElInd = (op, hi, lo, cl, vo) => {
+            if (cl.length < 30) return null;
+            const mc2=_rollingMean(cl,2), mc20=_rollingMean(cl,20);
+            const mo2=_rollingMean(op,2), mh2=_rollingMean(hi,2);
+            const ml2=_rollingMean(lo,2), mv5=_rollingMean(vo,5);
+            const s20=_rollingStd(cl,20), s2=_rollingStd(cl,2);
+            const bt20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m+2*s20[i]:null);
+            const bb20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m-2*s20[i]:null);
+            const bt2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m+2*s2[i]:null);
+            const bb2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m-2*s2[i]:null);
+            const rsi=_rsiArr(cl,14), ersi=_emaArr(rsi,9);
+            const {ml:macd,sgl:msig,hl:mosc}=_macdArr(cl,12,26,9);
+            const emacd=_emaArr(macd,9);
+            const {ml:macd_o}=_macdArr(op,12,26,9);
+            return { op,hi,lo,cl,vo, mc2,mc20,mo2,mh2,ml2,mv5,
+                     bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o };
+        };
+        const checkElBuy = (d) => {
+            if (!d) return false;
+            const {op:o,hi:h,lo:l,cl:c,vo:v,mc2,mc20,mo2,mh2,ml2,mv5,
+                   bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o}=d;
+            const g=_g;
+            if (g(c,3)===null||g(bb20,3)===null||g(rsi,3)===null) return false;
+            if (!(g(rsi,1)<78&&g(c)>g(ml2)&&g(h)>g(o)&&g(c)>g(l))) return false;
+            const C01=g(h,1)>g(bb20,1)&&g(bt2,1)<g(bt20,1)&&g(bb2)>g(bb20);
+            const C02=g(mosc)>g(mosc,1);
+            const C03=(g(mc20)>g(mc20,1)&&g(bt20)>g(bt20,1)&&g(rsi)>g(rsi,1))||
+                (g(mc20,1)<g(mc20,2)&&(g(bb20,1)<g(bb20,2)||(g(mo2,1)<g(mo2,2)&&g(o)>g(mo2)))&&
+                g(rsi,2)<g(rsi,3)&&g(rsi,1)>g(rsi,2)&&g(rsi)>g(rsi,1)&&g(ersi,1)>g(ersi,2));
+            const C04=(g(c,1)>g(mc2,1)||g(c,1)>g(mc20,1))&&g(o)<g(mc20,1);
+            const gA=C01&&C02&&C03&&C04;
+            const C11=g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2);
+            const C12=g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)<g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(c)>g(mo2);
+            const C21=g(mc20,1)<g(mc20,2)&&g(bt20)<g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(bb20)<g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1);
+            const C22=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(ersi,1)>g(rsi,1)&&g(emacd)>g(macd)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(ml2);
+            const C23=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)<g(msig,1)&&g(macd)>g(macd,1);
+            const C24=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(mo2)<g(bb20)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2)<g(mo2,1)&&g(o,1)<g(mo2,1)&&g(o)>g(mo2);
+            const C25=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bt20)>g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(c,1)<g(bb20,1)&&g(o)<g(bb20,1)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(c)>g(mo2);
+            const C26=g(mc20,1)<g(mc20,2)&&g(h,1)<g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(ersi,1)&&g(ersi,1)>g(ersi,2)&&g(macd,1)>g(macd,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o);
+            const C27=g(mc20,1)<g(mc20,2)&&g(o,1)<g(bb20,1)&&g(macd_o)<0&&g(rsi,1)<g(rsi,2)&&g(ersi,2)<35&&g(mo2,1)<g(bb20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(l,1);
+            const C28=g(mc20,1)<g(mc20,2)&&g(o,1)<g(mc20,1)&&g(c,1)>g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(ersi,1)>g(ersi,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(l);
+            const C41=g(mc20,1)>g(mc20,2)&&g(bb20)>g(bb20,1)&&g(bt20)<g(bt20,1)&&g(ersi,1)>g(rsi,1)&&g(emacd,1)>g(macd,1)&&g(o,1)<g(mc20,1)&&g(h,1)>g(mc20,1)&&g(mo2,1)<g(mc20,1)&&g(mo2)<g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2)&&g(l)>=g(l,1);
+            const C42=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(o)<g(bb20,1)&&g(o,1)>g(mc20,1)&&g(mo2,1)>g(l,2)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2);
+            const C43=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(o);
+            const C44=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(emacd,2)&&g(o)<g(mc20,1)&&g(mo2)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(h)<g(mo2)&&g(ml2,1)>=g(ml2,2)&&g(l)<g(ml2)&&g(c)>g(ml2);
+            const C45=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(macd,1)&&g(ersi,1)>g(rsi,1)&&g(o,1)<g(mo2,1)&&g(rsi,1)>g(rsi,2)&&g(o)>g(mo2)&&g(c,1)>g(mo2,1)&&g(mo2)<g(mo2,1)&&g(ml2,1)<g(bb20,1)&&g(c)>g(o);
+            const C46=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(h,1)>g(bt20,1)&&g(c)>g(bt20)&&g(c,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(o)<g(mo2);
+            const C47=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(macd)>g(macd,1)&&g(mo2,1)>g(mc20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2,1);
+            const C48=g(mc20,1)>g(mc20,2)&&g(bt20,2)<g(bt20,3)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi)>g(rsi,1)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)>g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o,1);
+            const C49=g(mc20,1)>g(mc20,2)&&g(h,2)<g(bt20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(ersi)>g(ersi,1)&&g(macd,1)>g(macd,2)&&g(o,1)>g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2);
+            const C50=g(mc20,2)>g(mc20,3)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(rsi)<g(ersi)&&g(emacd,1)<g(macd,1)&&g(bt20,2)>g(bt20,3)&&g(bb20,2)>g(bb20,3)&&g(mo2,1)<g(mo2,2)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2);
+            const C61=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,2)<g(o,2)&&g(c,1)>g(o,1)&&g(bb20,1)>g(bb20,2)&&g(bt2,1)>g(bt2,2)&&g(bb2,1)<g(bb2,2)&&g(mo2,1)<g(mc20,2)&&g(mo2,1)<g(mo2,2)&&g(mv5)>g(mv5,1)&&g(v)>g(mv5)&&g(h)>g(o);
+            const C62=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,1)<g(o,1)&&g(o,1)>g(mc20,1)&&g(bb20,1)<g(bb20,2)&&g(mh2,1)>g(mh2,2)&&g(ml2,1)>g(ml2,2)&&g(c,1)>=g(mc2,1)&&g(l)<g(o)&&g(c)>g(o);
+            const C63=g(mc20)>g(mc20,1)&&g(bb20)>g(bb20,1)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(ersi)>g(ersi,1)&&g(c)>g(mo2,1);
+            const C66=g(c,1)>g(o,1)&&g(mc20,2)>g(mc20,3)&&g(mc20,1)>g(mc20,2)&&g(l,1)>g(mc20,1)&&g(bt20,1)>g(bt20,2)&&g(bt2,1)>g(bt20,1)&&g(bb20)<g(bb20,1)&&g(o,1)<g(bt20,1)&&g(o)<g(bt20)&&g(macd)>g(msig)&&g(o,1)<g(mo2,1)&&g(c,1)>g(mo2,1)&&g(c,1)>=g(ml2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(o);
+            const C71=g(c,1)>g(o,1)&&g(c,2)<g(o,2)&&g(bb2,2)>g(bb20,2)&&g(ml2,2)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(o,1)<g(mc20,1)&&
+                ((g(mo2)>g(mo2,1)&&g(h,1)<g(mh2,1)&&g(c)>g(mc2))||(g(mo2)<g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2)))&&
+                g(o)>g(mo2)&&g(ml2)>=g(ml2,1)&&g(c,1)>=g(mc2,1);
+            const gB=C11||C12||C21||C22||C23||C24||C25||C26||C27||C28||C41||C42||C43||C44||C45||C46||C47||C48||C49||C50||C61||C62||C63||C66||C71;
+            return gA||gB;
+        };
 
-        // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
+
         const makeDiagCard = (code, result, bgDark, isHolding = false) => {
             const name     = stockNameMap[code] || '未定義資產';
             const hasBuy   = result.buy_signal;
@@ -1271,7 +1378,6 @@
             </div>`;
         };
 
-        // ── 3分鐘快取（建議1：避免重複抓取）────────────────────
         const diagCache = new Map(); // key=code, value={result, ts}
         const CACHE_TTL = 3 * 60 * 1000; // 3分鐘
 
@@ -1283,7 +1389,6 @@
         };
         const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
 
-        // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         // ✅ 自己的 Cloudflare Worker（最穩定，不會被Yahoo封鎖）
         // ✅ Cloudflare Worker（唯一資料來源，帶Cookie穿透Yahoo防護）
         window._WORKER_URL = 'https://yahoo-proxy.shchyu61.workers.dev';
@@ -1309,7 +1414,6 @@
             throw new Error('all sources failed');
         };
 
-        // ── 並行工作池（建議3：最多3個同時執行）────────────────
         // ── 需求5：動態工作池 + 優先隊列（持股優先，做完立刻補下一支）──
         const runWithPool = async (tasks, poolSize = 3, onDone, priorityFn = null) => {
             // 若有優先函數，持股排前面（參考：5個同事做完自己工作去幫忙）
@@ -1342,7 +1446,6 @@
             });
         };
 
-        // ── 全額交割股清單（來源：TWSE + TPEX OpenAPI）──────────
         //
         let _cashDeliverySet  = null;   // null=尚未載入
         let _cashDeliveryDate = '';     // 載入日期（日期不同就重新抓）
@@ -1386,7 +1489,6 @@
             return codes;
         };
 
-        // ── 主分析函數（含快取+多proxy）────────────────────────
         const analyzeStock = async (code) => {
             // 1. 有快取直接回傳
             const cached = getCached(code);
@@ -1473,7 +1575,6 @@
             console.log(`[${code}] 抓到資料：${closes.length}筆，最新：${closes[closes.length-1]}`);
             if (closes.length < 26) throw new Error('insufficient data');
 
-            // ── 【第4階段】官方公告下市日期偵測（最明確早期警訊）────
             const _meta = yResult?.meta || yResult?.chart?.result?.[0]?.meta || {};
             if (_meta.delistingDate) {
                 try {
@@ -1490,7 +1591,6 @@
                     setCache(code, _dr); return _dr;
                 } catch { /* 解析失敗不中斷 */ }
             }
-            // ── 【第5階段】查無即時報價（停牌或已下市）────────────────
             const _lastPx = _meta.regularMarketPrice || _meta.postMarketPrice || 0;
             if (_lastPx === 0 && closes.filter(v => v > 0).length === 0) {
                 const _dr5 = { price:'0.00', rsi:0, rsi_trend:'falling',
@@ -1501,14 +1601,16 @@
             }
 
             //
-            const _p1=((0xF>>1)-4),_p1d=((0xF>>1)-4),_p1m=((0x6C>>1)+(-(-0)));
+            const _p1 = 3, _p1d = 3, _p1m = 54;  // _p1d改為3根（與週K統一）
             const _p1_auto = SCAN_INTERVAL === '1d' ? _p1d : SCAN_INTERVAL === '5m' ? _p1m : _p1;
             const _p2 = 35, _p3 = 1.03, _p4 = 1.00;
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
-            const lows   = (yResult.indicators.quote[0].low  ||[]).filter(v => v != null && !isNaN(v));
-            const highs  = (yResult.indicators.quote[0].high ||[]).filter(v => v != null && !isNaN(v));
+            const lows   = (yResult.indicators.quote[0].low    ||[]).filter(v => v != null && !isNaN(v));
+            const highs  = (yResult.indicators.quote[0].high   ||[]).filter(v => v != null && !isNaN(v));
+            const opens  = (yResult.indicators.quote[0].open   ||[]).filter(v => v != null && !isNaN(v));
+            const vols   = (yResult.indicators.quote[0].volume  ||[]).map(v => v!=null&&!isNaN(v)?v:0);
             const rsiNow = calcRSI(closes);
             const rsiPrv = calcRSI(closes.slice(0, -1));
             const macd   = calcMACDHist(closes);
@@ -1557,17 +1659,14 @@
             let buy_signal = false;
             let conditions = [];
 
+            const _el2nd = checkElBuy(calcElInd(opens, highs, lows, closes, vols));
+
             if (SCAN_INTERVAL === '1wk') {
-                // [W]
-                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
 
             } else if (SCAN_INTERVAL === '1d') {
-                // 日K三道關卡
-                // 第一道：日K 3根條件A or B（_n=_p1d=3，_r1/_r2已用3根計算）
-                const _1st_pass = (_r1 || _r2) && rsiNow > _p2;
+                const _1st_pass = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
 
-                // 第二道：eLeader（網頁版無eLeader，用日K條件A/B作為位階確認，已在第一道完成）
-                // 第三道：5分K（RSI↑ AND MACD↑）AND（5分K近3根條件A or B）
                 let _3rd_pass = false;
                 try {
                     const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
@@ -1586,7 +1685,6 @@
                         const _5mMacd   = calcMACDHist(_5mC);
                         const _5mRsiOk  = _5mRsiNow > _5mRsiPrv && _5mRsiNow > _p2;
                         const _5mMacdOk = _5mMacd && _5mMacd.now > _5mMacd.prev;
-                        // 5分K近3根條件A or B（鏡像買進策略）
                         const _5mn = 3;
                         const _5mLn = _5mLo.slice(-_5mn);
                         const _5mHn = _5mHi.slice(-_5mn);
@@ -1600,8 +1698,7 @@
                 buy_signal = _1st_pass && _3rd_pass;
 
             } else {
-                // .
-                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
             }
 
             if (buy_signal) {
@@ -1623,8 +1720,6 @@
             return result;
         };
 
-        // ── 待買觀察清單：全部診斷（工作池版）──────────────────
-        // ── 系統B：買進訊號自動發Gmail通知 ──────────────────────
         const notifiedToday = new Set(); // 防止同一標的同一天重複發信
 
         const sendBuyNotify = async (signals) => {
@@ -1638,7 +1733,8 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}`;
+                const modeTag = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
+                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}\n投資模式：${modeTag}\n⚠️ 本訊號嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -1656,7 +1752,6 @@
             }
         };
 
-        // ── 賣出訊號發信 ──────────────────────────────────────────
         const notifiedSellToday = new Set(); // 防止同一標的同一天重複發賣出信
 
         const sendSellNotify = async (signals) => {
@@ -1668,7 +1763,8 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利`;
+                const modeTag2 = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
+                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利\n投資模式：${modeTag2}\n⚠️ 本訊號嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -1722,8 +1818,6 @@
             }
         }
 
-        // ── 週K/日K 切換開關 ────────────────────────────────────
-        // 目前掃描模式（'weekly'=週K / 'daily'=日K），預設週K
         let _currentScanMode = 'weekly';
 
         // ✅ 更新開關UI
@@ -1763,8 +1857,8 @@
             SCAN_RANGE    = mode === 'daily' ? '1y' : '2y';
             _updateScanModeUI(mode);
             const _lbl2 = document.getElementById('scan-mode-label');
-            if (_lbl2) _lbl2.textContent = mode === 'daily' ? '日K' : '週K';
-            window.showAlert(mode === 'daily' ? '📊 已切換日K模式（每股3次API，速度較慢）　請按「啟動AI診斷」' : '📊 已切換週K模式　請按「啟動AI診斷」');
+            if (_lbl2) _lbl2.textContent = mode === 'daily' ? '中期投資' : '長期投資';
+            window.showAlert(mode === 'daily' ? '📊 已切換中期投資模式　請按「啟動AI診斷」' : '📊 已切換長期投資模式　請按「啟動AI診斷」');
             // ✅ 儲存設定到 Firebase（綁定個人帳號）
             if (currentUserEmail && window.db) {
                 try {
@@ -1775,7 +1869,7 @@
             }
             // ✅ 清除診斷快取（不自動重新掃描，由使用者手動按「啟動AI診斷」）
             if (typeof diagCache !== 'undefined') diagCache.clear();
-            window.showAlert((mode === 'daily' ? '📊 已切換日K模式' : '📊 已切換週K模式') + '　請按「啟動AI診斷」開始掃描');
+            window.showAlert((mode === 'daily' ? '📊 已切換中期投資模式' : '📊 已切換長期投資模式') + '　請按「啟動AI診斷」開始掃描');
         };
 
         // ✅ 登入後從 Firebase 讀取個人掃描模式設定
@@ -1792,12 +1886,11 @@
                     _updateScanModeUI(saved);
                     // 更新模式標籤
                     const _lbl = document.getElementById('scan-mode-label');
-                    if (_lbl) _lbl.textContent = saved === 'daily' ? '日K' : '週K';
+                    if (_lbl) _lbl.textContent = saved === 'daily' ? '中期投資' : '長期投資';
                 }
             } catch(e) {}
         };
 
-        // ── 方案B：手動持倉開關 ──────────────────────────────────
         let _futuresHoldingManual = false;  // 手動持倉開關
 
         window.toggleFuturesHolding = async () => {
@@ -1876,7 +1969,6 @@
             return false;
         };
 
-        // ── 空倉開關（方案B手動）────────────────────────────────
         let _futuresShortManual = false;
 
         window.toggleFuturesShort = async () => {
@@ -1914,7 +2006,6 @@
             _updateNightModeHint();
         };
 
-        // ── 期貨5分K開關 Toggle ────────────────────────────────
         let _futuresActive = false;  // 開關狀態（false=關，true=開）
 
         window.toggleFutures5mk = () => {
@@ -1965,7 +2056,6 @@
             }
         };
 
-        // ── 期貨5分K診斷（專屬 shchyu61@gmail.com）────────────────
         window.startFutures5mk = async () => {
             if (currentUserEmail !== 'shchyu61@gmail.com') {
                 window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
@@ -2022,7 +2112,6 @@
                         continue;
                     }
 
-                    // ── 第一道：日K 15根位階（K棒等比換算，不用週K）──────
                     let _dkResult = null;
                     try {
                         const _dkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1y`;
@@ -2035,13 +2124,9 @@
                             const _dLows  = _dkL.slice(-_dn);
                             const _dHighs = _dkH.slice(-_dn);
                             const _dr = calcRSI(_dkC); const _dm = calcMACDHist(_dkC);
-                            // 多方日K條件A：近15根任一低點<=布林下緣 AND RSI↑ AND MACD↑
                             const _dA = _dLows.some((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<=_b.lower*_p3; }) && _dr>calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now>_dm.prev;
-                            // 多方日K條件B：近15根低均<中軌 AND 高均<上軌
                             const _dB = _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<_b.mid; }) && _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h<_b.upper; });
-                            // 空方日K條件A：近15根任一高點>=boll.upper AND RSI↓ AND MACD↓
                             const _dSA = _dHighs.some((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>=_b.upper*_p4; }) && _dr<calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now<_dm.prev;
-                            // 空方日K條件B：近15根高均>中軌 AND 低均>下軌
                             const _dSB = _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>_b.mid; }) && _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l>_b.lower; });
                             const _isLongOk  = (_dA || _dB) && _dr > _p2;
                             const _isShortOk = (_dSA || _dSB) && _dr < (100 - _p2);
@@ -2053,7 +2138,6 @@
                         continue;
                     }
 
-                    // ── 第三道：5分K 54根條件A/B ─────────────────────
                     // 計算技術指標
                     const boll    = calcBoll(closes);
                     const rsiNow  = calcRSI(closes);
@@ -2068,18 +2152,15 @@
                     const rsifalling  = rsiNow < rsiPrv;
                     const macdFalling = macd.now < macd.prev;
 
-                    // ✅【條件A/B 54根】與週K邏輯一致
                     const _nm = _5MK_LOOKBACK;
                     const _lows_m  = lows.slice(-_nm);
                     const _highs_m = highs.slice(-_nm);
                     const _cls_m   = closes;
-                    // 條件A：近54根任一最低價<=布林下緣 AND RSI↑ AND MACD↑
                     const _5mk_x1 = _lows_m.some((l,i) => {
                         const _b = calcBoll(_cls_m.slice(0, _cls_m.length-_nm+i+1));
                         return _b && l <= _b.lower * _p3;
                     });
                     const _5mk_A = _5mk_x1 && rsiRising && macdRising;
-                    // 條件B：近54根最低均<布林中軌 AND 最高均<boll.upper AND 前N根MACD縮 AND 當根放大
                     const _5mk_x2 = _lows_m.every((l,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l<_b.mid; });
                     const _5mk_x3 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h<_b.upper; });
                     const _5mk_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now<=_m1.now){_ok=false;break;} } return _ok; })() : false;
@@ -2090,11 +2171,8 @@
                     const nearUpper   = price >= boll.upper * _p4;
                     const name = stockNameMap[ticker] || ticker;
 
-                    // ══ 做空gate-3（鏡像多方）══════════════════════════
-                    // 第一道：近N根任一最高>=上軌 AND RSI↓ AND MACD↓
                     const _sh_x1 = _highs_m.some((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>=_b.upper*_p4; });
                     const _5mk_short_A = _sh_x1 && rsiPrv > rsiNow && macd.prev > macd.now;
-                    // 條件B：近N根最高均>布林中軌 AND 最低均>boll.lower AND 前N根MACD放大 AND 當根縮小
                     const _sh_x2 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>_b.mid; });
                     const _sh_x3 = _lows_m.every((l,i)  => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l>_b.lower; });
                     const _sh_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now>=_m1.now){_ok=false;break;} } return _ok; })() : false;
@@ -2102,9 +2180,7 @@
                     const _5mk_short = (_5mk_short_A || _5mk_short_B) && rsiNow < (100 - _p2);
                     const _nightShort = _isNightHours ? _futuresShortManual : false;
 
-                    // ✅ 深夜01~05持倉模式：只掃平倉，跳過買進
                     if (_5mk_buy && nearLower && !_nightHolding) {
-                        // 買進訊號：發Gmail
                         const body = `⭐【期貨5分K買進訊號】⭐
 標的：${ticker} ${name}
 收盤：${price.toFixed(2)}　布林下緣：${boll.lower.toFixed(2)}
@@ -2158,7 +2234,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else if (_5mk_short && nearUpper && !_nightShort) {
-                        // 做空訊號
                         const body = `🔻【期貨5分K做空訊號】🔻
 標的：${ticker} ${name}
 收盤：${price.toFixed(2)}　boll.upper：${boll.upper.toFixed(2)}
@@ -2184,7 +2259,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else if (_futuresShortManual && _5mk_buy && nearLower) {
-                        // 平空回補訊號（空倉中且觸發多方條件）
                         const body = `🟢【期貨5分K平空回補】🟢
 標的：${ticker} ${name}
 收盤：${price.toFixed(2)}　boll.lower：${boll.lower.toFixed(2)}
@@ -2253,7 +2327,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 }
             });
 
-            // 收集買進訊號
             const wlSignals = [];
             // ✅ 工作池：平日5支並行，週末1支
             await runWithPool(tasks, _poolSize(), (done, total) => {
@@ -2281,7 +2354,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 await runWithPool(retryTasks, 3, null);
             }
 
-            // 掃描完成後整理買進訊號並發信
             watchlist.forEach(s => {
                 const cached = getCached(s.code);
                 if (cached && cached.buy_signal) {
@@ -2300,7 +2372,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             txt.innerText = '全部診斷（掃描買進訊號）';
         };
 
-        // ── 智能診斷：持股＋觀察兩清單（工作池版）─────────────
         window.startManualScan = async () => {
             const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
             const _sortFn = (a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code);
@@ -2351,7 +2422,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 progress.style.width = `${Math.round(done/total*100)}%`;
             }, (t) => t.tag === '持股');
 
-            // 掃描完成後整理買進+賣出訊號並分別發信
             const manualBuySignals  = [];
             const manualSellSignals = [];
             all.forEach(({ code, tag }) => {
@@ -2362,7 +2432,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if (cached.buy_signal) {
                     manualBuySignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: cached.conditions.join('、') });
                 }
-                // 賣出訊號只針對持股
                 if (tag === '持股' && cached.sell_signal) {
                     manualSellSignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: '賣出條件觸發' });
                 }
@@ -2371,12 +2440,9 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             if (manualSellSignals.length > 0) sendSellNotify(manualSellSignals);
         };
 
-        // ── 待買觀察清單：渲染/新增/刪除 ──────────────────────
-        // ── 需求1：分類篩選狀態 ──────────────────────────────────
         let wlCatFilter = 'all';
         let stCatFilter = 'all';
 
-        // ── 需求1：分類Tab切換（待買觀察）────────────────────────
         window.filterWatchlist = (cat) => {
             wlCatFilter = cat;
             document.querySelectorAll('.wl-cat-btn').forEach(btn => {
@@ -2390,7 +2456,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             window.renderWatchlist();
         };
 
-        // ── 需求1：分類Tab切換（持股清單）────────────────────────
         window.filterStocks = (cat) => {
             stCatFilter = cat;
             document.querySelectorAll('.st-cat-btn').forEach(btn => {
@@ -2404,7 +2469,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             window.renderStocks();
         };
 
-        // ── 需求2：分類提示（選分類時顯示對應提示）──────────────
         document.addEventListener('change', (e) => {
             if (e.target.id === 'new-watchlist-cat') {
                 const v = e.target.value;
@@ -2421,7 +2485,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             }
         });
 
-        // ── 需求3：匯出JSON備份 ───────────────────────────────────
         window.exportData = () => {
             const data = { email: currentUserEmail, stocks, watchlist, exportedAt: new Date().toISOString() };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2432,7 +2495,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             window.showAlert('✅ 備份已下載！請妥善保管 JSON 檔案。');
         };
 
-        // ── 需求3：匯入JSON還原 ───────────────────────────────────
         window.importData = async (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -2469,7 +2531,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             } catch(e) { msg.style.color='#8a2020'; msg.innerText='儲存失敗：'+e.message; msg.style.opacity='1'; }
         };
 
-        // ── 需求4：登入時優先驗證自訂密碼 ───────────────────────
         const checkCustomPassword = async (email, inputPw) => {
             try {
                 await initFirebaseAuth();
@@ -2561,7 +2622,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             });
         };
 
-        // ── 登入記錄查看（僅管理員）──────────────────────────
         // 登入記錄篩選狀態
         let _logFilter = 'all';
         window.refreshLoginLog = async (filter) => {
@@ -2628,9 +2688,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
 
         // ✅ Bug3修正：登出時清除 localStorage
-        // ╔══════════════════════════════════════════════════════════╗
         // ║        自動掃描系統（開著網頁時定時觸發）                ║
-        // ╚══════════════════════════════════════════════════════════╝
         let _autoScanTimer    = null;   // setInterval handle
         let _autoScanCdTimer  = null;   // 倒計時 setInterval
         let _autoScanSecsLeft = 0;      // 倒計時秒數
@@ -2746,9 +2804,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             }
         });
 
-        // ╔══════════════════════════════════════════════════════════╗
         // ║    待買觀察清單：自動掃描系統                             ║
-        // ╚══════════════════════════════════════════════════════════╝
         let _wlAutoScanTimer    = null;
         let _wlAutoScanCdTimer  = null;
         let _wlAutoScanSecsLeft = 0;
