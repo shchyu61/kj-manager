@@ -213,25 +213,13 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04130344</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04070708</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
     </nav>
 
-    <!-- ⚠️ 常駐警語橫幅：所有頁面可見 -->
-    <div id="warning-banner" style="
-        position:fixed; top:64px; left:0; right:0; z-index:49;
-        background:linear-gradient(90deg,#b91c1c,#c2410c);
-        color:#fff; text-align:center;
-        padding:6px 12px; font-size:11px; font-weight:900;
-        letter-spacing:0.04em; line-height:1.5;
-        box-shadow:0 2px 8px rgba(0,0,0,0.18);
-    ">
-        ⚠️&nbsp;本系統提供之訊號，嚴禁用於當沖或隔日沖等短期交易！投資有風險，訊號僅供中長期投資參考。&nbsp;⚠️
-    </div>
-
-    <main id="main-content" class="hide pt-36 pb-32 px-4 max-w-4xl mx-auto">
+    <main id="main-content" class="hide pt-24 pb-32 px-4 max-w-4xl mx-auto">
         <!-- 待買觀察清單頁面 -->
         <div id="page-watchlist" class="hide space-y-6">
             <div class="flex justify-between items-end px-2">
@@ -271,22 +259,6 @@
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
                         <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
                     </div>
-                    <!-- 虛擬幣提示 -->
-                    <div id="wl-crypto-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
-                        🪙 虛擬幣建議輸入代碼（Yahoo Finance格式）：<br>
-                        <span style="color:#f7931a; font-weight:900;">BTC-USD</span>（比特幣）　
-                        <span style="color:#627eea; font-weight:900;">ETH-USD</span>（以太幣）<br>
-                        <span style="color:#c2a633; font-weight:900;">DOGE-USD</span>（狗狗幣）　
-                        <span style="color:#2775ca; font-weight:900;">USDT-USD</span>（泰達幣）
-                    </div>
-                    <!-- 外匯提示 -->
-                    <div id="wl-fx-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
-                        💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
-                        <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
-                        <span style="color:#1a6a2a; font-weight:900;">JPY=X</span>（美元/日圓）<br>
-                        <span style="color:#1a6a2a; font-weight:900;">CHFUSD=X</span>（美元/瑞郎）　
-                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）
-                    </div>
                     <!-- 待買觀察：匯出/匯入備份 -->
                     <div class="flex gap-2">
                         <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-xs font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
@@ -300,43 +272,6 @@
                         <i data-lucide="search" class="w-4 h-4"></i>
                         <span id="watchlist-scan-text">全部診斷（掃描買進訊號）</span>
                     </button>
-                    <!-- ✅ GitHub Actions 自動通知提醒卡 -->
-                    <div class="rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
-                        <div class="text-xs font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
-                        <div class="text-[10px] leading-relaxed" style="color:#5a3a00;">
-                            ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
-                            ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
-                            <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
-                        </div>
-                    </div>
-                    <!-- ✅ 待買觀察：自動掃描控制面板（需開著瀏覽器）-->
-                    <div class="rounded-2xl p-4 space-y-3" style="background:#f0f8ff; border:1px solid #90c0f0;">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <div class="text-sm font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
-                                <div class="text-[10px]" style="color:#4a6a9a;">定時掃描觀察清單，符合條件自動發 Gmail</div>
-                            </div>
-                            <button id="btn-wl-auto-scan" onclick="toggleWlAutoScan()"
-                                role="switch" aria-checked="false"
-                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
-                                style="min-width:3.5rem;">
-                                <span id="wl-auto-scan-knob" class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style="transform:translateX(0px);"></span>
-                                <span id="wl-auto-scan-label" class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
-                            </button>
-                        </div>
-                        <div id="wl-auto-scan-settings" style="opacity:0.4;pointer-events:none;" class="flex items-center gap-3">
-                            <span class="text-xs font-black" style="color:#1a3a6a;">間隔</span>
-                            <select id="wl-auto-scan-interval" class="text-xs font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
-                                <option value="5">5 分鐘</option>
-                                <option value="10">10 分鐘</option>
-                                <option value="15">15 分鐘</option>
-                                <option value="30">30 分鐘</option>
-                                <option value="60">60 分鐘</option>
-                            </select>
-                            <span class="text-xs" style="color:#4a6a9a;">下次：<span id="wl-auto-scan-countdown" class="font-black">--:--</span></span>
-                        </div>
-                        <div id="wl-auto-scan-status" class="text-[10px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
-                    </div>
                 </div>
                 <!-- 分類Tab -->
                 <div id="wl-cat-tabs" class="flex gap-2 mb-3 overflow-x-auto pb-1">
@@ -427,14 +362,14 @@
                         <span class="text-sm font-black text-slate-800">掃描頻率：自動同步全球市場</span>
                         <span class="text-[10px] font-bold text-slate-400">
                             目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span>
-                            &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-blue-600">長期投資</span>
+                            &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-blue-600">週K</span>
                         </span>
                     </div>
                     <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                     <!-- 週K/日K 切換開關：所有帳號可見 -->
                     <div id="scan-mode-wrap" class="flex flex-col items-center gap-1.5">
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-slate-500">長期投資</span>
+                            <span class="text-[10px] font-black text-slate-500">週K</span>
                             <button id="btn-scan-weekly" onclick="toggleScanMode('weekly')"
                                 role="switch" aria-checked="true"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
@@ -448,7 +383,7 @@
                             </button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-slate-500">中期投資</span>
+                            <span class="text-[10px] font-black text-slate-500">日K</span>
                             <button id="btn-scan-daily" onclick="toggleScanMode('daily')"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -527,44 +462,6 @@
                     </div>
                     <div id="scan-result-list" class="hide space-y-3"></div>
                 </div>
-                <!-- ✅ GitHub Actions 自動通知提醒卡 -->
-                <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
-                    <div class="text-xs font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
-                    <div class="text-[10px] leading-relaxed" style="color:#5a3a00;">
-                        ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
-                        ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
-                        <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
-                    </div>
-                </div>
-                <!-- ✅ 自動掃描控制面板（需開著瀏覽器）-->
-                <div class="mt-3 rounded-2xl p-4 space-y-3" style="background:#f0f8ff; border:1px solid #90c0f0;">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
-                            <div class="text-[10px]" style="color:#4a6a9a;">開著網頁時自動定時掃描並發通知</div>
-                        </div>
-                        <button id="btn-auto-scan" onclick="toggleAutoScan()"
-                            role="switch" aria-checked="false"
-                            class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
-                            style="min-width:3.5rem;">
-                            <span id="auto-scan-knob" class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style="transform:translateX(0px);"></span>
-                            <span id="auto-scan-label" class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
-                        </button>
-                    </div>
-                    <!-- 間隔設定（OFF時灰化）-->
-                    <div id="auto-scan-settings" style="opacity:0.4;pointer-events:none;" class="flex items-center gap-3">
-                        <span class="text-xs font-black" style="color:#1a3a6a;">間隔</span>
-                        <select id="auto-scan-interval" class="text-xs font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
-                            <option value="5">5 分鐘</option>
-                            <option value="10">10 分鐘</option>
-                            <option value="15">15 分鐘</option>
-                            <option value="30">30 分鐘</option>
-                            <option value="60">60 分鐘</option>
-                        </select>
-                        <span class="text-xs" style="color:#4a6a9a;">下次掃描：<span id="auto-scan-countdown" class="font-black">--:--</span></span>
-                    </div>
-                    <div id="auto-scan-status" class="text-[10px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
-                </div>
             </div>
         </div>
 
@@ -607,23 +504,6 @@
                         <p class="text-[10px] font-medium" style="color:#4a7030;">當美股、虛擬幣、台股轉折時自動發信</p>
                     </div>
                     <div class="w-12 h-6 bg-blue-600 rounded-full flex items-center px-1"><div class="w-4 h-4 bg-white rounded-full ml-auto"></div></div>
-                </div>
-                <!-- 登入記錄（僅管理員可見）-->
-                <div id="login-log-section" class="hide rounded-2xl p-4 space-y-3" style="background:#f0e8ff; border:1px solid #c4a0e8;">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="text-sm font-black" style="color:#3a1060;">🔐 登入紀錄（最近200筆）</div>
-                        <button onclick="clearLoginLog()" class="text-[10px] font-black px-2 py-1 rounded-lg" style="background:#e8a0a0; color:#6a0000;">🗑 清除紀錄</button>
-                    </div>
-                    <!-- 篩選按鈕 -->
-                    <div class="flex gap-2 flex-wrap">
-                        <button onclick="refreshLoginLog('all')" id="log-btn-all" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#3a1060;color:#fff;border-color:#3a1060;">全部</button>
-                        <button onclick="refreshLoginLog('success')" id="log-btn-success" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#1a5a30;border-color:#6cd47e;">✅ 成功</button>
-                        <button onclick="refreshLoginLog('fail')" id="log-btn-fail" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#8a2020;border-color:#e88888;">❌ 失敗/封鎖</button>
-                        <button onclick="refreshLoginLog('blocked')" id="log-btn-blocked" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#6a4000;border-color:#e8a020;">🚫 黑名單</button>
-                    </div>
-                    <div id="login-log-list" class="space-y-2 text-xs" style="max-height:400px;overflow-y:auto;">
-                        <div style="color:#6a4080;">載入中...</div>
-                    </div>
                 </div>
                 <div class="text-center">
                     <p class="text-[10px] font-black uppercase tracking-widest" style="color:#c4a878;">Authorized by AI Security System</p>
@@ -677,11 +557,6 @@
             "70.2.7wendy@yahoo.com.tw", "dcyu0905@gmail.com",
             "dcyu09056@gmail.com", "dzyu1115@gmail.com"
         ];
-        // 格式："信箱",（可填多個，用逗號分隔）
-        // 被封鎖的信箱即使知道密碼也無法登入
-        const BLOCKED_EMAILS = [
-            // "ex_tenant@gmail.com",  // 範例：搬離房客的信箱
-        ];
 
         const stockNameMap = {
             // 台股
@@ -710,6 +585,7 @@
             "BTC": "比特幣", "ETH": "以太幣", "SOL": "Solana",
         };
 
+        // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
         const fetchStockName = async (code) => {
             if (stockNameMap[code]) return; // 已有名稱，跳過
             try {
@@ -739,11 +615,16 @@
         // 【１．設定區】← 常改的內容都在這裡
         // ============================================================
 
+        // ── 【１-1】K線週期切換 ──────────────────────────────────────
         // 切換此處的interval和range，analyzeStock自動使用對應K棒根數
         //
+        //   週K  → interval='1wk', range='2y',  _p1=3
+        //   日K  → interval='1d',  range='1y',  _p1=_p1d（15根）
         //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
-        eval(atob('bGV0IFNDQU5fSU5URVJWQUw9JzF3ayc7bGV0IFNDQU5fUkFOR0U9JzJ5Jzs='));
+        let SCAN_INTERVAL = '1wk';  // ✅ let：由週K/日K開關動態切換
+        let SCAN_RANGE    = '2y';   // 週K建議'2y'，日K建議'1y'
 
+        // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
         // ============================================================
         //
         // ============================================================
@@ -838,37 +719,8 @@
             }
         };
 
-
-        const _notifyBlacklist = (email, method) => {
-            const now = new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'});
-            try {
-                emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-                    to_email: 'shchyu61@gmail.com',
-                    otp: `🚫【黑名單警示 ${now}】\n已封鎖帳號嘗試登入「科蓁股票篩選系統」！\n帳號：${email}\n方式：${method}\n請確認是否需要進一步處理。`
-                });
-            } catch(e) {}
-        };
-
-        const _writeLoginLog = async (email, success, reason='', method='') => {
-            try {
-                await initFirebaseAuth();
-                const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
-                const _existing = await getDoc(_logRef);
-                const _logs = (_existing.exists() ? _existing.data().logs : []) || [];
-                _logs.unshift({
-                    email, success, reason, method,
-                    time: new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'}),
-                    ts: Date.now()
-                });
-                // 只保留最近100筆
-                await setDoc(_logRef, { logs: _logs.slice(0,200) }, { merge: true });
-            } catch(e) { /* 不影響登入流程 */ }
-        };
-
-        const completeLogin = async (email, method='OTP') => {
+        const completeLogin = async (email) => {
             currentUserEmail = email;
-            // 自動登入記錄為「自動登入」，手動登入記錄實際方式（不再假裝是OTP）
-            _writeLoginLog(email, true, '', method === '自動登入' ? '自動登入（沿用上次）' : method);
             // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
             localStorage.setItem('kj_email', email);
             await loadFromCloud(email);
@@ -878,12 +730,6 @@
             }, 500);
             // ✅ 登入後背景預載全額交割清單
             fetchCashDeliveryStocks().catch(() => {});
-            // 管理員專屬：顯示登入記錄
-            const _logSec = document.getElementById('login-log-section');
-            if (_logSec && currentUserEmail === 'shchyu61@gmail.com') {
-                _logSec.classList.remove('hide');
-                refreshLoginLog();
-            }
             // ✅ 期貨5分K按鈕：只對 shchyu61@gmail.com 顯示，並查詢 GitHub Actions 狀態
             const _futWrap = document.getElementById('futures-5mk-wrap');
             if (_futWrap && currentUserEmail === 'shchyu61@gmail.com') {
@@ -908,7 +754,9 @@
             document.getElementById('btn-logout').classList.remove('hide');
             document.getElementById('settings-email').innerText = email;
             if (countdownTimer) clearInterval(countdownTimer);
+            // ✅ 登入後讀取個人掃描模式設定（週K/日K）
             _loadScanModePref(email).catch(()=>{});
+            // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
             if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
         };
 
@@ -933,13 +781,6 @@
             const keyInput = document.getElementById('access-key-input').value.trim();
             const expected = generateDailyKey(email);
 
-            if (BLOCKED_EMAILS.includes(email.toLowerCase())) {
-                showError('此信箱已被停用，請聯絡管理員。');
-                _writeLoginLog(email, false, '黑名單封鎖');
-                // 即時通知管理員
-                _notifyBlacklist(email, '每日密碼');
-                return;
-            }
             // ✅ 首次登入強制OTP驗證（未在Firebase記錄emailVerified的信箱不可用密碼登入）
             const isVerified = await checkEmailVerified(email);
             if (!isVerified) {
@@ -962,7 +803,7 @@
             const btn = document.getElementById('btn-verify-key');
             btn.disabled = true;
             try {
-                await completeLogin(email, '每日密碼');
+                await completeLogin(email);
             } catch (e) {
                 btn.disabled = false;
                 window.showAlert('登入失敗：' + e.message);
@@ -973,14 +814,6 @@
         document.getElementById('btn-send-otp').addEventListener('click', async () => {
             const email = getEmailInput();
             if (!email || !email.includes('@')) { showError('請輸入有效信箱。'); return; }
-
-            // ── 黑名單檢查 ──
-            if (BLOCKED_EMAILS.includes(email.toLowerCase())) {
-                showError('此信箱已被停用，請聯絡管理員。');
-                _writeLoginLog(email, false, '黑名單封鎖');
-                _notifyBlacklist(email, 'OTP');
-                return;
-            }
 
             // 🔒 1小時內最多3次OTP（防止額度耗盡）
             const _otpKey = `otp_count_${email}`;
@@ -1049,7 +882,7 @@
                 await initFirebaseAuth();
                 const verifyPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
                 await setDoc(verifyPath, { emailVerified: true }, { merge: true });
-                await completeLogin(email, 'OTP一次性密碼');
+                await completeLogin(email);
             } catch (e) {
                 btn.disabled = false;
                 window.showAlert('登入失敗：' + e.message);
@@ -1150,6 +983,7 @@
             });
         };
 
+        // ── stockNameMap 補充台股ETF ────────────────────────────
         stockNameMap["00713"] = "元大台灣高息低波";
         stockNameMap["00878"] = "國泰永續高股息";
         stockNameMap["00919"] = "群益台灣精選高息";
@@ -1165,6 +999,7 @@
         stockNameMap["IAU"]   = "iShares黃金信託ETF";
         stockNameMap["SI=F"]  = "白銀期貨";
 
+        // ── 技術指標計算工具函數 ──────────────────────────────────
         const calcRSI = (closes, period = 14) => {
             if (closes.length < period + 1) return null;
             let gains = 0, losses = 0;
@@ -1208,126 +1043,9 @@
             return { now: macd_now, prev: macd_prev };
         };
 
-        const _rollingMean = (arr, n) => arr.map((_, i) => {
-            if (i < n - 1) return null;
-            let s = 0; for (let j = i-n+1; j <= i; j++) s += arr[j]; return s / n;
-        });
-        const _rollingStd = (arr, n) => arr.map((_, i) => {
-            if (i < n - 1) return null;
-            const m = arr.slice(i-n+1, i+1).reduce((a,b)=>a+b,0)/n;
-            let v = 0; for (let j = i-n+1; j <= i; j++) v += (arr[j]-m)**2;
-            return Math.sqrt(v/(n-1));
-        });
-        const _emaArr = (arr, n) => {
-            const k = 2/(n+1), r = new Array(arr.length).fill(null);
-            let si = 0; while (si < arr.length && arr[si] === null) si++;
-            if (si >= arr.length) return r;
-            r[si] = arr[si];
-            for (let i = si+1; i < arr.length; i++)
-                r[i] = (arr[i]!==null && r[i-1]!==null) ? arr[i]*k+r[i-1]*(1-k) : null;
-            return r;
-        };
-        const _rsiArr = (arr, n=14) => {
-            const r = new Array(arr.length).fill(null);
-            if (arr.length < n+1) return r;
-            let g=0, ls=0;
-            for (let i=1; i<=n; i++) {
-                const d = arr[i]-arr[i-1];
-                if (d>=0) g+=d; else ls-=d;
-            }
-            let ag=g/n, al=ls/n;
-            r[n] = al===0 ? 100 : 100-100/(1+ag/al);
-            for (let i=n+1; i<arr.length; i++) {
-                const d = arr[i]-arr[i-1];
-                ag=(ag*(n-1)+Math.max(d,0))/n; al=(al*(n-1)+Math.max(-d,0))/n;
-                r[i] = al===0 ? 100 : 100-100/(1+ag/al);
-            }
-            return r;
-        };
-        const _macdArr = (arr, f=12, sl=26, sg=9) => {
-            const kf=2/(f+1), ks=2/(sl+1), kg=2/(sg+1);
-            const ml=new Array(arr.length).fill(null);
-            const sgl=new Array(arr.length).fill(null);
-            const hl=new Array(arr.length).fill(null);
-            let ef=arr[0], es=arr[0];
-            for (let i=1; i<arr.length; i++) {
-                ef=arr[i]*kf+ef*(1-kf); es=arr[i]*ks+es*(1-ks);
-                if (i>=sl-1) ml[i]=ef-es;
-            }
-            const fi=ml.findIndex(v=>v!==null);
-            if (fi>=0) {
-                sgl[fi]=ml[fi];
-                for (let i=fi+1; i<arr.length; i++)
-                    if (ml[i]!==null&&sgl[i-1]!==null) sgl[i]=ml[i]*kg+sgl[i-1]*(1-kg);
-                for (let i=fi; i<arr.length; i++)
-                    if (ml[i]!==null&&sgl[i]!==null) hl[i]=ml[i]-sgl[i];
-            }
-            return { ml, sgl, hl };
-        };
-        const _g = (arr, sh=0) => { const i=arr.length-1-sh; return i>=0?arr[i]:null; };
-        const calcElInd = (op, hi, lo, cl, vo) => {
-            if (cl.length < 30) return null;
-            const mc2=_rollingMean(cl,2), mc20=_rollingMean(cl,20);
-            const mo2=_rollingMean(op,2), mh2=_rollingMean(hi,2);
-            const ml2=_rollingMean(lo,2), mv5=_rollingMean(vo,5);
-            const s20=_rollingStd(cl,20), s2=_rollingStd(cl,2);
-            const bt20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m+2*s20[i]:null);
-            const bb20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m-2*s20[i]:null);
-            const bt2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m+2*s2[i]:null);
-            const bb2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m-2*s2[i]:null);
-            const rsi=_rsiArr(cl,14), ersi=_emaArr(rsi,9);
-            const {ml:macd,sgl:msig,hl:mosc}=_macdArr(cl,12,26,9);
-            const emacd=_emaArr(macd,9);
-            const {ml:macd_o}=_macdArr(op,12,26,9);
-            return { op,hi,lo,cl,vo, mc2,mc20,mo2,mh2,ml2,mv5,
-                     bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o };
-        };
-        const checkElBuy = (d) => {
-            if (!d) return false;
-            const {op:o,hi:h,lo:l,cl:c,vo:v,mc2,mc20,mo2,mh2,ml2,mv5,
-                   bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o}=d;
-            const g=_g;
-            if (g(c,3)===null||g(bb20,3)===null||g(rsi,3)===null) return false;
-            if (!(g(rsi,1)<78&&g(c)>g(ml2)&&g(h)>g(o)&&g(c)>g(l))) return false;
-            const C01=g(h,1)>g(bb20,1)&&g(bt2,1)<g(bt20,1)&&g(bb2)>g(bb20);
-            const C02=g(mosc)>g(mosc,1);
-            const C03=(g(mc20)>g(mc20,1)&&g(bt20)>g(bt20,1)&&g(rsi)>g(rsi,1))||
-                (g(mc20,1)<g(mc20,2)&&(g(bb20,1)<g(bb20,2)||(g(mo2,1)<g(mo2,2)&&g(o)>g(mo2)))&&
-                g(rsi,2)<g(rsi,3)&&g(rsi,1)>g(rsi,2)&&g(rsi)>g(rsi,1)&&g(ersi,1)>g(ersi,2));
-            const C04=(g(c,1)>g(mc2,1)||g(c,1)>g(mc20,1))&&g(o)<g(mc20,1);
-            const gA=C01&&C02&&C03&&C04;
-            const C11=g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2);
-            const C12=g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)<g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(c)>g(mo2);
-            const C21=g(mc20,1)<g(mc20,2)&&g(bt20)<g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(bb20)<g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1);
-            const C22=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(ersi,1)>g(rsi,1)&&g(emacd)>g(macd)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(ml2);
-            const C23=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)<g(msig,1)&&g(macd)>g(macd,1);
-            const C24=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(mo2)<g(bb20)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2)<g(mo2,1)&&g(o,1)<g(mo2,1)&&g(o)>g(mo2);
-            const C25=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bt20)>g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(c,1)<g(bb20,1)&&g(o)<g(bb20,1)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(c)>g(mo2);
-            const C26=g(mc20,1)<g(mc20,2)&&g(h,1)<g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(ersi,1)&&g(ersi,1)>g(ersi,2)&&g(macd,1)>g(macd,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o);
-            const C27=g(mc20,1)<g(mc20,2)&&g(o,1)<g(bb20,1)&&g(macd_o)<0&&g(rsi,1)<g(rsi,2)&&g(ersi,2)<35&&g(mo2,1)<g(bb20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(l,1);
-            const C28=g(mc20,1)<g(mc20,2)&&g(o,1)<g(mc20,1)&&g(c,1)>g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(ersi,1)>g(ersi,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(l);
-            const C41=g(mc20,1)>g(mc20,2)&&g(bb20)>g(bb20,1)&&g(bt20)<g(bt20,1)&&g(ersi,1)>g(rsi,1)&&g(emacd,1)>g(macd,1)&&g(o,1)<g(mc20,1)&&g(h,1)>g(mc20,1)&&g(mo2,1)<g(mc20,1)&&g(mo2)<g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2)&&g(l)>=g(l,1);
-            const C42=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(o)<g(bb20,1)&&g(o,1)>g(mc20,1)&&g(mo2,1)>g(l,2)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2);
-            const C43=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(o);
-            const C44=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(emacd,2)&&g(o)<g(mc20,1)&&g(mo2)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(h)<g(mo2)&&g(ml2,1)>=g(ml2,2)&&g(l)<g(ml2)&&g(c)>g(ml2);
-            const C45=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(macd,1)&&g(ersi,1)>g(rsi,1)&&g(o,1)<g(mo2,1)&&g(rsi,1)>g(rsi,2)&&g(o)>g(mo2)&&g(c,1)>g(mo2,1)&&g(mo2)<g(mo2,1)&&g(ml2,1)<g(bb20,1)&&g(c)>g(o);
-            const C46=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(h,1)>g(bt20,1)&&g(c)>g(bt20)&&g(c,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(o)<g(mo2);
-            const C47=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(macd)>g(macd,1)&&g(mo2,1)>g(mc20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2,1);
-            const C48=g(mc20,1)>g(mc20,2)&&g(bt20,2)<g(bt20,3)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi)>g(rsi,1)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)>g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o,1);
-            const C49=g(mc20,1)>g(mc20,2)&&g(h,2)<g(bt20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(ersi)>g(ersi,1)&&g(macd,1)>g(macd,2)&&g(o,1)>g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2);
-            const C50=g(mc20,2)>g(mc20,3)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(rsi)<g(ersi)&&g(emacd,1)<g(macd,1)&&g(bt20,2)>g(bt20,3)&&g(bb20,2)>g(bb20,3)&&g(mo2,1)<g(mo2,2)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2);
-            const C61=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,2)<g(o,2)&&g(c,1)>g(o,1)&&g(bb20,1)>g(bb20,2)&&g(bt2,1)>g(bt2,2)&&g(bb2,1)<g(bb2,2)&&g(mo2,1)<g(mc20,2)&&g(mo2,1)<g(mo2,2)&&g(mv5)>g(mv5,1)&&g(v)>g(mv5)&&g(h)>g(o);
-            const C62=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,1)<g(o,1)&&g(o,1)>g(mc20,1)&&g(bb20,1)<g(bb20,2)&&g(mh2,1)>g(mh2,2)&&g(ml2,1)>g(ml2,2)&&g(c,1)>=g(mc2,1)&&g(l)<g(o)&&g(c)>g(o);
-            const C63=g(mc20)>g(mc20,1)&&g(bb20)>g(bb20,1)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(ersi)>g(ersi,1)&&g(c)>g(mo2,1);
-            const C66=g(c,1)>g(o,1)&&g(mc20,2)>g(mc20,3)&&g(mc20,1)>g(mc20,2)&&g(l,1)>g(mc20,1)&&g(bt20,1)>g(bt20,2)&&g(bt2,1)>g(bt20,1)&&g(bb20)<g(bb20,1)&&g(o,1)<g(bt20,1)&&g(o)<g(bt20)&&g(macd)>g(msig)&&g(o,1)<g(mo2,1)&&g(c,1)>g(mo2,1)&&g(c,1)>=g(ml2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(o);
-            const C71=g(c,1)>g(o,1)&&g(c,2)<g(o,2)&&g(bb2,2)>g(bb20,2)&&g(ml2,2)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(o,1)<g(mc20,1)&&
-                ((g(mo2)>g(mo2,1)&&g(h,1)<g(mh2,1)&&g(c)>g(mc2))||(g(mo2)<g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2)))&&
-                g(o)>g(mo2)&&g(ml2)>=g(ml2,1)&&g(c,1)>=g(mc2,1);
-            const gB=C11||C12||C21||C22||C23||C24||C25||C26||C27||C28||C41||C42||C43||C44||C45||C46||C47||C48||C49||C50||C61||C62||C63||C66||C71;
-            return gA||gB;
-        };
+        // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
 
-
+        // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
         const makeDiagCard = (code, result, bgDark, isHolding = false) => {
             const name     = stockNameMap[code] || '未定義資產';
             const hasBuy   = result.buy_signal;
@@ -1387,6 +1105,7 @@
             </div>`;
         };
 
+        // ── 3分鐘快取（建議1：避免重複抓取）────────────────────
         const diagCache = new Map(); // key=code, value={result, ts}
         const CACHE_TTL = 3 * 60 * 1000; // 3分鐘
 
@@ -1398,6 +1117,7 @@
         };
         const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
 
+        // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         // ✅ 自己的 Cloudflare Worker（最穩定，不會被Yahoo封鎖）
         // ✅ Cloudflare Worker（唯一資料來源，帶Cookie穿透Yahoo防護）
         window._WORKER_URL = 'https://yahoo-proxy.shchyu61.workers.dev';
@@ -1423,6 +1143,7 @@
             throw new Error('all sources failed');
         };
 
+        // ── 並行工作池（建議3：最多3個同時執行）────────────────
         // ── 需求5：動態工作池 + 優先隊列（持股優先，做完立刻補下一支）──
         const runWithPool = async (tasks, poolSize = 3, onDone, priorityFn = null) => {
             // 若有優先函數，持股排前面（參考：5個同事做完自己工作去幫忙）
@@ -1455,6 +1176,7 @@
             });
         };
 
+        // ── 全額交割股清單（來源：TWSE + TPEX OpenAPI）──────────
         //
         let _cashDeliverySet  = null;   // null=尚未載入
         let _cashDeliveryDate = '';     // 載入日期（日期不同就重新抓）
@@ -1498,6 +1220,7 @@
             return codes;
         };
 
+        // ── 主分析函數（含快取+多proxy）────────────────────────
         const analyzeStock = async (code) => {
             // 1. 有快取直接回傳
             const cached = getCached(code);
@@ -1526,6 +1249,7 @@
                 // Token使用全域 _FM_TOKEN
                 const _today = new Date().toISOString().slice(0,10);
                 const _start = new Date(Date.now() - 150*24*60*60*1000).toISOString().slice(0,10); // 800天前
+                // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
                 const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${window._FM_TOKEN}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
                 const _fmData = await _fmResp.json();
@@ -1583,6 +1307,7 @@
             console.log(`[${code}] 抓到資料：${closes.length}筆，最新：${closes[closes.length-1]}`);
             if (closes.length < 26) throw new Error('insufficient data');
 
+            // ── 【第4階段】官方公告下市日期偵測（最明確早期警訊）────
             const _meta = yResult?.meta || yResult?.chart?.result?.[0]?.meta || {};
             if (_meta.delistingDate) {
                 try {
@@ -1599,6 +1324,7 @@
                     setCache(code, _dr); return _dr;
                 } catch { /* 解析失敗不中斷 */ }
             }
+            // ── 【第5階段】查無即時報價（停牌或已下市）────────────────
             const _lastPx = _meta.regularMarketPrice || _meta.postMarketPrice || 0;
             if (_lastPx === 0 && closes.filter(v => v > 0).length === 0) {
                 const _dr5 = { price:'0.00', rsi:0, rsi_trend:'falling',
@@ -1609,16 +1335,14 @@
             }
 
             //
-            const _p1 = 3, _p1d = 3, _p1m = 54;  // _p1d改為3根（與週K統一）
+            const _p1 = 3, _p1d = 15, _p1m = 54;
             const _p1_auto = SCAN_INTERVAL === '1d' ? _p1d : SCAN_INTERVAL === '5m' ? _p1m : _p1;
             const _p2 = 35, _p3 = 1.03, _p4 = 1.00;
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
-            const lows   = (yResult.indicators.quote[0].low    ||[]).filter(v => v != null && !isNaN(v));
-            const highs  = (yResult.indicators.quote[0].high   ||[]).filter(v => v != null && !isNaN(v));
-            const opens  = (yResult.indicators.quote[0].open   ||[]).filter(v => v != null && !isNaN(v));
-            const vols   = (yResult.indicators.quote[0].volume  ||[]).map(v => v!=null&&!isNaN(v)?v:0);
+            const lows   = (yResult.indicators.quote[0].low  ||[]).filter(v => v != null && !isNaN(v));
+            const highs  = (yResult.indicators.quote[0].high ||[]).filter(v => v != null && !isNaN(v));
             const rsiNow = calcRSI(closes);
             const rsiPrv = calcRSI(closes.slice(0, -1));
             const macd   = calcMACDHist(closes);
@@ -1667,15 +1391,17 @@
             let buy_signal = false;
             let conditions = [];
 
-            const _el2nd = checkElBuy(calcElInd(opens, highs, lows, closes, vols));
-
             if (SCAN_INTERVAL === '1wk') {
-                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
+                // [W]
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
 
             } else if (SCAN_INTERVAL === '1d') {
-                const _1st_pass = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
+                // [D]
+                // [D1]
+                const _1st_pass = (_r1 || _r2) && rsiNow > _p2;
 
-                let _3rd_pass = false;
+                // [D2]
+                let _2nd_pass = false;
                 try {
                     const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
                     const _5mData = await fetchWithFallback(
@@ -1684,29 +1410,20 @@
                         if (/^\d{4,6}$/.test(code)) return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=5m&range=5d`);
                         throw new Error('no 5m data');
                     });
-                    const _5mC  = _5mData.indicators.quote[0].close.filter(v=>v!=null);
-                    const _5mLo = (_5mData.indicators.quote[0].low ||[]).filter(v=>v!=null&&!isNaN(v));
-                    const _5mHi = (_5mData.indicators.quote[0].high||[]).filter(v=>v!=null&&!isNaN(v));
-                    if (_5mC.length >= 5) {
+                    const _5mC = _5mData.indicators.quote[0].close.filter(v=>v!=null);
+                    if (_5mC.length >= 3) {
                         const _5mRsiNow = calcRSI(_5mC);
                         const _5mRsiPrv = calcRSI(_5mC.slice(0,-1));
                         const _5mMacd   = calcMACDHist(_5mC);
-                        const _5mRsiOk  = _5mRsiNow > _5mRsiPrv && _5mRsiNow > _p2;
-                        const _5mMacdOk = _5mMacd && _5mMacd.now > _5mMacd.prev;
-                        const _5mn = 3;
-                        const _5mLn = _5mLo.slice(-_5mn);
-                        const _5mHn = _5mHi.slice(-_5mn);
-                        const _5mB  = calcBoll(_5mC);
-                        const _5mA  = _5mB && _5mLn.some(l => l <= _5mB.lower * _p3) && _5mRsiOk && _5mMacdOk;
-                        const _5mB2 = _5mB && _5mLn.every(l => l < _5mB.mid) && _5mHn.every(h => h < _5mB.upper) && _5mMacdOk;
-                        _3rd_pass = (_5mA || _5mB2);
+                        _2nd_pass = _5mRsiNow > _5mRsiPrv && _5mMacd && _5mMacd.now > _5mMacd.prev;
                     }
-                } catch(e) { _3rd_pass = false; }
+                } catch(e) { _2nd_pass = false; }
 
-                buy_signal = _1st_pass && _3rd_pass;
+                buy_signal = _1st_pass && _2nd_pass;
 
             } else {
-                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
+                // .
+                buy_signal = (_r1 || _r2) && rsiNow > _p2;
             }
 
             if (buy_signal) {
@@ -1728,6 +1445,8 @@
             return result;
         };
 
+        // ── 待買觀察清單：全部診斷（工作池版）──────────────────
+        // ── 系統B：買進訊號自動發Gmail通知 ──────────────────────
         const notifiedToday = new Set(); // 防止同一標的同一天重複發信
 
         const sendBuyNotify = async (signals) => {
@@ -1741,8 +1460,7 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                const modeTag = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
-                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}\n投資模式：${modeTag}\n⚠️ 本訊號嚴禁用於當沖或隔日沖`;
+                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -1760,6 +1478,7 @@
             }
         };
 
+        // ── 賣出訊號發信 ──────────────────────────────────────────
         const notifiedSellToday = new Set(); // 防止同一標的同一天重複發賣出信
 
         const sendSellNotify = async (signals) => {
@@ -1771,8 +1490,7 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                const modeTag2 = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
-                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利\n投資模式：${modeTag2}\n⚠️ 本訊號嚴禁用於當沖或隔日沖`;
+                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -1789,6 +1507,7 @@
             }
         };
 
+        // ── GitHub Actions 期貨Job狀態查詢 ──────────────────────────
         // 呼叫 GitHub API 取得最近一次 futures-scan Job 狀態
         // ── 期貨Job狀態查詢（方案B：從 Firebase 讀取，無需 Token 在前端）──
         // Python 每次期貨掃描結束後寫入 Firebase，網頁只讀不寫，F12 看不到任何敏感資訊
@@ -1825,6 +1544,8 @@
             }
         }
 
+        // ── 週K/日K 切換開關 ────────────────────────────────────
+        // 目前掃描模式（'weekly'=週K / 'daily'=日K），預設週K
         let _currentScanMode = 'weekly';
 
         // ✅ 更新開關UI
@@ -1864,8 +1585,8 @@
             SCAN_RANGE    = mode === 'daily' ? '1y' : '2y';
             _updateScanModeUI(mode);
             const _lbl2 = document.getElementById('scan-mode-label');
-            if (_lbl2) _lbl2.textContent = mode === 'daily' ? '中期投資' : '長期投資';
-            window.showAlert(mode === 'daily' ? '📊 已切換中期投資模式　請按「啟動AI診斷」' : '📊 已切換長期投資模式　請按「啟動AI診斷」');
+            if (_lbl2) _lbl2.textContent = mode === 'daily' ? '日K' : '週K';
+            window.showAlert(mode === 'daily' ? '📊 已切換日K模式（每股3次API，速度較慢）　請按「啟動AI診斷」' : '📊 已切換週K模式　請按「啟動AI診斷」');
             // ✅ 儲存設定到 Firebase（綁定個人帳號）
             if (currentUserEmail && window.db) {
                 try {
@@ -1876,7 +1597,7 @@
             }
             // ✅ 清除診斷快取（不自動重新掃描，由使用者手動按「啟動AI診斷」）
             if (typeof diagCache !== 'undefined') diagCache.clear();
-            window.showAlert((mode === 'daily' ? '📊 已切換中期投資模式' : '📊 已切換長期投資模式') + '　請按「啟動AI診斷」開始掃描');
+            window.showAlert((mode === 'daily' ? '📊 已切換日K模式' : '📊 已切換週K模式') + '　請按「啟動AI診斷」開始掃描');
         };
 
         // ✅ 登入後從 Firebase 讀取個人掃描模式設定
@@ -1893,11 +1614,12 @@
                     _updateScanModeUI(saved);
                     // 更新模式標籤
                     const _lbl = document.getElementById('scan-mode-label');
-                    if (_lbl) _lbl.textContent = saved === 'daily' ? '中期投資' : '長期投資';
+                    if (_lbl) _lbl.textContent = saved === 'daily' ? '日K' : '週K';
                 }
             } catch(e) {}
         };
 
+        // ── 方案B：手動持倉開關 ──────────────────────────────────
         let _futuresHoldingManual = false;  // 手動持倉開關
 
         window.toggleFuturesHolding = async () => {
@@ -1919,6 +1641,7 @@
                 btn.setAttribute('aria-checked','false');
                 window.showAlert('⬜ 已清除持倉標記');
             }
+            // ✅ 方案A：同步寫入Firebase持倉狀態
             if (currentUserEmail && window.db) {
                 try {
                     await initFirebaseAuth();
@@ -1929,6 +1652,7 @@
             _updateNightModeHint();
         };
 
+        // ✅ 方案A：從Firebase讀取持倉狀態
         const _loadFuturesHolding = async () => {
             try {
                 await initFirebaseAuth();
@@ -1960,6 +1684,7 @@
             hint.style.display = (isNight && _futuresHoldingManual) ? 'block' : 'none';
         };
 
+        // ✅ 深夜01:00~05:00時，判斷是否有持倉（方案A Firebase OR 方案B手動）
         const _hasFuturesHolding = async () => {
             // 方案B：手動開關直接判斷
             if (_futuresHoldingManual) return true;
@@ -1973,6 +1698,7 @@
             return false;
         };
 
+        // ── 空倉開關（方案B手動）────────────────────────────────
         let _futuresShortManual = false;
 
         window.toggleFuturesShort = async () => {
@@ -2010,6 +1736,7 @@
             _updateNightModeHint();
         };
 
+        // ── 期貨5分K開關 Toggle ────────────────────────────────
         let _futuresActive = false;  // 開關狀態（false=關，true=開）
 
         window.toggleFutures5mk = () => {
@@ -2060,6 +1787,7 @@
             }
         };
 
+        // ── 期貨5分K診斷（專屬 shchyu61@gmail.com）────────────────
         window.startFutures5mk = async () => {
             if (currentUserEmail !== 'shchyu61@gmail.com') {
                 window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
@@ -2075,6 +1803,7 @@
                 (wd === 2 && (tv < 1*60 || tv >= 5*60)) ||               // 週二（排除凌晨01:00~05:00）
                 (wd === 3 && tv <= 11*60+30)                              // 週三11:30前
             );
+            // ✅ 深夜01:00~05:00：若有持倉（方案A Firebase OR 方案B手動）→ 只掃平倉，不掃買進
             const _isNightHours = (wd === 2 && tv >= 1*60 && tv < 5*60);
             const _nightHolding = _isNightHours ? await _hasFuturesHolding() : false;
 
@@ -2115,6 +1844,7 @@
                         continue;
                     }
 
+                    // ── 第一道：日K 15根位階（K棒等比換算，不用週K）──────
                     let _dkResult = null;
                     try {
                         const _dkUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1y`;
@@ -2127,9 +1857,13 @@
                             const _dLows  = _dkL.slice(-_dn);
                             const _dHighs = _dkH.slice(-_dn);
                             const _dr = calcRSI(_dkC); const _dm = calcMACDHist(_dkC);
+                            // 多方日K條件A：近15根任一低點<=布林下緣 AND RSI↑ AND MACD↑
                             const _dA = _dLows.some((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<=_b.lower*_p3; }) && _dr>calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now>_dm.prev;
+                            // 多方日K條件B：近15根低均<中軌 AND 高均<上軌
                             const _dB = _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l<_b.mid; }) && _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h<_b.upper; });
+                            // 空方日K條件A：近15根任一高點>=boll.upper AND RSI↓ AND MACD↓
                             const _dSA = _dHighs.some((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>=_b.upper*_p4; }) && _dr<calcRSI(_dkC.slice(0,-1)) && _dm&&_dm.now<_dm.prev;
+                            // 空方日K條件B：近15根高均>中軌 AND 低均>下軌
                             const _dSB = _dHighs.every((h,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&h>_b.mid; }) && _dLows.every((l,i)=>{ const _b=calcBoll(_dkC.slice(0,_dkC.length-_dn+i+1)); return _b&&l>_b.lower; });
                             const _isLongOk  = (_dA || _dB) && _dr > _p2;
                             const _isShortOk = (_dSA || _dSB) && _dr < (100 - _p2);
@@ -2141,6 +1875,7 @@
                         continue;
                     }
 
+                    // ── 第三道：5分K 54根條件A/B ─────────────────────
                     // 計算技術指標
                     const boll    = calcBoll(closes);
                     const rsiNow  = calcRSI(closes);
@@ -2155,15 +1890,18 @@
                     const rsifalling  = rsiNow < rsiPrv;
                     const macdFalling = macd.now < macd.prev;
 
+                    // ✅【條件A/B 54根】與週K邏輯一致
                     const _nm = _5MK_LOOKBACK;
                     const _lows_m  = lows.slice(-_nm);
                     const _highs_m = highs.slice(-_nm);
                     const _cls_m   = closes;
+                    // 條件A：近54根任一最低價<=布林下緣 AND RSI↑ AND MACD↑
                     const _5mk_x1 = _lows_m.some((l,i) => {
                         const _b = calcBoll(_cls_m.slice(0, _cls_m.length-_nm+i+1));
                         return _b && l <= _b.lower * _p3;
                     });
                     const _5mk_A = _5mk_x1 && rsiRising && macdRising;
+                    // 條件B：近54根最低均<布林中軌 AND 最高均<boll.upper AND 前N根MACD縮 AND 當根放大
                     const _5mk_x2 = _lows_m.every((l,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l<_b.mid; });
                     const _5mk_x3 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h<_b.upper; });
                     const _5mk_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now<=_m1.now){_ok=false;break;} } return _ok; })() : false;
@@ -2174,8 +1912,11 @@
                     const nearUpper   = price >= boll.upper * _p4;
                     const name = stockNameMap[ticker] || ticker;
 
+                    // ══ 做空gate-3（鏡像多方）══════════════════════════
+                    // 第一道：近N根任一最高>=上軌 AND RSI↓ AND MACD↓
                     const _sh_x1 = _highs_m.some((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>=_b.upper*_p4; });
                     const _5mk_short_A = _sh_x1 && rsiPrv > rsiNow && macd.prev > macd.now;
+                    // 條件B：近N根最高均>布林中軌 AND 最低均>boll.lower AND 前N根MACD放大 AND 當根縮小
                     const _sh_x2 = _highs_m.every((h,i) => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&h>_b.mid; });
                     const _sh_x3 = _lows_m.every((l,i)  => { const _b=calcBoll(_cls_m.slice(0,_cls_m.length-_nm+i+1)); return _b&&l>_b.lower; });
                     const _sh_x4 = closes.length>=_nm+1 ? (() => { let _ok=true; for(let _j=0;_j<_nm-1;_j++){ const _m1=calcMACDHist(closes.slice(0,closes.length-_nm+_j)); const _m2=calcMACDHist(closes.slice(0,closes.length-_nm+_j+1)); if(!_m1||!_m2||_m2.now>=_m1.now){_ok=false;break;} } return _ok; })() : false;
@@ -2183,7 +1924,9 @@
                     const _5mk_short = (_5mk_short_A || _5mk_short_B) && rsiNow < (100 - _p2);
                     const _nightShort = _isNightHours ? _futuresShortManual : false;
 
+                    // ✅ 深夜01~05持倉模式：只掃平倉，跳過買進
                     if (_5mk_buy && nearLower && !_nightHolding) {
+                        // 買進訊號：發Gmail
                         const body = `⭐【期貨5分K買進訊號】⭐
 標的：${ticker} ${name}
 收盤：${price.toFixed(2)}　布林下緣：${boll.lower.toFixed(2)}
@@ -2197,6 +1940,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 signal_body: body,
                             });
                             window.showAlert(`⭐ ${ticker} 期貨5分K買進訊號！Gmail已發送`);
+                            // ✅ 方案A：買進訊號發出 → 自動標記Firebase持倉=true
                             try {
                                 await initFirebaseAuth();
                                 const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
@@ -2221,6 +1965,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 signal_body: body,
                             });
                             window.showAlert(`🔔 ${ticker} 期貨5分K平倉訊號！Gmail已發送`);
+                            // ✅ 方案A：平倉訊號發出 → 自動清除Firebase持倉=false
                             try {
                                 await initFirebaseAuth();
                                 const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
@@ -2235,6 +1980,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else if (_5mk_short && nearUpper && !_nightShort) {
+                        // 做空訊號
                         const body = `🔻【期貨5分K做空訊號】🔻
 標的：${ticker} ${name}
 收盤：${price.toFixed(2)}　boll.upper：${boll.upper.toFixed(2)}
@@ -2260,6 +2006,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else if (_futuresShortManual && _5mk_buy && nearLower) {
+                        // 平空回補訊號（空倉中且觸發多方條件）
                         const body = `🟢【期貨5分K平空回補】🟢
 標的：${ticker} ${name}
 收盤：${price.toFixed(2)}　boll.lower：${boll.lower.toFixed(2)}
@@ -2328,6 +2075,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 }
             });
 
+            // 收集買進訊號
             const wlSignals = [];
             // ✅ 工作池：平日5支並行，週末1支
             await runWithPool(tasks, _poolSize(), (done, total) => {
@@ -2355,6 +2103,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 await runWithPool(retryTasks, 3, null);
             }
 
+            // 掃描完成後整理買進訊號並發信
             watchlist.forEach(s => {
                 const cached = getCached(s.code);
                 if (cached && cached.buy_signal) {
@@ -2373,6 +2122,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             txt.innerText = '全部診斷（掃描買進訊號）';
         };
 
+        // ── 智能診斷：持股＋觀察兩清單（工作池版）─────────────
         window.startManualScan = async () => {
             const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
             const _sortFn = (a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code);
@@ -2423,6 +2173,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 progress.style.width = `${Math.round(done/total*100)}%`;
             }, (t) => t.tag === '持股');
 
+            // 掃描完成後整理買進+賣出訊號並分別發信
             const manualBuySignals  = [];
             const manualSellSignals = [];
             all.forEach(({ code, tag }) => {
@@ -2433,6 +2184,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if (cached.buy_signal) {
                     manualBuySignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: cached.conditions.join('、') });
                 }
+                // 賣出訊號只針對持股
                 if (tag === '持股' && cached.sell_signal) {
                     manualSellSignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: '賣出條件觸發' });
                 }
@@ -2441,9 +2193,12 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             if (manualSellSignals.length > 0) sendSellNotify(manualSellSignals);
         };
 
+        // ── 待買觀察清單：渲染/新增/刪除 ──────────────────────
+        // ── 需求1：分類篩選狀態 ──────────────────────────────────
         let wlCatFilter = 'all';
         let stCatFilter = 'all';
 
+        // ── 需求1：分類Tab切換（待買觀察）────────────────────────
         window.filterWatchlist = (cat) => {
             wlCatFilter = cat;
             document.querySelectorAll('.wl-cat-btn').forEach(btn => {
@@ -2457,6 +2212,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             window.renderWatchlist();
         };
 
+        // ── 需求1：分類Tab切換（持股清單）────────────────────────
         window.filterStocks = (cat) => {
             stCatFilter = cat;
             document.querySelectorAll('.st-cat-btn').forEach(btn => {
@@ -2470,13 +2226,13 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             window.renderStocks();
         };
 
+        // ── 需求2：安聯基金提示（選基金分類時顯示）──────────────
         document.addEventListener('change', (e) => {
             if (e.target.id === 'new-watchlist-cat') {
-                const v = e.target.value;
-                const ids = ['fund-hint','wl-gold-hint','wl-crypto-hint','wl-fx-hint'];
-                const maps = { 'fund':'fund-hint', 'gold':'wl-gold-hint', 'crypto':'wl-crypto-hint', 'fx':'wl-fx-hint' };
-                ids.forEach(id => { const el=document.getElementById(id); if(el) el.classList.add('hide'); });
-                if (maps[v]) { const el=document.getElementById(maps[v]); if(el) el.classList.remove('hide'); }
+                const hint = document.getElementById('fund-hint');
+                if (hint) hint.classList.toggle('hide', e.target.value !== 'fund');
+                const goldHint = document.getElementById('wl-gold-hint');
+                if (goldHint) goldHint.classList.toggle('hide', e.target.value !== 'gold');
             }
             if (e.target.id === 'new-stock-cat') {
                 const hint = document.getElementById('stock-fund-hint');
@@ -2486,6 +2242,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             }
         });
 
+        // ── 需求3：匯出JSON備份 ───────────────────────────────────
         window.exportData = () => {
             const data = { email: currentUserEmail, stocks, watchlist, exportedAt: new Date().toISOString() };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2496,6 +2253,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             window.showAlert('✅ 備份已下載！請妥善保管 JSON 檔案。');
         };
 
+        // ── 需求3：匯入JSON還原 ───────────────────────────────────
         window.importData = async (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -2515,6 +2273,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             event.target.value = '';
         };
 
+        // ── 需求4：Firebase儲存自訂密碼 ──────────────────────────
         window.saveCustomPassword = async () => {
             const pw  = document.getElementById('new-pw-input').value.trim();
             const pw2 = document.getElementById('new-pw-confirm').value.trim();
@@ -2531,6 +2290,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             } catch(e) { msg.style.color='#8a2020'; msg.innerText='儲存失敗：'+e.message; msg.style.opacity='1'; }
         };
 
+        // ── 需求4：登入時優先驗證自訂密碼 ───────────────────────
         const checkCustomPassword = async (email, inputPw) => {
             try {
                 await initFirebaseAuth();
@@ -2622,272 +2382,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             });
         };
 
-        // 登入記錄篩選狀態
-        let _logFilter = 'all';
-        window.refreshLoginLog = async (filter) => {
-            if (filter) {
-                _logFilter = filter;
-                // 更新按鈕樣式
-                ['all','success','fail','blocked'].forEach(f => {
-                    const btn = document.getElementById(`log-btn-${f}`);
-                    if (!btn) return;
-                    const isActive = f === filter;
-                    btn.style.background = isActive ? '#3a1060' : '#f0e8ff';
-                    btn.style.color = isActive ? '#fff' : (f==='success'?'#1a5a30':f==='fail'?'#8a2020':f==='blocked'?'#6a4000':'#3a1060');
-                });
-            }
-            const logList = document.getElementById('login-log-list');
-            if (!logList) return;
-            logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">載入中...</div>';
-            try {
-                await initFirebaseAuth();
-                const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
-                const _snap = await getDoc(_logRef);
-                if (!_snap.exists() || !_snap.data().logs?.length) {
-                    logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">尚無紀錄</div>'; return;
-                }
-                let logs = _snap.data().logs || [];
-                // 篩選
-                if (_logFilter === 'success')  logs = logs.filter(l => l.success);
-                if (_logFilter === 'fail')      logs = logs.filter(l => !l.success);
-                if (_logFilter === 'blocked')   logs = logs.filter(l => l.reason && l.reason.includes('黑名單'));
-                if (!logs.length) {
-                    logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">此類別無紀錄</div>'; return;
-                }
-                logList.innerHTML = logs.map(l => {
-                    const isBlocked = l.reason && l.reason.includes('黑名單');
-                    const icon  = l.success ? '✅ 成功' : (isBlocked ? '🚫 黑名單' : '❌ 失敗');
-                    const bg    = l.success ? '#f0fff4' : (isBlocked ? '#fff8e8' : '#fff0f0');
-                    const bdr   = l.success ? '#6cd47e' : (isBlocked ? '#e8a020' : '#e88888');
-                    const methodTag = l.method ? `<span style="background:#e0d0f0;color:#3a1060;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:900;">${l.method}</span>` : '';
-                    const reasonTag = (l.reason && !isBlocked) ? `<span style="color:#8a4040;font-size:10px;">(${l.reason})</span>` : '';
-                    return `<div style="background:${bg};border:1px solid ${bdr};border-radius:0.75rem;padding:0.6rem 0.8rem;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-                            <span style="font-weight:900;font-size:12px;">${icon}</span>
-                            <span style="color:#888;font-size:10px;">${l.time}</span>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="color:#1a1060;font-weight:700;font-size:12px;">🔵 ${l.email}</span>
-                            ${methodTag}${reasonTag}
-                        </div>
-                    </div>`;
-                }).join('');
-            } catch(e) {
-                logList.innerHTML = `<div style="color:#8a2020;padding:0.5rem;">載入失敗：${e.message}</div>`;
-            }
-        };
-
-        window.clearLoginLog = async () => {
-            if (!confirm('確定要清除所有登入紀錄嗎？')) return;
-            try {
-                await initFirebaseAuth();
-                const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
-                await setDoc(_logRef, { logs: [] }, { merge: false });
-                document.getElementById('login-log-list').innerHTML = '<div style="color:#6a4080;padding:0.5rem;">紀錄已清除</div>';
-            } catch(e) { window.showAlert('清除失敗：' + e.message); }
-        };
-
         // ✅ Bug3修正：登出時清除 localStorage
-        // ║        自動掃描系統（開著網頁時定時觸發）                ║
-        let _autoScanTimer    = null;   // setInterval handle
-        let _autoScanCdTimer  = null;   // 倒計時 setInterval
-        let _autoScanSecsLeft = 0;      // 倒計時秒數
-        let _autoScanActive   = false;
-
-        window.toggleAutoScan = () => {
-            _autoScanActive = !_autoScanActive;
-            const btn      = document.getElementById('btn-auto-scan');
-            const knob     = document.getElementById('auto-scan-knob');
-            const label    = document.getElementById('auto-scan-label');
-            const settings = document.getElementById('auto-scan-settings');
-            const status   = document.getElementById('auto-scan-status');
-
-            if (_autoScanActive) {
-                // ── 開啟 ──
-                btn.style.background = '#2563eb';
-                knob.style.transform = 'translateX(28px)';
-                label.textContent    = 'ON';
-                label.style.color    = '#fff';
-                label.className      = 'absolute left-1.5 text-[9px] font-black text-white';
-                settings.style.opacity = '1';
-                settings.style.pointerEvents = 'auto';
-                _startAutoScanLoop();
-                status.textContent = '✅ 自動掃描已啟動';
-                status.style.color = '#1a6a30';
-            } else {
-                // ── 關閉 ──
-                btn.style.background = '';
-                btn.className = btn.className.replace('bg-blue-600','') + ' bg-slate-300';
-                knob.style.transform = 'translateX(0px)';
-                label.textContent = 'OFF';
-                label.style.color = '';
-                label.className = 'absolute right-1.5 text-[9px] font-black text-slate-400';
-                settings.style.opacity = '0.4';
-                settings.style.pointerEvents = 'none';
-                _stopAutoScanLoop();
-                status.textContent = '⏸ 自動掃描已停止';
-                status.style.color = '#4a6a9a';
-                document.getElementById('auto-scan-countdown').textContent = '--:--';
-            }
-        };
-
-        const _startAutoScanLoop = () => {
-            _stopAutoScanLoop();  // 先清除舊的
-            const mins = parseInt(document.getElementById('auto-scan-interval').value) || 5;
-            _autoScanSecsLeft = mins * 60;
-
-            // 立刻執行一次
-            _runAutoScan();
-
-            // 設定倒計時顯示
-            _autoScanCdTimer = setInterval(() => {
-                _autoScanSecsLeft--;
-                if (_autoScanSecsLeft <= 0) _autoScanSecsLeft = 0;
-                const m = String(Math.floor(_autoScanSecsLeft / 60)).padStart(2,'0');
-                const s = String(_autoScanSecsLeft % 60).padStart(2,'0');
-                const cd = document.getElementById('auto-scan-countdown');
-                if (cd) cd.textContent = `${m}:${s}`;
-            }, 1000);
-
-            // 設定定時掃描
-            _autoScanTimer = setInterval(() => {
-                _autoScanSecsLeft = mins * 60;
-                _runAutoScan();
-            }, mins * 60 * 1000);
-        };
-
-        const _stopAutoScanLoop = () => {
-            if (_autoScanTimer)   { clearInterval(_autoScanTimer);   _autoScanTimer   = null; }
-            if (_autoScanCdTimer) { clearInterval(_autoScanCdTimer); _autoScanCdTimer = null; }
-        };
-
-        const _runAutoScan = async () => {
-            const status = document.getElementById('auto-scan-status');
-            if (status) {
-                status.textContent = '🔍 掃描中...';
-                status.style.color = '#1a3a8a';
-            }
-            try {
-                // 呼叫現有的 startManualScan（智能診斷掃描所有持股+觀察清單）
-                await window.startManualScan();
-                const now = new Date().toLocaleTimeString('zh-TW');
-                if (status) {
-                    status.textContent = `✅ 上次掃描：${now}`;
-                    status.style.color = '#1a6a30';
-                }
-            } catch(e) {
-                if (status) {
-                    status.textContent = `❌ 掃描失敗：${e.message}`;
-                    status.style.color = '#8a2020';
-                }
-            }
-        };
-
-        // 間隔改變時自動重啟
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'auto-scan-interval' && _autoScanActive) {
-                _startAutoScanLoop();
-            }
-        });
-
-        // 分頁可見度偵測：分頁切回來時重置倒計時
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                if (_autoScanActive) {
-                    const status = document.getElementById('auto-scan-status');
-                    if (status) status.textContent = '👁 分頁重新活躍，繼續自動掃描';
-                }
-                if (_wlAutoScanActive) {
-                    const status = document.getElementById('wl-auto-scan-status');
-                    if (status) status.textContent = '👁 分頁重新活躍，繼續自動掃描';
-                }
-            }
-        });
-
-        // ║    待買觀察清單：自動掃描系統                             ║
-        let _wlAutoScanTimer    = null;
-        let _wlAutoScanCdTimer  = null;
-        let _wlAutoScanSecsLeft = 0;
-        let _wlAutoScanActive   = false;
-
-        window.toggleWlAutoScan = () => {
-            _wlAutoScanActive = !_wlAutoScanActive;
-            const btn      = document.getElementById('btn-wl-auto-scan');
-            const knob     = document.getElementById('wl-auto-scan-knob');
-            const label    = document.getElementById('wl-auto-scan-label');
-            const settings = document.getElementById('wl-auto-scan-settings');
-            const status   = document.getElementById('wl-auto-scan-status');
-
-            if (_wlAutoScanActive) {
-                btn.style.background = '#2563eb';
-                knob.style.transform = 'translateX(28px)';
-                label.textContent    = 'ON';
-                label.className      = 'absolute left-1.5 text-[9px] font-black text-white';
-                settings.style.opacity = '1';
-                settings.style.pointerEvents = 'auto';
-                _startWlAutoScanLoop();
-                status.textContent = '✅ 自動掃描已啟動';
-                status.style.color = '#1a6a30';
-            } else {
-                btn.style.background = '';
-                knob.style.transform = 'translateX(0px)';
-                label.textContent = 'OFF';
-                label.className = 'absolute right-1.5 text-[9px] font-black text-slate-400';
-                settings.style.opacity = '0.4';
-                settings.style.pointerEvents = 'none';
-                _stopWlAutoScanLoop();
-                status.textContent = '⏸ 自動掃描已停止';
-                status.style.color = '#4a6a9a';
-                document.getElementById('wl-auto-scan-countdown').textContent = '--:--';
-            }
-        };
-
-        const _startWlAutoScanLoop = () => {
-            _stopWlAutoScanLoop();
-            const mins = parseInt(document.getElementById('wl-auto-scan-interval').value) || 5;
-            _wlAutoScanSecsLeft = mins * 60;
-
-            _runWlAutoScan();  // 立刻執行一次
-
-            _wlAutoScanCdTimer = setInterval(() => {
-                _wlAutoScanSecsLeft--;
-                if (_wlAutoScanSecsLeft < 0) _wlAutoScanSecsLeft = 0;
-                const m = String(Math.floor(_wlAutoScanSecsLeft / 60)).padStart(2,'0');
-                const s = String(_wlAutoScanSecsLeft % 60).padStart(2,'0');
-                const cd = document.getElementById('wl-auto-scan-countdown');
-                if (cd) cd.textContent = `${m}:${s}`;
-            }, 1000);
-
-            _wlAutoScanTimer = setInterval(() => {
-                _wlAutoScanSecsLeft = mins * 60;
-                _runWlAutoScan();
-            }, mins * 60 * 1000);
-        };
-
-        const _stopWlAutoScanLoop = () => {
-            if (_wlAutoScanTimer)   { clearInterval(_wlAutoScanTimer);   _wlAutoScanTimer   = null; }
-            if (_wlAutoScanCdTimer) { clearInterval(_wlAutoScanCdTimer); _wlAutoScanCdTimer = null; }
-        };
-
-        const _runWlAutoScan = async () => {
-            const status = document.getElementById('wl-auto-scan-status');
-            if (status) { status.textContent = '🔍 掃描中...'; status.style.color = '#1a3a8a'; }
-            try {
-                await window.startWatchlistScan();
-                const now = new Date().toLocaleTimeString('zh-TW');
-                if (status) { status.textContent = `✅ 上次掃描：${now}`; status.style.color = '#1a6a30'; }
-            } catch(e) {
-                if (status) { status.textContent = `❌ 掃描失敗：${e.message}`; status.style.color = '#8a2020'; }
-            }
-        };
-
-        // 間隔改變時自動重啟
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'wl-auto-scan-interval' && _wlAutoScanActive) {
-                _startWlAutoScanLoop();
-            }
-        });
-
         document.getElementById('btn-logout').addEventListener('click', () => {
             localStorage.removeItem('kj_email');
             location.reload();
@@ -2898,8 +2393,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             const savedEmail = localStorage.getItem('kj_email');
             if (savedEmail) {
                 try {
-                    // ✅ 自動登入：method標示為「自動登入」，不記錄為OTP或密碼
-                    await completeLogin(savedEmail, '自動登入');
+                    await completeLogin(savedEmail);
                 } catch(e) {
                     localStorage.removeItem('kj_email');
                 }
