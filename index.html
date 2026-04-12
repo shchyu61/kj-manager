@@ -213,13 +213,25 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04081755</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04130344</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
     </nav>
 
-    <main id="main-content" class="hide pt-24 pb-32 px-4 max-w-4xl mx-auto">
+    <!-- ⚠️ 常駐警語橫幅：所有頁面可見 -->
+    <div id="warning-banner" style="
+        position:fixed; top:64px; left:0; right:0; z-index:49;
+        background:linear-gradient(90deg,#b91c1c,#c2410c);
+        color:#fff; text-align:center;
+        padding:6px 12px; font-size:11px; font-weight:900;
+        letter-spacing:0.04em; line-height:1.5;
+        box-shadow:0 2px 8px rgba(0,0,0,0.18);
+    ">
+        ⚠️&nbsp;本系統提供之訊號，嚴禁用於當沖或隔日沖等短期交易！投資有風險，訊號僅供中長期投資參考。&nbsp;⚠️
+    </div>
+
+    <main id="main-content" class="hide pt-36 pb-32 px-4 max-w-4xl mx-auto">
         <!-- 待買觀察清單頁面 -->
         <div id="page-watchlist" class="hide space-y-6">
             <div class="flex justify-between items-end px-2">
@@ -732,7 +744,6 @@
         //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
         eval(atob('bGV0IFNDQU5fSU5URVJWQUw9JzF3ayc7bGV0IFNDQU5fUkFOR0U9JzJ5Jzs='));
 
-        // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
         // ============================================================
         //
         // ============================================================
@@ -827,7 +838,6 @@
             }
         };
 
-        // ── 登入記錄寫入Firebase ──────────────────────────────
 
         const _notifyBlacklist = (email, method) => {
             const now = new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'});
@@ -899,7 +909,6 @@
             document.getElementById('settings-email').innerText = email;
             if (countdownTimer) clearInterval(countdownTimer);
             _loadScanModePref(email).catch(()=>{});
-            // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
             if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
         };
 
@@ -1517,7 +1526,6 @@
                 // Token使用全域 _FM_TOKEN
                 const _today = new Date().toISOString().slice(0,10);
                 const _start = new Date(Date.now() - 150*24*60*60*1000).toISOString().slice(0,10); // 800天前
-                // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
                 const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${window._FM_TOKEN}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
                 const _fmData = await _fmResp.json();
@@ -1781,7 +1789,6 @@
             }
         };
 
-        // ── GitHub Actions 期貨Job狀態查詢 ──────────────────────────
         // 呼叫 GitHub API 取得最近一次 futures-scan Job 狀態
         // ── 期貨Job狀態查詢（方案B：從 Firebase 讀取，無需 Token 在前端）──
         // Python 每次期貨掃描結束後寫入 Firebase，網頁只讀不寫，F12 看不到任何敏感資訊
@@ -1912,7 +1919,6 @@
                 btn.setAttribute('aria-checked','false');
                 window.showAlert('⬜ 已清除持倉標記');
             }
-            // ✅ 方案A：同步寫入Firebase持倉狀態
             if (currentUserEmail && window.db) {
                 try {
                     await initFirebaseAuth();
@@ -1923,7 +1929,6 @@
             _updateNightModeHint();
         };
 
-        // ✅ 方案A：從Firebase讀取持倉狀態
         const _loadFuturesHolding = async () => {
             try {
                 await initFirebaseAuth();
@@ -1955,7 +1960,6 @@
             hint.style.display = (isNight && _futuresHoldingManual) ? 'block' : 'none';
         };
 
-        // ✅ 深夜01:00~05:00時，判斷是否有持倉（方案A Firebase OR 方案B手動）
         const _hasFuturesHolding = async () => {
             // 方案B：手動開關直接判斷
             if (_futuresHoldingManual) return true;
@@ -2071,7 +2075,6 @@
                 (wd === 2 && (tv < 1*60 || tv >= 5*60)) ||               // 週二（排除凌晨01:00~05:00）
                 (wd === 3 && tv <= 11*60+30)                              // 週三11:30前
             );
-            // ✅ 深夜01:00~05:00：若有持倉（方案A Firebase OR 方案B手動）→ 只掃平倉，不掃買進
             const _isNightHours = (wd === 2 && tv >= 1*60 && tv < 5*60);
             const _nightHolding = _isNightHours ? await _hasFuturesHolding() : false;
 
@@ -2194,7 +2197,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 signal_body: body,
                             });
                             window.showAlert(`⭐ ${ticker} 期貨5分K買進訊號！Gmail已發送`);
-                            // ✅ 方案A：買進訊號發出 → 自動標記Firebase持倉=true
                             try {
                                 await initFirebaseAuth();
                                 const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
@@ -2219,7 +2221,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 signal_body: body,
                             });
                             window.showAlert(`🔔 ${ticker} 期貨5分K平倉訊號！Gmail已發送`);
-                            // ✅ 方案A：平倉訊號發出 → 自動清除Firebase持倉=false
                             try {
                                 await initFirebaseAuth();
                                 const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
@@ -2514,7 +2515,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             event.target.value = '';
         };
 
-        // ── 需求4：Firebase儲存自訂密碼 ──────────────────────────
         window.saveCustomPassword = async () => {
             const pw  = document.getElementById('new-pw-input').value.trim();
             const pw2 = document.getElementById('new-pw-confirm').value.trim();
