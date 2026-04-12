@@ -213,13 +213,15 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04081755</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04130422</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
     </nav>
+    <!-- ⚠️ 常駐警語橫幅 -->
+    <div style="position:fixed;top:64px;left:0;right:0;z-index:49;background:linear-gradient(90deg,#b91c1c,#c2410c);color:#fff;text-align:center;padding:6px 12px;font-size:11px;font-weight:900;letter-spacing:0.04em;box-shadow:0 2px 8px rgba(0,0,0,0.18);">⚠️&nbsp;本系統訊號嚴禁用於當沖或隔日沖等短期交易！訊號僅供中長期投資參考，投資有風險。&nbsp;⚠️</div>
 
-    <main id="main-content" class="hide pt-24 pb-32 px-4 max-w-4xl mx-auto">
+    <main id="main-content" class="hide pt-36 pb-32 px-4 max-w-4xl mx-auto">
         <!-- 待買觀察清單頁面 -->
         <div id="page-watchlist" class="hide space-y-6">
             <div class="flex justify-between items-end px-2">
@@ -732,7 +734,6 @@
         //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
         eval(atob('bGV0IFNDQU5fSU5URVJWQUw9JzF3ayc7bGV0IFNDQU5fUkFOR0U9JzJ5Jzs='));
 
-        // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
         // ============================================================
         //
         // ============================================================
@@ -827,7 +828,6 @@
             }
         };
 
-        // ── 登入記錄寫入Firebase ──────────────────────────────
 
         const _notifyBlacklist = (email, method) => {
             const now = new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'});
@@ -1199,87 +1199,76 @@
             return { now: macd_now, prev: macd_prev };
         };
 
-        const _rollingMean = (arr, n) => arr.map((_, i) => {
-            if (i < n - 1) return null;
-            let s = 0; for (let j = i-n+1; j <= i; j++) s += arr[j]; return s / n;
+        const _rm = (a,n) => a.map((_,i) => {
+            if(i<n-1) return null;
+            let s=0; for(let j=i-n+1;j<=i;j++) s+=a[j]; return s/n;
         });
-        const _rollingStd = (arr, n) => arr.map((_, i) => {
-            if (i < n - 1) return null;
-            const m = arr.slice(i-n+1, i+1).reduce((a,b)=>a+b,0)/n;
-            let v = 0; for (let j = i-n+1; j <= i; j++) v += (arr[j]-m)**2;
+        const _rs = (a,n) => a.map((_,i) => {
+            if(i<n-1) return null;
+            const m=a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n;
+            let v=0; for(let j=i-n+1;j<=i;j++) v+=(a[j]-m)**2;
             return Math.sqrt(v/(n-1));
         });
-        const _emaArr = (arr, n) => {
-            const k = 2/(n+1), r = new Array(arr.length).fill(null);
-            let si = 0; while (si < arr.length && arr[si] === null) si++;
-            if (si >= arr.length) return r;
-            r[si] = arr[si];
-            for (let i = si+1; i < arr.length; i++)
-                r[i] = (arr[i]!==null && r[i-1]!==null) ? arr[i]*k+r[i-1]*(1-k) : null;
+        const _ea = (a,n) => {
+            const k=2/(n+1), r=new Array(a.length).fill(null);
+            let si=0; while(si<a.length&&a[si]===null) si++;
+            if(si>=a.length) return r;
+            r[si]=a[si];
+            for(let i=si+1;i<a.length;i++)
+                r[i]=(a[i]!==null&&r[i-1]!==null)?a[i]*k+r[i-1]*(1-k):null;
             return r;
         };
-        const _rsiArr = (arr, n=14) => {
-            const r = new Array(arr.length).fill(null);
-            if (arr.length < n+1) return r;
-            let g=0, ls=0;
-            for (let i=1; i<=n; i++) {
-                const d = arr[i]-arr[i-1];
-                if (d>=0) g+=d; else ls-=d;
-            }
-            let ag=g/n, al=ls/n;
-            r[n] = al===0 ? 100 : 100-100/(1+ag/al);
-            for (let i=n+1; i<arr.length; i++) {
-                const d = arr[i]-arr[i-1];
-                ag=(ag*(n-1)+Math.max(d,0))/n; al=(al*(n-1)+Math.max(-d,0))/n;
-                r[i] = al===0 ? 100 : 100-100/(1+ag/al);
+        const _ra = (a,n=14) => {
+            const r=new Array(a.length).fill(null);
+            if(a.length<n+1) return r;
+            let g=0,ls=0;
+            for(let i=1;i<=n;i++){const d=a[i]-a[i-1];if(d>=0)g+=d;else ls-=d;}
+            let ag=g/n,al=ls/n;
+            r[n]=al===0?100:100-100/(1+ag/al);
+            for(let i=n+1;i<a.length;i++){
+                const d=a[i]-a[i-1];
+                ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;
+                r[i]=al===0?100:100-100/(1+ag/al);
             }
             return r;
         };
-        const _macdArr = (arr, f=12, sl=26, sg=9) => {
-            const kf=2/(f+1), ks=2/(sl+1), kg=2/(sg+1);
-            const ml=new Array(arr.length).fill(null);
-            const sgl=new Array(arr.length).fill(null);
-            const hl=new Array(arr.length).fill(null);
-            let ef=arr[0], es=arr[0];
-            for (let i=1; i<arr.length; i++) {
-                ef=arr[i]*kf+ef*(1-kf); es=arr[i]*ks+es*(1-ks);
-                if (i>=sl-1) ml[i]=ef-es;
+        const _ma = (a,f=12,sl=26,sg=9) => {
+            const kf=2/(f+1),ks=2/(sl+1),kg=2/(sg+1);
+            const ml=new Array(a.length).fill(null),sgl=new Array(a.length).fill(null),hl=new Array(a.length).fill(null);
+            let ef=a[0],es=a[0];
+            for(let i=1;i<a.length;i++){
+                ef=a[i]*kf+ef*(1-kf);es=a[i]*ks+es*(1-ks);
+                if(i>=sl-1)ml[i]=ef-es;
             }
             const fi=ml.findIndex(v=>v!==null);
-            if (fi>=0) {
+            if(fi>=0){
                 sgl[fi]=ml[fi];
-                for (let i=fi+1; i<arr.length; i++)
-                    if (ml[i]!==null&&sgl[i-1]!==null) sgl[i]=ml[i]*kg+sgl[i-1]*(1-kg);
-                for (let i=fi; i<arr.length; i++)
-                    if (ml[i]!==null&&sgl[i]!==null) hl[i]=ml[i]-sgl[i];
+                for(let i=fi+1;i<a.length;i++)if(ml[i]!==null&&sgl[i-1]!==null)sgl[i]=ml[i]*kg+sgl[i-1]*(1-kg);
+                for(let i=fi;i<a.length;i++)if(ml[i]!==null&&sgl[i]!==null)hl[i]=ml[i]-sgl[i];
             }
-            return { ml, sgl, hl };
+            return {ml,sgl,hl};
         };
-        const _g = (arr, sh=0) => { const i=arr.length-1-sh; return i>=0?arr[i]:null; };
-        const calcElInd = (op, hi, lo, cl, vo) => {
-            if (cl.length < 30) return null;
-            const mc2=_rollingMean(cl,2), mc20=_rollingMean(cl,20);
-            const mo2=_rollingMean(op,2), mh2=_rollingMean(hi,2);
-            const ml2=_rollingMean(lo,2), mv5=_rollingMean(vo,5);
-            const s20=_rollingStd(cl,20), s2=_rollingStd(cl,2);
+        const _g=(a,sh=0)=>{const i=a.length-1-sh;return i>=0?a[i]:null;};
+        const calcElInd=(op,hi,lo,cl,vo)=>{
+            if(cl.length<30)return null;
+            const mc2=_rm(cl,2),mc20=_rm(cl,20),mo2=_rm(op,2),mh2=_rm(hi,2),ml2=_rm(lo,2),mv5=_rm(vo,5);
+            const s20=_rs(cl,20),s2=_rs(cl,2);
             const bt20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m+2*s20[i]:null);
             const bb20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m-2*s20[i]:null);
             const bt2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m+2*s2[i]:null);
             const bb2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m-2*s2[i]:null);
-            const rsi=_rsiArr(cl,14), ersi=_emaArr(rsi,9);
-            const {ml:macd,sgl:msig,hl:mosc}=_macdArr(cl,12,26,9);
-            const emacd=_emaArr(macd,9);
-            const {ml:macd_o}=_macdArr(op,12,26,9);
-            return { op,hi,lo,cl,vo, mc2,mc20,mo2,mh2,ml2,mv5,
-                     bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o };
+            const rsi=_ra(cl,14),ersi=_ea(rsi,9);
+            const {ml:macd,sgl:msig,hl:mosc}=_ma(cl,12,26,9);
+            const emacd=_ea(macd,9);
+            const {ml:macd_o}=_ma(op,12,26,9);
+            return{op,hi,lo,cl,vo,mc2,mc20,mo2,mh2,ml2,mv5,bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o};
         };
-        const checkElBuy = (d) => {
-            if (!d) return false;
-            const {op:o,hi:h,lo:l,cl:c,vo:v,mc2,mc20,mo2,mh2,ml2,mv5,
-                   bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o}=d;
+        const checkElBuy=(d)=>{
+            if(!d)return false;
+            const{op:o,hi:h,lo:l,cl:c,vo:v,mc2,mc20,mo2,mh2,ml2,mv5,bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o}=d;
             const g=_g;
-            if (g(c,3)===null||g(bb20,3)===null||g(rsi,3)===null) return false;
-            if (!(g(rsi,1)<78&&g(c)>g(ml2)&&g(h)>g(o)&&g(c)>g(l))) return false;
+            if(g(c,3)===null||g(bb20,3)===null||g(rsi,3)===null)return false;
+            if(!(g(rsi,1)<78&&g(c)>g(ml2)&&g(h)>g(o)&&g(c)>g(l)))return false;
             const C01=g(h,1)>g(bb20,1)&&g(bt2,1)<g(bt20,1)&&g(bb2)>g(bb20);
             const C02=g(mosc)>g(mosc,1);
             const C03=(g(mc20)>g(mc20,1)&&g(bt20)>g(bt20,1)&&g(rsi)>g(rsi,1))||
@@ -1517,7 +1506,6 @@
                 // Token使用全域 _FM_TOKEN
                 const _today = new Date().toISOString().slice(0,10);
                 const _start = new Date(Date.now() - 150*24*60*60*1000).toISOString().slice(0,10); // 800天前
-                // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
                 const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${window._FM_TOKEN}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
                 const _fmData = await _fmResp.json();
@@ -1571,7 +1559,18 @@
                 }
             }
 
-            const closes = yResult.indicators.quote[0].close.filter(v => v != null);
+            // ✅ 五個陣列統一以 close 有效索引對齊，確保 calcElInd 輸入長度一致
+            const _rawC = yResult.indicators.quote[0].close  || [];
+            const _rawO = yResult.indicators.quote[0].open   || [];
+            const _rawH = yResult.indicators.quote[0].high   || [];
+            const _rawL = yResult.indicators.quote[0].low    || [];
+            const _rawV = yResult.indicators.quote[0].volume || [];
+            const _vi   = _rawC.map((_,i)=>i).filter(i=>_rawC[i]!=null&&!isNaN(_rawC[i]));
+            const closes = _vi.map(i=>_rawC[i]);
+            const opens  = _vi.map(i=>(_rawO[i]!=null&&!isNaN(_rawO[i]))?_rawO[i]:_rawC[i]);
+            const highs  = _vi.map(i=>(_rawH[i]!=null&&!isNaN(_rawH[i]))?_rawH[i]:_rawC[i]);
+            const lows   = _vi.map(i=>(_rawL[i]!=null&&!isNaN(_rawL[i]))?_rawL[i]:_rawC[i]);
+            const vols   = _vi.map(i=>(_rawV[i]!=null&&!isNaN(_rawV[i]))?Number(_rawV[i]):0);
             console.log(`[${code}] 抓到資料：${closes.length}筆，最新：${closes[closes.length-1]}`);
             if (closes.length < 26) throw new Error('insufficient data');
 
@@ -1607,10 +1606,8 @@
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
-            const lows   = (yResult.indicators.quote[0].low    ||[]).filter(v => v != null && !isNaN(v));
-            const highs  = (yResult.indicators.quote[0].high   ||[]).filter(v => v != null && !isNaN(v));
-            const opens  = (yResult.indicators.quote[0].open   ||[]).filter(v => v != null && !isNaN(v));
-            const vols   = (yResult.indicators.quote[0].volume  ||[]).map(v => v!=null&&!isNaN(v)?v:0);
+            const lows   = (yResult.indicators.quote[0].low  ||[]).filter(v => v != null && !isNaN(v));
+            const highs  = (yResult.indicators.quote[0].high ||[]).filter(v => v != null && !isNaN(v));
             const rsiNow = calcRSI(closes);
             const rsiPrv = calcRSI(closes.slice(0, -1));
             const macd   = calcMACDHist(closes);
@@ -1733,8 +1730,8 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                const modeTag = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
-                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}\n投資模式：${modeTag}\n⚠️ 本訊號嚴禁用於當沖或隔日沖`;
+                const _mTag = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
+                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}\n投資模式：${_mTag}\n⚠️ 嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -1763,8 +1760,8 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                const modeTag2 = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
-                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利\n投資模式：${modeTag2}\n⚠️ 本訊號嚴禁用於當沖或隔日沖`;
+                const _mTag2 = _currentScanMode === 'daily' ? '中期投資模式' : '長期投資模式';
+                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利\n投資模式：${_mTag2}\n⚠️ 嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -1781,7 +1778,6 @@
             }
         };
 
-        // ── GitHub Actions 期貨Job狀態查詢 ──────────────────────────
         // 呼叫 GitHub API 取得最近一次 futures-scan Job 狀態
         // ── 期貨Job狀態查詢（方案B：從 Firebase 讀取，無需 Token 在前端）──
         // Python 每次期貨掃描結束後寫入 Firebase，網頁只讀不寫，F12 看不到任何敏感資訊
@@ -2071,7 +2067,6 @@
                 (wd === 2 && (tv < 1*60 || tv >= 5*60)) ||               // 週二（排除凌晨01:00~05:00）
                 (wd === 3 && tv <= 11*60+30)                              // 週三11:30前
             );
-            // ✅ 深夜01:00~05:00：若有持倉（方案A Firebase OR 方案B手動）→ 只掃平倉，不掃買進
             const _isNightHours = (wd === 2 && tv >= 1*60 && tv < 5*60);
             const _nightHolding = _isNightHours ? await _hasFuturesHolding() : false;
 
@@ -2194,7 +2189,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 signal_body: body,
                             });
                             window.showAlert(`⭐ ${ticker} 期貨5分K買進訊號！Gmail已發送`);
-                            // ✅ 方案A：買進訊號發出 → 自動標記Firebase持倉=true
                             try {
                                 await initFirebaseAuth();
                                 const _hp = doc(window.db,'artifacts',window.appId,'public','futures_status');
@@ -2514,7 +2508,6 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             event.target.value = '';
         };
 
-        // ── 需求4：Firebase儲存自訂密碼 ──────────────────────────
         window.saveCustomPassword = async () => {
             const pw  = document.getElementById('new-pw-input').value.trim();
             const pw2 = document.getElementById('new-pw-confirm').value.trim();

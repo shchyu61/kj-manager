@@ -178,7 +178,6 @@ CASH_DELIVERY_CACHE_HOURS  = 24     # 全額交割清單快取時間（小時，
 # ── 【２-7】做空入場策略：空頭三道關卡條件 ────────────────────────
 # ⚠️ 做空策略嚴禁用於當沖或隔日沖，僅供中長期空頭佈局參考
 # 做空條件與買進策略完全鏡像（布林上緣 / eLeader反向 / 5分K空頭轉折）
-# 相關執行邏輯在第10-2章（check_short_first_layer / check_short_eleader）
 ENABLE_SHORT          = True    # True=開啟做空掃描 / False=關閉做空掃描
 SHORT_RSI_MAX         = 65      # 做空RSI上限門檻（RSI需 < 此值才視為有效空頭）
 SHORT_BOLL_TOLERANCE  = 0.98    # 布林上緣容忍度（0.98=允許在上緣下方2%內觸發）
@@ -187,7 +186,6 @@ SHORT_LOOKBACK_BARS   = 3       # 做空回看根數（與買進策略對稱）
 # ── 【２-8】做空停損策略（預留，目前未啟用）─────────────────────
 # 做空停損：當價格反轉突破布林上緣時強制回補
 ENABLE_SHORT_STOP_LOSS = False   # 做空停損開關（False=未啟用）
-# SHORT_STOP_LOSS_PCT    = 0.05   # 漲破建倉價5%強制回補（預留）
 
 # ============================================================
 # 【３．套件引用】
@@ -1029,14 +1027,14 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
             c_price = result[1]
             r_prev  = result[2]
             r_now   = result[3]
-            l_val   = float(df_w['Low'].iloc[-1])       # 補上最低價（週K/日K）
+            l_val   = float(df_w['Low'].iloc[-1])       # 補上最低價（依SCAN_MODE）
             bb_val  = float(df_w['boll_bot20'].iloc[-1])# 補上布林下緣
             
             # 精準存入 7 個變數：market, code, c, l, bb, r, rp
             buy_signals.append(('基金', fund_name, c_price, l_val, bb_val, r_now, r_prev))
             
             # --- [修正 BUG：send_gmail 內文必須為格式化字串，不可傳入 Tuple] ---
-            # ✅ [修正重複通知 Bug：基金當天同標的只發1次]
+            # ✅ 修正重複通知Bug：基金當天同標的只發1次
             _fund_key = f"基金_{fund_name}_BUY"
             _today_f  = datetime.now().strftime("%Y-%m-%d")
             if _today_f not in notified: notified[_today_f] = []
