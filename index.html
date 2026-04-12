@@ -1606,8 +1606,7 @@
 
             const price  = closes[closes.length - 1];
             const boll   = calcBoll(closes);
-            const lows   = (yResult.indicators.quote[0].low  ||[]).filter(v => v != null && !isNaN(v));
-            const highs  = (yResult.indicators.quote[0].high ||[]).filter(v => v != null && !isNaN(v));
+            // lows/highs/opens/vols 已統一在上方 _vi.map 區塊宣告
             const rsiNow = calcRSI(closes);
             const rsiPrv = calcRSI(closes.slice(0, -1));
             const macd   = calcMACDHist(closes);
