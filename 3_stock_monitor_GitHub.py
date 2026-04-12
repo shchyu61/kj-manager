@@ -147,7 +147,7 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # ── 【掃描週期模式】切換此處決定scan_stock用哪個週期把關 ──────────
 # 'weekly' = 週K三道關卡（第一道週K3根/第二道日K eLeader/第三道5分K3根）
 # 'daily'  = 日K三道關卡（第一道日K3根/第二道日K eLeader/第三道5分K3根）
-SCAN_MODE = 'weekly'   # 切換：'weekly' / 'daily'
+SCAN_MODE = 'daily'    # 切換：'weekly' / 'daily'
 BUY_RSI_MIN          = 35     # 買進RSI最低門檻（條件A，RSI需 > 此值才視為上升有效）
 BUY_BOLL_TOLERANCE   = 1.02   # 布林下緣容忍度（1.02=允許價格在下緣上方2%內仍觸發）
 
@@ -958,7 +958,7 @@ def scan_stock(ticker, is_holding=False):
                 return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
-            mode_tag = '日K' if SCAN_MODE == 'daily' else '週K'
+            mode_tag = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             print(f"🔥 {ticker} 觸發【{mode_tag}三道關卡 多頭買進】，成交價：{c}")
             return ('BUY', c, float(ref_df['Low'].iloc[-1]), float(ref_df['boll_bot20'].iloc[-1]),
                     float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
@@ -967,7 +967,7 @@ def scan_stock(ticker, is_holding=False):
                 return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
-            mode_tag = '日K' if SCAN_MODE == 'daily' else '週K'
+            mode_tag = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             print(f"🔥 {ticker} 觸發【{mode_tag}三道關卡 空頭做空】，成交價：{c}")
             return ('SHORT', c, float(ref_df['High'].iloc[-1]), float(ref_df['boll_top20'].iloc[-1]),
                     float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
@@ -1015,7 +1015,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
             c_price = result[1]
             r_prev  = result[2]
             r_now   = result[3]
-            l_val   = float(df_w['Low'].iloc[-1])       # 補上週K最低價
+            l_val   = float(df_w['Low'].iloc[-1])       # 補上最低價（週K/日K）
             bb_val  = float(df_w['boll_bot20'].iloc[-1])# 補上布林下緣
             
             # 精準存入 7 個變數：market, code, c, l, bb, r, rp
@@ -1484,9 +1484,10 @@ def main_task():
                 body += (
                     f"⭐【買進訊號】⭐\n"
                     f"市場：{market}　代碼：{code}\n"
-                    f"週K最低：{l:.2f}　布林下緣：{bb:.2f}\n"
+                    f"最低價：{l:.2f}　布林下緣：{bb:.2f}\n"
                     f"收盤價：{c:.2f}\n"
                     f"RSI：{rp:.1f} → {r:.1f}（↑上升）\n"
+                    f"⚠️ 嚴禁用於當沖或隔日沖\n"
                     f"{'─'*30}\n"
                 )
 
@@ -1517,9 +1518,10 @@ def main_task():
                 body += (
                     f"🔔【賣出訊號】🔔\n"
                     f"市場：{market}　代碼：{code}\n"
-                    f"週K最高：{h:.2f}　布林上緣：{bt:.2f}\n"
+                    f"最高價：{h:.2f}　布林上緣：{bt:.2f}\n"
                     f"收盤價：{c:.2f}\n"
                     f"RSI：{rp:.1f} → {r:.1f}（↓下降）\n"
+                    f"⚠️ 嚴禁用於當沖或隔日沖\n"
                     f"{'─'*30}\n"
                 )
 
@@ -1595,7 +1597,7 @@ if __name__ == "__main__":
                    "此為 Gmail 篩選器測試信，請確認手機是否響鈴、是否有黃色星星。")
         
         # 2. 驗證【週K報告標籤】：預期會觸發「響鈴 + 重要標籤 + 無星號」
-        send_gmail(f"📊 【測試】週K掃描完成 - {test_now}", 
+        send_gmail(f"📊 【測試】掃描完成 - {test_now}", 
                    "此為例行報告測試信，請確認手機是否響鈴，且不應該有星星。")
         
         print("\n✅ 精準測試信已發出。")
