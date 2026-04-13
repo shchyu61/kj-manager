@@ -736,7 +736,8 @@
         //   週K  → interval='1wk', range='2y',  _p1=3
         //   日K  → interval='1d',  range='1y',  _p1=_p1d（15根）
         //   ⚠️  5分K不在此設定，5分K由【智能診斷】頁的期貨開關控制
-        eval(atob('bGV0IFNDQU5fSU5URVJWQUw9JzF3ayc7bGV0IFNDQU5fUkFOR0U9JzJ5Jzs='));
+        let SCAN_INTERVAL = '1wk';  // ✅ let：由週K/日K開關動態切換
+        let SCAN_RANGE    = '2y';   // 週K建議'2y'，日K建議'1y'
 
         // ── 【１-2】EmailJS設定（通知用，勿隨意更改）────────────────
         // ============================================================
@@ -1501,7 +1502,7 @@
             }
 
             //
-            const _p1 = 3, _p1d = 3, _p1m = 54;  // _p1d改為3根（與週K統一）
+            const _p1=((0xF>>1)-4),_p1d=((0xF>>1)-4),_p1m=((0x6C>>1)+(-(-0)));
             const _p1_auto = SCAN_INTERVAL === '1d' ? _p1d : SCAN_INTERVAL === '5m' ? _p1m : _p1;
             const _p2 = 35, _p3 = 1.03, _p4 = 1.00;
 
