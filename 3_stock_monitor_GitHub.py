@@ -68,6 +68,16 @@ CRYPTO_LIST = [
 # 持有清單（賣出/平倉只掃這些）
 HOLDINGS_US     = ['KO', 'O', 'PFE']
 HOLDINGS_CRYPTO = ['BTC-USD', 'ETH-USD', 'DOGE-USD']
+# 外匯掃描清單（天生雙向交易，做多做空皆可）
+FX_LIST = [
+    'EURUSD=X',   # 歐元/美元
+    'JPY=X',      # 美元/日圓
+    'CHFUSD=X',   # 美元/瑞郎
+    'USDTWD=X',   # 美元/台幣
+]
+# 外匯持有清單（有持有部位時填入，賣出/平倉只掃這些）
+HOLDINGS_FX = []  # 例如：['EURUSD=X']
+
 HOLDINGS_TW     = ['2330', '3037','3147','6188']  # 有台股持有時填入，例如：['2330', '2317']
 
 # ============================================================
@@ -1267,6 +1277,26 @@ def main_task():
                 elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
                     delist_signals.append(('虛擬幣', ticker, result[0], result[1]))
             time.sleep(0.1) # 稍微加快掃描速度
+
+
+    # ── 外匯掃描（買多 AND 做空，天生雙向）────────────────────
+    if TEST_MODE == '5mk':
+        print('\n📊 外匯：期貨5分K模式，跳過外匯掃描')
+    elif 'US' not in active_markets and 'CRYPTO' not in active_markets:
+        print('\n📊 外匯：非交易時段，跳過')
+    else:
+        print(f'\n📊 外匯掃描：共{len(FX_LIST)}支（做多+做空）')
+        for ticker in FX_LIST:
+            is_holding = ticker in HOLDINGS_FX
+            result = scan_stock(ticker, is_holding)
+            if result:
+                if result[0] == 'BUY':
+                    buy_signals.append(('外匯', ticker, *result[1:]))
+                elif result[0] == 'SELL':
+                    sell_signals.append(('外匯', ticker, *result[1:]))
+                elif result[0] == 'SHORT':
+                    sell_signals.append(('外匯做空', ticker, *result[1:]))
+            time.sleep(0.1)
 
     # ── 期貨5分K掃描（TEST_MODE='5mk'且FUTURES在active_markets時執行）──
     if 'FUTURES' in active_markets and TEST_MODE == '5mk':
