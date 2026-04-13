@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04140311</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04140319</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -302,9 +302,9 @@
                     <div class="rounded-2xl p-3" style="background:#f3e8ff; border:1.5px solid #a855f7;">
                         <div class="text-xs font-black mb-1" style="color:#5b21b6;">🔀 掃描模式說明</div>
                         <div class="text-[10px] leading-relaxed" style="color:#4c1d95;">
-                            ✅ 本頁掃描預設使用「<b>長期+中期混合模式</b>」，同時偵測週K與日K訊號<br>
+                            ✅ 本頁掃描預設使用「<b>長期+中期混合模式</b>」，同時偵測長期與中期訊號<br>
                             ✅ 通知信會標示「長期投資」或「中期投資」以利辨識<br>
-                            ⚠️ 混合模式每支股票需兩次API，標的較多時速度較慢，請耐心等待
+                            ⚠️ 混合模式每支股票需兩次分析，標的較多時速度較慢，請耐心等待
                         </div>
                     </div>
                     <!-- ✅ 待買觀察：自動掃描控制面板（需開著瀏覽器）-->
@@ -1839,7 +1839,7 @@
                 label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
                 btn.setAttribute('aria-checked','true');
                 if (lbl2) lbl2.textContent = '混合模式';
-                window.showAlert('📊 已切換混合模式（週K+日K同時掃描）　請按「啟動AI診斷」');
+                window.showAlert('📊 已切換混合模式（長期+中期同時掃描）　請按「啟動AI診斷」');
             } else {
                 btn.style.background = '';
                 btn.className = btn.className.replace(/bg-\S+/,'bg-slate-300');
@@ -2160,7 +2160,7 @@
                         }
                     } catch(e) { _dkResult = null; }
                     if (!_dkResult) {
-                        window.showAlert(`❌ ${ticker} 第一道日K15根未達條件，跳過`);
+                        window.showAlert(`❌ ${ticker} 第一道中期位階未達條件，跳過`);
                         continue;
                     }
 
