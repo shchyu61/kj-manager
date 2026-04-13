@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131053</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131153</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -416,14 +416,14 @@
                         <span class="text-sm font-black text-slate-800">掃描頻率：自動同步全球市場</span>
                         <span class="text-[10px] font-bold text-slate-400">
                             目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span>
-                            &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-blue-600">週K</span>
+                            &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-blue-600">長期投資</span>
                         </span>
                     </div>
                     <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                     <!-- 週K/日K 切換開關：所有帳號可見 -->
                     <div id="scan-mode-wrap" class="flex flex-col items-center gap-1.5">
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-slate-500">週K</span>
+                            <span class="text-[10px] font-black text-slate-500">長期投資</span>
                             <button id="btn-scan-weekly" onclick="toggleScanMode('weekly')"
                                 role="switch" aria-checked="true"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
@@ -437,7 +437,7 @@
                             </button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-slate-500">日K</span>
+                            <span class="text-[10px] font-black text-slate-500">中期投資</span>
                             <button id="btn-scan-daily" onclick="toggleScanMode('daily')"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -1764,8 +1764,8 @@
             SCAN_RANGE    = mode === 'daily' ? '1y' : '2y';
             _updateScanModeUI(mode);
             const _lbl2 = document.getElementById('scan-mode-label');
-            if (_lbl2) _lbl2.textContent = mode === 'daily' ? '日K' : '週K';
-            window.showAlert(mode === 'daily' ? '📊 已切換日K模式（每股3次API，速度較慢）　請按「啟動AI診斷」' : '📊 已切換週K模式　請按「啟動AI診斷」');
+            if (_lbl2) _lbl2.textContent = mode === 'daily' ? '中期投資' : '長期投資';
+            window.showAlert(mode === 'daily' ? '📊 已切換中期投資模式　請按「啟動AI診斷」' : '📊 已切換長期投資模式　請按「啟動AI診斷」');
             // ✅ 儲存設定到 Firebase（綁定個人帳號）
             if (currentUserEmail && window.db) {
                 try {
@@ -1776,7 +1776,7 @@
             }
             // ✅ 清除診斷快取（不自動重新掃描，由使用者手動按「啟動AI診斷」）
             if (typeof diagCache !== 'undefined') diagCache.clear();
-            window.showAlert((mode === 'daily' ? '📊 已切換日K模式' : '📊 已切換週K模式') + '　請按「啟動AI診斷」開始掃描');
+            window.showAlert((mode === 'daily' ? '📊 已切換中期投資模式' : '📊 已切換長期投資模式') + '　請按「啟動AI診斷」開始掃描');
         };
 
         // ✅ 登入後從 Firebase 讀取個人掃描模式設定
@@ -1793,7 +1793,7 @@
                     _updateScanModeUI(saved);
                     // 更新模式標籤
                     const _lbl = document.getElementById('scan-mode-label');
-                    if (_lbl) _lbl.textContent = saved === 'daily' ? '日K' : '週K';
+                    if (_lbl) _lbl.textContent = saved === 'daily' ? '中期投資' : '長期投資';
                 }
             } catch(e) {}
         };
