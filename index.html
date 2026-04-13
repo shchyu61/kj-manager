@@ -134,19 +134,19 @@
             <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3">
                 <i data-lucide="shield-check" class="w-6 h-6"></i>
             </div>
-            <h2 class="text-xl font-black mb-1 tracking-tight">【科蓁智能理財管家】成員身份驗證</h2>
-            <p class="text-slate-500 text-sm mb-3 leading-relaxed">請輸入信箱帳號，選擇任一方式登入。</p>
+            <h2 class="text-lg font-black mb-1 tracking-tight">【科蓁智能理財管家】成員身份驗證</h2>
+            <p class="text-slate-500 text-xs mb-3 leading-relaxed">請輸入信箱帳號，選擇任一方式登入。</p>
 
             <!-- 信箱輸入 -->
             <div class="space-y-2 text-left mb-3">
                 <div class="flex flex-col gap-1">
-                    <label class="text-base font-black text-slate-500 ml-2 tracking-tight uppercase flex justify-between">
+                    <label class="text-sm font-black text-slate-500 ml-2 tracking-tight uppercase flex justify-between">
                         <span>User Account / 信箱帳號</span>
                         <span class="text-blue-500 font-bold normal-case">Gmail 可免輸入 @gmail.com</span>
                     </label>
                     <input type="text" id="auth-email" placeholder="如: shchyu61" 
-                           class="w-full border-none rounded-xl py-2.5 px-4 text-base font-bold focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
-                    <p class="text-sm text-slate-400 ml-2 italic">※ Yahoo 或其他信箱請輸入完整地址</p>
+                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
+                    <p class="text-xs text-slate-400 ml-2 italic">※ Yahoo 或其他信箱請輸入完整地址</p>
                 </div>
             </div>
 
@@ -154,9 +154,9 @@
             <div id="section-daily-key" class="space-y-2 text-left">
                 <div class="divider">方式 A：每日密碼</div>
                 <div class="flex flex-col gap-1">
-                    <label class="text-base font-black text-slate-500 ml-2 tracking-tight uppercase">Daily Key / 每日密碼</label>
+                    <label class="text-sm font-black text-slate-500 ml-2 tracking-tight uppercase">Daily Key / 每日密碼</label>
                     <input type="password" id="access-key-input" placeholder="輸入每日密碼" 
-                           class="w-full border-none rounded-xl py-2.5 px-6 text-xl font-bold tracking-widest focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
+                           class="w-full border-none rounded-xl py-2.5 px-6 text-lg font-bold tracking-widest focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
                 </div>
                 <button id="btn-verify-key" 
                         class="w-full py-2.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all flex items-center justify-center gap-2">
@@ -177,8 +177,8 @@
                 </div>
                 <div id="otp-step2" class="hide space-y-2">
                     <div class="p-2 bg-emerald-50 rounded-xl text-center">
-                        <p class="text-sm font-black text-emerald-700">✅ 密碼已發送！請查收信箱</p>
-                        <p class="text-[12px] text-emerald-600 mt-0.5">有效時間：<span id="otp-countdown" class="font-black">05:00</span></p>
+                        <p class="text-xs font-black text-emerald-700">✅ 密碼已發送！請查收信箱</p>
+                        <p class="text-[10px] text-emerald-600 mt-0.5">有效時間：<span id="otp-countdown" class="font-black">05:00</span></p>
                     </div>
                     <input type="text" id="otp-input" placeholder="輸入6碼一次性密碼" maxlength="6"
                            class="otp-input w-full border-none rounded-xl py-2.5 px-4 focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
@@ -189,19 +189,19 @@
                             <span id="otp-verify-text">驗證並登入</span>
                         </button>
                         <button id="btn-resend-otp" 
-                                class="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+                                class="px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all text-xs">
                             重新發送
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div id="error-msg" class="text-rose-500 text-sm mt-3 font-bold opacity-0 transition-opacity">身份或密碼錯誤，請重新嘗試。</div>
+            <div id="error-msg" class="text-rose-500 text-xs mt-3 font-bold opacity-0 transition-opacity">身份或密碼錯誤，請重新嘗試。</div>
         </div>
     </div>
 
     <!-- 警報彈窗 -->
-    <div id="custom-alert" class="bg-rose-600 text-white px-8 py-4 rounded-2xl shadow-2xl font-black text-base flex items-center gap-3 animate-bounce">
+    <div id="custom-alert" class="bg-rose-600 text-white px-8 py-4 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-3 animate-bounce">
         <i data-lucide="alert-circle" class="w-5 h-5"></i>
         <span id="alert-text">發生錯誤</span>
     </div>
@@ -210,11 +210,11 @@
         <div class="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow font-black italic">K</div>
-                <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
+                <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04140335</span>
-                <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04140410</span>
+                <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
     </nav>
@@ -226,19 +226,19 @@
             <div class="flex justify-between items-end px-2">
                 <div>
                     <h3 class="text-2xl font-black italic tracking-tight uppercase">Watchlist</h3>
-                    <p class="text-slate-400 text-[12px] font-black uppercase tracking-[0.2em]">待買觀察清單</p>
+                    <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">待買觀察清單</p>
                 </div>
                 <div class="text-right">
                     <span id="watchlist-count" class="text-3xl font-black text-amber-500">0</span>
-                    <span class="text-[12px] font-black text-slate-400 block uppercase">觀察中</span>
+                    <span class="text-[10px] font-black text-slate-400 block uppercase">觀察中</span>
                 </div>
             </div>
             <div class="rounded-[2.5rem] p-4 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
                 <div class="flex flex-col gap-3 mb-4">
                     <div class="flex gap-3">
                         <input type="text" id="new-watchlist-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)"
-                               class="flex-1 rounded-2xl px-6 py-4 text-base font-black outline-none focus:ring-2 focus:ring-amber-400 uppercase transition-all border" style="background:#faf4ea; border-color:#c4a878;">
-                        <select id="new-watchlist-cat" class="rounded-2xl px-3 py-2 text-sm font-black border outline-none" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-400 uppercase transition-all border" style="background:#faf4ea; border-color:#c4a878;">
+                        <select id="new-watchlist-cat" class="rounded-2xl px-3 py-2 text-xs font-black border outline-none" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
                             <option value="tw">台股</option>
                             <option value="us">美股</option>
                             <option value="fund">基金</option>
@@ -246,22 +246,22 @@
                             <option value="fx">外匯</option>
                             <option value="gold">黃金/貴金屬</option>
                         </select>
-                        <button id="btn-add-watchlist" class="bg-amber-500 text-white px-6 py-4 rounded-2xl font-black text-base hover:bg-amber-600 transition-all">新增</button>
+                        <button id="btn-add-watchlist" class="bg-amber-500 text-white px-6 py-4 rounded-2xl font-black text-sm hover:bg-amber-600 transition-all">新增</button>
                     </div>
                     <!-- 需求2：安聯基金提示 -->
-                    <div id="fund-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#fff3cd; color:#7a4a00; border:1px solid #f0c878;">
+                    <div id="fund-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fff3cd; color:#7a4a00; border:1px solid #f0c878;">
                         💡 安聯月配息基金無直接代碼，建議改用三合一追蹤：<br>
                         請分別新增 <span style="color:#1a5a30; font-weight:900;">SPY（美股）、QQQ（美股）、HYG（基金）</span>，系統將依 3_stock_monitor 策略判斷買賣訊號。
                     </div>
                     <!-- 黃金/貴金屬提示 -->
-                    <div id="wl-gold-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#fdf6e3; color:#7a5a00; border:1px solid #d4af37;">
+                    <div id="wl-gold-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fdf6e3; color:#7a5a00; border:1px solid #d4af37;">
                         🥇 追蹤台灣銀行黃金存摺，建議輸入代碼：<br>
                         <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
                         <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
                     </div>
                     <!-- 虛擬幣提示 -->
-                    <div id="wl-crypto-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
+                    <div id="wl-crypto-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
                         🪙 虛擬幣建議輸入代碼（Yahoo Finance格式）：<br>
                         <span style="color:#f7931a; font-weight:900;">BTC-USD</span>（比特幣）　
                         <span style="color:#627eea; font-weight:900;">ETH-USD</span>（以太幣）<br>
@@ -269,7 +269,7 @@
                         <span style="color:#2775ca; font-weight:900;">USDT-USD</span>（泰達幣）
                     </div>
                     <!-- 外匯提示 -->
-                    <div id="wl-fx-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
+                    <div id="wl-fx-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
                         💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
                         <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
                         <span style="color:#1a6a2a; font-weight:900;">JPY=X</span>（美元/日圓）<br>
@@ -278,21 +278,21 @@
                     </div>
                     <!-- 待買觀察：匯出/匯入備份 -->
                     <div class="flex gap-2">
-                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-sm font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
-                        <label class="flex-1 py-2 rounded-xl text-sm font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-xs font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
+                        <label class="flex-1 py-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
                             ⬆ 匯入還原 JSON
                             <input type="file" accept=".json" class="hidden" onchange="importData(event)">
                         </label>
                     </div>
                     <button id="btn-watchlist-scan" onclick="startWatchlistScan()"
-                            class="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-black text-base hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
+                            class="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-black text-sm hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
                         <i data-lucide="search" class="w-4 h-4"></i>
                         <span id="watchlist-scan-text">全部診斷（掃描買進訊號）</span>
                     </button>
                     <!-- ✅ GitHub Actions 自動通知提醒卡 -->
                     <div class="rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
-                        <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
-                        <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
+                        <div class="text-xs font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
+                        <div class="text-[10px] leading-relaxed" style="color:#5a3a00;">
                             ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
                             ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                             <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
@@ -300,8 +300,8 @@
                     </div>
                     <!-- 混合模式提醒 -->
                     <div class="rounded-2xl p-3" style="background:#f3e8ff; border:1.5px solid #a855f7;">
-                        <div class="text-sm font-black mb-1" style="color:#5b21b6;">🔀 掃描模式說明</div>
-                        <div class="text-[12px] leading-relaxed" style="color:#4c1d95;">
+                        <div class="text-xs font-black mb-1" style="color:#5b21b6;">🔀 掃描模式說明</div>
+                        <div class="text-[10px] leading-relaxed" style="color:#4c1d95;">
                             ✅ 本頁掃描預設使用「<b>長期+中期混合模式</b>」，同時偵測長期與中期訊號<br>
                             ✅ 通知信會標示「長期投資」或「中期投資」以利辨識<br>
                             ⚠️ 混合模式每支股票需兩次分析，標的較多時速度較慢，請耐心等待
@@ -311,40 +311,40 @@
                     <div class="rounded-2xl p-4 space-y-3" style="background:#f0f8ff; border:1px solid #90c0f0;">
                         <div class="flex items-center justify-between">
                             <div>
-                                <div class="text-base font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
-                                <div class="text-[12px]" style="color:#4a6a9a;">定時掃描觀察清單，符合條件自動發 Gmail</div>
+                                <div class="text-sm font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
+                                <div class="text-[10px]" style="color:#4a6a9a;">定時掃描觀察清單，符合條件自動發 Gmail</div>
                             </div>
                             <button id="btn-wl-auto-scan" onclick="toggleWlAutoScan()"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
                                 style="min-width:3.5rem;">
                                 <span id="wl-auto-scan-knob" class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style="transform:translateX(0px);"></span>
-                                <span id="wl-auto-scan-label" class="absolute right-1.5 text-[11px] font-black text-slate-400">OFF</span>
+                                <span id="wl-auto-scan-label" class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
                             </button>
                         </div>
                         <div id="wl-auto-scan-settings" style="opacity:0.4;pointer-events:none;" class="flex items-center gap-3">
-                            <span class="text-sm font-black" style="color:#1a3a6a;">間隔</span>
-                            <select id="wl-auto-scan-interval" class="text-sm font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
+                            <span class="text-xs font-black" style="color:#1a3a6a;">間隔</span>
+                            <select id="wl-auto-scan-interval" class="text-xs font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
                                 <option value="5">5 分鐘</option>
                                 <option value="10">10 分鐘</option>
                                 <option value="15">15 分鐘</option>
                                 <option value="30">30 分鐘</option>
                                 <option value="60">60 分鐘</option>
                             </select>
-                            <span class="text-sm" style="color:#4a6a9a;">下次：<span id="wl-auto-scan-countdown" class="font-black">--:--</span></span>
+                            <span class="text-xs" style="color:#4a6a9a;">下次：<span id="wl-auto-scan-countdown" class="font-black">--:--</span></span>
                         </div>
-                        <div id="wl-auto-scan-status" class="text-[12px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
+                        <div id="wl-auto-scan-status" class="text-[10px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
                     </div>
                 </div>
                 <!-- 分類Tab -->
                 <div id="wl-cat-tabs" class="flex gap-2 mb-3 overflow-x-auto pb-1">
-                    <button onclick="filterWatchlist('all')" id="wl-tab-all" class="wl-cat-btn active-cat shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#8a4a18;color:#fff;">全部</button>
-                    <button onclick="filterWatchlist('tw')"   id="wl-tab-tw"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">台股</button>
-                    <button onclick="filterWatchlist('us')"   id="wl-tab-us"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">美股</button>
-                    <button onclick="filterWatchlist('fund')" id="wl-tab-fund" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">基金</button>
-                    <button onclick="filterWatchlist('crypto')" id="wl-tab-crypto" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
-                    <button onclick="filterWatchlist('fx')"   id="wl-tab-fx"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
-                    <button onclick="filterWatchlist('gold')" id="wl-tab-gold" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
+                    <button onclick="filterWatchlist('all')" id="wl-tab-all" class="wl-cat-btn active-cat shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#8a4a18;color:#fff;">全部</button>
+                    <button onclick="filterWatchlist('tw')"   id="wl-tab-tw"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">台股</button>
+                    <button onclick="filterWatchlist('us')"   id="wl-tab-us"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">美股</button>
+                    <button onclick="filterWatchlist('fund')" id="wl-tab-fund" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">基金</button>
+                    <button onclick="filterWatchlist('crypto')" id="wl-tab-crypto" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
+                    <button onclick="filterWatchlist('fx')"   id="wl-tab-fx"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
+                    <button onclick="filterWatchlist('gold')" id="wl-tab-gold" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
                 </div>
                 <div id="watchlist-list" class="grid grid-cols-1 gap-4 min-h-[200px]"></div>
             </div>
@@ -355,19 +355,19 @@
             <div class="flex justify-between items-end px-2">
                 <div>
                     <h3 class="text-2xl font-black italic tracking-tight uppercase">Multi-Asset Monitor</h3>
-                    <p class="text-slate-400 text-[12px] font-black uppercase tracking-[0.2em]">台/美股、虛擬貨幣、基金三合一</p>
+                    <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">台/美股、虛擬貨幣、基金三合一</p>
                 </div>
                 <div class="text-right">
                     <span id="stock-count" class="text-3xl font-black text-blue-600">0</span>
-                    <span class="text-[12px] font-black text-slate-400 block uppercase">監控中</span>
+                    <span class="text-[10px] font-black text-slate-400 block uppercase">監控中</span>
                 </div>
             </div>
             <div class="rounded-[2.5rem] p-4 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
                 <div class="flex flex-col gap-3 mb-4">
                     <div class="flex gap-3">
                         <input type="text" id="new-stock-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)" 
-                               class="flex-1 rounded-2xl px-6 py-4 text-base font-black outline-none focus:ring-2 focus:ring-amber-500 uppercase transition-all border" style="background:#faf4ea; border-color:#c4a878;">
-                        <select id="new-stock-cat" class="rounded-2xl px-3 py-2 text-sm font-black border outline-none" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                               class="flex-1 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-amber-500 uppercase transition-all border" style="background:#faf4ea; border-color:#c4a878;">
+                        <select id="new-stock-cat" class="rounded-2xl px-3 py-2 text-xs font-black border outline-none" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
                             <option value="tw">台股</option>
                             <option value="us">美股</option>
                             <option value="fund">基金</option>
@@ -375,23 +375,23 @@
                             <option value="fx">外匯</option>
                             <option value="gold">黃金/貴金屬</option>
                         </select>
-                        <button id="btn-add-stock" class="bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-base hover:bg-blue-600 transition-all">新增</button>
+                        <button id="btn-add-stock" class="bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-sm hover:bg-blue-600 transition-all">新增</button>
                     </div>
                     <!-- 需求3: 匯出/匯入備份 -->
                     <div class="flex gap-2">
-                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-sm font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
-                        <label class="flex-1 py-2 rounded-xl text-sm font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
+                        <button onclick="exportData()" class="flex-1 py-2 rounded-xl text-xs font-black border transition-all" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">⬇ 匯出備份 JSON</button>
+                        <label class="flex-1 py-2 rounded-xl text-xs font-black border transition-all text-center cursor-pointer" style="background:#ede0cc; border-color:#c4a878; color:#3a2010;">
                             ⬆ 匯入還原 JSON
                             <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
                         </label>
                     </div>
                     <!-- 持股清單：安聯基金提示（選基金時顯示）-->
-                    <div id="stock-fund-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#fff3cd; color:#7a4a00; border:1px solid #f0c878;">
+                    <div id="stock-fund-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fff3cd; color:#7a4a00; border:1px solid #f0c878;">
                         💡 安聯月配息基金無直接代碼，建議改用三合一追蹤：<br>
                         請分別新增 <span style="color:#1a5a30; font-weight:900;">SPY（美股）、QQQ（美股）、HYG（基金）</span>，系統將依 3_stock_monitor 策略判斷買賣訊號。
                     </div>
                     <!-- 持股清單：黃金/貴金屬提示 -->
-                    <div id="st-gold-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#fdf6e3; color:#7a5a00; border:1px solid #d4af37;">
+                    <div id="st-gold-hint" class="hide text-xs font-black rounded-xl px-4 py-2" style="background:#fdf6e3; color:#7a5a00; border:1px solid #d4af37;">
                         🥇 追蹤台灣銀行黃金存摺，建議輸入代碼：<br>
                         <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
@@ -400,13 +400,13 @@
                 </div>
                 <!-- 分類Tab -->
                 <div id="st-cat-tabs" class="flex gap-2 mb-3 overflow-x-auto pb-1">
-                    <button onclick="filterStocks('all')"    id="st-tab-all"    class="st-cat-btn active-cat shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#1a3a8a;color:#fff;">全部</button>
-                    <button onclick="filterStocks('tw')"     id="st-tab-tw"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">台股</button>
-                    <button onclick="filterStocks('us')"     id="st-tab-us"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">美股</button>
-                    <button onclick="filterStocks('fund')"   id="st-tab-fund"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">基金</button>
-                    <button onclick="filterStocks('crypto')" id="st-tab-crypto" class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
-                    <button onclick="filterStocks('fx')"     id="st-tab-fx"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
-                    <button onclick="filterStocks('gold')"   id="st-tab-gold"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
+                    <button onclick="filterStocks('all')"    id="st-tab-all"    class="st-cat-btn active-cat shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#1a3a8a;color:#fff;">全部</button>
+                    <button onclick="filterStocks('tw')"     id="st-tab-tw"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">台股</button>
+                    <button onclick="filterStocks('us')"     id="st-tab-us"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">美股</button>
+                    <button onclick="filterStocks('fund')"   id="st-tab-fund"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">基金</button>
+                    <button onclick="filterStocks('crypto')" id="st-tab-crypto" class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
+                    <button onclick="filterStocks('fx')"     id="st-tab-fx"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
+                    <button onclick="filterStocks('gold')"   id="st-tab-gold"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-xs font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
                 </div>
                 <div id="stock-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[200px]"></div>
             </div>
@@ -416,23 +416,23 @@
         <div id="page-scan" class="hide space-y-6">
             <div class="text-left px-2">
                 <h3 class="text-2xl font-black italic tracking-tight uppercase">Intelligence Scan</h3>
-                <p class="text-slate-400 text-[12px] font-black uppercase tracking-[0.2em]">RSI/MACD 技術面自動診斷</p>
+                <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">RSI/MACD 技術面自動診斷</p>
             </div>
             <div class="bg-white border-2 border-slate-200 rounded-[2.5rem] p-8 relative overflow-hidden">
                 <div id="scan-visual" class="hide scan-line"></div>
                 <div class="flex items-center justify-between mb-8">
                     <div class="flex flex-col">
-                        <span class="text-base font-black text-slate-800">掃描頻率：自動同步全球市場</span>
-                        <span class="text-[12px] font-bold text-slate-400">
+                        <span class="text-sm font-black text-slate-800">掃描頻率：自動同步全球市場</span>
+                        <span class="text-[10px] font-bold text-slate-400">
                             目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span>
                             &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-purple-600">混合模式</span>
                         </span>
                     </div>
-                    <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
+                    <button onclick="startManualScan()" class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                     <!-- 週K/日K 切換開關：所有帳號可見 -->
                     <div id="scan-mode-wrap" class="flex flex-col items-center gap-1.5">
                         <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-black text-slate-500">長期投資</span>
+                            <span class="text-[10px] font-black text-slate-500">長期投資</span>
                             <button id="btn-scan-weekly" onclick="toggleScanMode('weekly')"
                                 role="switch" aria-checked="true"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
@@ -442,11 +442,11 @@
                                     style="transform:translateX(28px);">
                                 </span>
                                 <span id="weekly-label"
-                                    class="absolute left-1.5 text-[11px] font-black text-white">ON</span>
+                                    class="absolute left-1.5 text-[9px] font-black text-white">ON</span>
                             </button>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-black text-slate-500">中期投資</span>
+                            <span class="text-[10px] font-black text-slate-500">中期投資</span>
                             <button id="btn-scan-daily" onclick="toggleScanMode('daily')"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -456,12 +456,12 @@
                                     style="transform:translateX(0px);">
                                 </span>
                                 <span id="daily-label"
-                                    class="absolute right-1.5 text-[11px] font-black text-slate-400">OFF</span>
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
                             </button>
                         </div>
                     </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-black text-slate-500">混合模式</span>
+                            <span class="text-[10px] font-black text-slate-500">混合模式</span>
                             <button id="btn-scan-mixed" onclick="toggleMixedMode()"
                                 role="switch" aria-checked="true"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
@@ -471,7 +471,7 @@
                                     style="transform:translateX(28px);">
                                 </span>
                                 <span id="mixed-label"
-                                    class="absolute left-1.5 text-[11px] font-black text-white">ON</span>
+                                    class="absolute left-1.5 text-[9px] font-black text-white">ON</span>
                             </button>
                         </div>
 
@@ -479,7 +479,7 @@
                     <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1.5">
                         <!-- 開關式 Toggle -->
                         <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-black text-slate-500">期貨5分K</span>
+                            <span class="text-[10px] font-black text-slate-500">期貨5分K</span>
                             <button id="btn-futures-5mk" onclick="toggleFutures5mk()"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -489,16 +489,16 @@
                                     style="transform:translateX(0px);">
                                 </span>
                                 <span id="futures-toggle-label"
-                                    class="absolute right-1.5 text-[11px] font-black text-slate-400">OFF</span>
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
                             </button>
                         </div>
                         <!-- GitHub Actions 狀態標籤 -->
-                        <span id="futures-status" class="text-[12px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
+                        <span id="futures-status" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">
                             ⏳ 狀態查詢中...
                         </span>
                         <!-- 方案B：手動持倉開關 -->
                         <div class="flex items-center gap-2 mt-1">
-                            <span class="text-[12px] font-black text-rose-500">多方持倉中</span>
+                            <span class="text-[10px] font-black text-rose-500">多方持倉中</span>
                             <button id="btn-futures-holding" onclick="toggleFuturesHolding()"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -508,12 +508,12 @@
                                     style="transform:translateX(0px);">
                                 </span>
                                 <span id="holding-label"
-                                    class="absolute right-1.5 text-[11px] font-black text-slate-400">OFF</span>
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
                             </button>
                         </div>
                         <!-- 空倉開關（方案B手動）-->
                         <div class="flex items-center gap-2 mt-1">
-                            <span class="text-[12px] font-black text-blue-600">空方持倉中</span>
+                            <span class="text-[10px] font-black text-blue-600">空方持倉中</span>
                             <button id="btn-futures-short" onclick="toggleFuturesShort()"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -523,12 +523,12 @@
                                     style="transform:translateX(0px);">
                                 </span>
                                 <span id="short-label"
-                                    class="absolute right-1.5 text-[11px] font-black text-slate-400">OFF</span>
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
                             </button>
                         </div>
                         <!-- 深夜模式提醒 -->
                         <div id="night-mode-hint" style="display:none"
-                            class="text-[11px] font-black text-amber-600 text-center leading-tight mt-0.5">
+                            class="text-[9px] font-black text-amber-600 text-center leading-tight mt-0.5">
                             ⚠️ 深夜01~05<br>方案A+B監控出場
                         </div>
                     </div>
@@ -541,8 +541,8 @@
                 </div>
                 <!-- ✅ GitHub Actions 自動通知提醒卡 -->
                 <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
-                    <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
-                    <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
+                    <div class="text-xs font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
+                    <div class="text-[10px] leading-relaxed" style="color:#5a3a00;">
                         ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
                         ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                         <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
@@ -552,30 +552,30 @@
                 <div class="mt-3 rounded-2xl p-4 space-y-3" style="background:#f0f8ff; border:1px solid #90c0f0;">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-base font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
-                            <div class="text-[12px]" style="color:#4a6a9a;">開著網頁時自動定時掃描並發通知</div>
+                            <div class="text-sm font-black" style="color:#1a3a6a;">🔄 自動掃描</div>
+                            <div class="text-[10px]" style="color:#4a6a9a;">開著網頁時自動定時掃描並發通知</div>
                         </div>
                         <button id="btn-auto-scan" onclick="toggleAutoScan()"
                             role="switch" aria-checked="false"
                             class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
                             style="min-width:3.5rem;">
                             <span id="auto-scan-knob" class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style="transform:translateX(0px);"></span>
-                            <span id="auto-scan-label" class="absolute right-1.5 text-[11px] font-black text-slate-400">OFF</span>
+                            <span id="auto-scan-label" class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
                         </button>
                     </div>
                     <!-- 間隔設定（OFF時灰化）-->
                     <div id="auto-scan-settings" style="opacity:0.4;pointer-events:none;" class="flex items-center gap-3">
-                        <span class="text-sm font-black" style="color:#1a3a6a;">間隔</span>
-                        <select id="auto-scan-interval" class="text-sm font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
+                        <span class="text-xs font-black" style="color:#1a3a6a;">間隔</span>
+                        <select id="auto-scan-interval" class="text-xs font-black rounded-lg px-2 py-1 border" style="background:#fff; border-color:#90c0f0; color:#1a3a6a;">
                             <option value="5">5 分鐘</option>
                             <option value="10">10 分鐘</option>
                             <option value="15">15 分鐘</option>
                             <option value="30">30 分鐘</option>
                             <option value="60">60 分鐘</option>
                         </select>
-                        <span class="text-sm" style="color:#4a6a9a;">下次掃描：<span id="auto-scan-countdown" class="font-black">--:--</span></span>
+                        <span class="text-xs" style="color:#4a6a9a;">下次掃描：<span id="auto-scan-countdown" class="font-black">--:--</span></span>
                     </div>
-                    <div id="auto-scan-status" class="text-[12px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
+                    <div id="auto-scan-status" class="text-[10px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
                 </div>
             </div>
         </div>
@@ -584,30 +584,30 @@
         <div id="page-settings" class="hide space-y-6">
             <div class="text-left px-2">
                 <h3 class="text-2xl font-black italic tracking-tight uppercase">Account Management</h3>
-                <p class="text-slate-400 text-[12px] font-black uppercase tracking-[0.2em]">權限與推播設定</p>
+                <p class="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">權限與推播設定</p>
             </div>
             <div class="rounded-[2.5rem] p-6 space-y-5 border-2" style="background:#faf4ea; border-color:#c4a878;">
                 <div class="border-b pb-4" style="border-color:#d4c0a0;">
-                    <div class="text-sm font-black mb-2" style="color:#8a6a40;">當前授權帳號</div>
-                    <div id="settings-email" class="font-bold text-xl tracking-tight" style="color:#3a2010;">訪客模式</div>
+                    <div class="text-xs font-black mb-2" style="color:#8a6a40;">當前授權帳號</div>
+                    <div id="settings-email" class="font-bold text-lg tracking-tight" style="color:#3a2010;">訪客模式</div>
                 </div>
                 <!-- 需求4：自訂登入密碼 -->
                 <div class="rounded-2xl p-4 space-y-3" style="background:#ede0cc;">
-                    <div class="text-base font-black" style="color:#3a2010;">🔑 修改登入密碼</div>
-                    <div class="text-sm" style="color:#6a4a20;">設定後每日密碼失效，改用此自訂密碼登入</div>
+                    <div class="text-sm font-black" style="color:#3a2010;">🔑 修改登入密碼</div>
+                    <div class="text-xs" style="color:#6a4a20;">設定後每日密碼失效，改用此自訂密碼登入</div>
                     <input type="password" id="new-pw-input" placeholder="輸入新密碼（至少6位）"
-                           class="w-full border-none rounded-xl py-2.5 px-4 text-base font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
+                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
                     <input type="password" id="new-pw-confirm" placeholder="再次確認新密碼"
-                           class="w-full border-none rounded-xl py-2.5 px-4 text-base font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
-                    <button onclick="saveCustomPassword()" class="w-full py-2.5 rounded-xl font-black text-base text-white transition-all" style="background:#8a4a18;">儲存密碼</button>
-                    <div id="pw-msg" class="text-sm font-black text-center opacity-0" style="color:#1a6a30;"></div>
+                           class="w-full border-none rounded-xl py-2.5 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
+                    <button onclick="saveCustomPassword()" class="w-full py-2.5 rounded-xl font-black text-sm text-white transition-all" style="background:#8a4a18;">儲存密碼</button>
+                    <div id="pw-msg" class="text-xs font-black text-center opacity-0" style="color:#1a6a30;"></div>
                 </div>
                 <!-- 匯出匯入（也放帳號頁一份） -->
                 <div class="rounded-2xl p-4 space-y-3" style="background:#ede0cc;">
-                    <div class="text-base font-black" style="color:#3a2010;">💾 資料備份與還原</div>
+                    <div class="text-sm font-black" style="color:#3a2010;">💾 資料備份與還原</div>
                     <div class="flex gap-2">
-                        <button onclick="exportData()" class="flex-1 py-2.5 rounded-xl text-sm font-black border" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">⬇ 匯出 JSON</button>
-                        <label class="flex-1 py-2.5 rounded-xl text-sm font-black border text-center cursor-pointer" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">
+                        <button onclick="exportData()" class="flex-1 py-2.5 rounded-xl text-xs font-black border" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">⬇ 匯出 JSON</button>
+                        <label class="flex-1 py-2.5 rounded-xl text-xs font-black border text-center cursor-pointer" style="background:#faf4ea; border-color:#c4a878; color:#3a2010;">
                             ⬆ 匯入 JSON
                             <input type="file" accept=".json" class="hidden" onchange="importData(event)">
                         </label>
@@ -615,30 +615,30 @@
                 </div>
                 <div class="p-4 rounded-2xl flex items-center justify-between" style="background:#e8f0e0;">
                     <div>
-                        <p class="text-base font-bold" style="color:#1a4a10;">多終端同步警報</p>
-                        <p class="text-[12px] font-medium" style="color:#4a7030;">當美股、虛擬幣、台股轉折時自動發信</p>
+                        <p class="text-sm font-bold" style="color:#1a4a10;">多終端同步警報</p>
+                        <p class="text-[10px] font-medium" style="color:#4a7030;">當美股、虛擬幣、台股轉折時自動發信</p>
                     </div>
                     <div class="w-12 h-6 bg-blue-600 rounded-full flex items-center px-1"><div class="w-4 h-4 bg-white rounded-full ml-auto"></div></div>
                 </div>
                 <!-- 登入記錄（僅管理員可見）-->
                 <div id="login-log-section" class="hide rounded-2xl p-4 space-y-3" style="background:#f0e8ff; border:1px solid #c4a0e8;">
                     <div class="flex items-center justify-between mb-2">
-                        <div class="text-base font-black" style="color:#3a1060;">🔐 登入紀錄（最近200筆）</div>
-                        <button onclick="clearLoginLog()" class="text-[12px] font-black px-2 py-1 rounded-lg" style="background:#e8a0a0; color:#6a0000;">🗑 清除紀錄</button>
+                        <div class="text-sm font-black" style="color:#3a1060;">🔐 登入紀錄（最近200筆）</div>
+                        <button onclick="clearLoginLog()" class="text-[10px] font-black px-2 py-1 rounded-lg" style="background:#e8a0a0; color:#6a0000;">🗑 清除紀錄</button>
                     </div>
                     <!-- 篩選按鈕 -->
                     <div class="flex gap-2 flex-wrap">
-                        <button onclick="refreshLoginLog('all')" id="log-btn-all" class="text-sm font-black px-3 py-1 rounded-xl border-2" style="background:#3a1060;color:#fff;border-color:#3a1060;">全部</button>
-                        <button onclick="refreshLoginLog('success')" id="log-btn-success" class="text-sm font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#1a5a30;border-color:#6cd47e;">✅ 成功</button>
-                        <button onclick="refreshLoginLog('fail')" id="log-btn-fail" class="text-sm font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#8a2020;border-color:#e88888;">❌ 失敗/封鎖</button>
-                        <button onclick="refreshLoginLog('blocked')" id="log-btn-blocked" class="text-sm font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#6a4000;border-color:#e8a020;">🚫 黑名單</button>
+                        <button onclick="refreshLoginLog('all')" id="log-btn-all" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#3a1060;color:#fff;border-color:#3a1060;">全部</button>
+                        <button onclick="refreshLoginLog('success')" id="log-btn-success" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#1a5a30;border-color:#6cd47e;">✅ 成功</button>
+                        <button onclick="refreshLoginLog('fail')" id="log-btn-fail" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#8a2020;border-color:#e88888;">❌ 失敗/封鎖</button>
+                        <button onclick="refreshLoginLog('blocked')" id="log-btn-blocked" class="text-xs font-black px-3 py-1 rounded-xl border-2" style="background:#f0e8ff;color:#6a4000;border-color:#e8a020;">🚫 黑名單</button>
                     </div>
-                    <div id="login-log-list" class="space-y-2 text-sm" style="max-height:400px;overflow-y:auto;">
+                    <div id="login-log-list" class="space-y-2 text-xs" style="max-height:400px;overflow-y:auto;">
                         <div style="color:#6a4080;">載入中...</div>
                     </div>
                 </div>
                 <div class="text-center">
-                    <p class="text-[12px] font-black uppercase tracking-widest" style="color:#c4a878;">Authorized by AI Security System</p>
+                    <p class="text-[10px] font-black uppercase tracking-widest" style="color:#c4a878;">Authorized by AI Security System</p>
                 </div>
             </div>
         </div>
@@ -649,19 +649,19 @@
         <div class="max-w-md mx-auto flex justify-around items-center">
             <button onclick="switchPage('watchlist')" id="tab-watchlist" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="eye" class="w-6 h-6"></i>
-                <span class="text-[12px] font-black">待買觀察</span>
+                <span class="text-[10px] font-black">待買觀察</span>
             </button>
             <button onclick="switchPage('monitor')" id="tab-monitor" class="flex flex-col items-center gap-1 py-2 px-3 transition-all tab-active">
                 <i data-lucide="list" class="w-6 h-6"></i>
-                <span class="text-[12px] font-black">持股清單</span>
+                <span class="text-[10px] font-black">持股清單</span>
             </button>
             <button onclick="switchPage('scan')" id="tab-scan" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="brain-circuit" class="w-6 h-6"></i>
-                <span class="text-[12px] font-black">智能診斷</span>
+                <span class="text-[10px] font-black">智能診斷</span>
             </button>
             <button onclick="switchPage('settings')" id="tab-settings" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="user-check" class="w-6 h-6"></i>
-                <span class="text-[12px] font-black">帳號權限</span>
+                <span class="text-[10px] font-black">帳號權限</span>
             </button>
         </div>
     </div>
@@ -1101,14 +1101,14 @@
             const list = document.getElementById('stock-list');
             document.getElementById('stock-count').innerText = stocks.length;
             if (stocks.length === 0) {
-                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-sm italic font-black uppercase tracking-widest">No Active Monitoring</div>`;
+                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Active Monitoring</div>`;
                 return;
             }
             const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
             const filtered_st = (stCatFilter === 'all' ? stocks : stocks.filter(s => (s.cat||'tw') === stCatFilter))
                 .slice().sort((a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code));
             if (filtered_st.length === 0) {
-                list.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm font-black uppercase">此分類尚無股票</div>`;
+                list.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs font-black uppercase">此分類尚無股票</div>`;
                 lucide.createIcons(); return;
             }
             list.innerHTML = filtered_st.map(s => {
@@ -1119,7 +1119,7 @@
                     const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
                     const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
                     const bollClr = { near_upper:'text-amber-600', mid_zone:'text-slate-500', near_lower:'text-emerald-600' };
-                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[13px] font-black px-1">
+                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
@@ -1127,10 +1127,10 @@
                 return `
                 <div class="flex items-center gap-2 p-2 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-2 shrink-0">
-                        <div class="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-black text-blue-600 shadow-inner text-base">${s.code[0]}</div>
+                        <div class="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-black text-blue-600 shadow-inner text-sm">${s.code[0]}</div>
                         <div>
-                            <div class="font-black text-base tracking-tight">${s.code}</div>
-                            <div class="text-[11px] font-black text-slate-400 uppercase">${name}</div>
+                            <div class="font-black text-sm tracking-tight">${s.code}</div>
+                            <div class="text-[9px] font-black text-slate-400 uppercase">${name}</div>
                         </div>
                     </div>
                     ${rsiHtml}
@@ -1271,24 +1271,24 @@
                 <div class="flex items-center gap-2">
                     <!-- 左：icon + 代碼 + 名稱 -->
                     <div class="flex items-center gap-2 shrink-0 min-w-0">
-                        <div class="w-9 h-9 rounded-xl shrink-0 ${hasBuy ? 'bg-emerald-200 text-emerald-700' : (bgDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500')} flex items-center justify-center font-black text-base">${code[0]}</div>
+                        <div class="w-9 h-9 rounded-xl shrink-0 ${hasBuy ? 'bg-emerald-200 text-emerald-700' : (bgDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500')} flex items-center justify-center font-black text-sm">${code[0]}</div>
                         <div class="min-w-0">
-                            <div class="font-black text-base ${textMain} truncate">${code}</div>
-                            <div class="text-[11px] ${textSub} uppercase truncate">${name}</div>
+                            <div class="font-black text-sm ${textMain} truncate">${code}</div>
+                            <div class="text-[9px] ${textSub} uppercase truncate">${name}</div>
                         </div>
                     </div>
                     <!-- 中：RSI + 布林（固定寬度，防超框）-->
-                    <div class="flex-1 flex flex-col items-center justify-center gap-0.5 text-[12px] font-black px-1 min-w-[60px] max-w-[72px]">
+                    <div class="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-black px-1 min-w-[60px] max-w-[72px]">
                         <span class="diag-rsi ${rsiClr} whitespace-nowrap">RSI ${result.rsi} ${arrow}</span>
                         <span class="${bollClr[result.boll_position] || textSub} text-center leading-tight whitespace-nowrap">${bollMap[result.boll_position] || result.boll_position}</span>
                     </div>
                     <!-- 右：價格 + 狀態（flex-1自動撐開不截斷）-->
                     <div class="text-right flex-1 min-w-0">
-                        <div class="font-black text-base ${textMain}">${result.price}</div>
-                        <div class="text-[11px] font-black leading-tight ${hasBuy ? 'text-emerald-400' : hasSell ? 'text-rose-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : hasSell ? '🔔 賣出訊號' : noSignalText}</div>
+                        <div class="font-black text-sm ${textMain}">${result.price}</div>
+                        <div class="text-[9px] font-black leading-tight ${hasBuy ? 'text-emerald-400' : hasSell ? 'text-rose-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : hasSell ? '🔔 賣出訊號' : noSignalText}</div>
                     </div>
                 </div>
-                ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[12px] font-black text-center">${condText}</div>` : ''}
+                ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black text-center">${condText}</div>` : ''}
             </div>`;
         };
 
@@ -1299,7 +1299,7 @@
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl ${bgDark ? 'bg-slate-700 text-slate-300' : 'bg-blue-100 text-blue-600'} flex items-center justify-center font-black">${code[0]}</div>
                     <div class="font-black ${textClr}">${code}</div>
-                    <div class="ml-auto text-sm text-blue-500 font-black animate-pulse">診斷中...</div>
+                    <div class="ml-auto text-xs text-blue-500 font-black animate-pulse">診斷中...</div>
                 </div>
             </div>`;
         };
@@ -1604,48 +1604,49 @@
                 _el2nd = checkElBuy(calcElInd(_elO, _elH, _elL, _elC, _elV));
             } catch(_e2) { _el2nd = false; }
 
+            // ── 【三道關卡共用5分K邏輯】週K和日K都需要通過第三道5分K ──
+            // 第三道：5分K（RSI↑ AND MACD↑）AND（5分K近3根條件A or B）
+            let _3rd_pass = false;
+            try {
+                const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
+                const _5mData = await fetchWithFallback(
+                    `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_5mSuffix}?interval=5m&range=5d`
+                ).catch(async () => {
+                    if (/^\d{4,6}$/.test(code)) return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=5m&range=5d`);
+                    throw new Error('no 5m data');
+                });
+                const _5mC  = _5mData.indicators.quote[0].close.filter(v=>v!=null);
+                const _5mLo = (_5mData.indicators.quote[0].low ||[]).filter(v=>v!=null&&!isNaN(v));
+                const _5mHi = (_5mData.indicators.quote[0].high||[]).filter(v=>v!=null&&!isNaN(v));
+                if (_5mC.length >= 5) {
+                    const _5mRsiNow = calcRSI(_5mC);
+                    const _5mRsiPrv = calcRSI(_5mC.slice(0,-1));
+                    const _5mMacd   = calcMACDHist(_5mC);
+                    const _5mRsiOk  = _5mRsiNow > _5mRsiPrv && _5mRsiNow > _p2;
+                    const _5mMacdOk = _5mMacd && _5mMacd.now > _5mMacd.prev;
+                    const _5mn = 3;
+                    const _5mLn = _5mLo.slice(-_5mn);
+                    const _5mHn = _5mHi.slice(-_5mn);
+                    const _5mB  = calcBoll(_5mC);
+                    const _5mA  = _5mB && _5mLn.some(l => l <= _5mB.lower * _p3) && _5mRsiOk && _5mMacdOk;
+                    const _5mB2 = _5mB && _5mLn.every(l => l < _5mB.mid) && _5mHn.every(h => h < _5mB.upper) && _5mMacdOk;
+                    _3rd_pass = (_5mA || _5mB2);
+                }
+            } catch(e) { _3rd_pass = false; }
+
+            const _1st2nd_pass = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
+
             if (SCAN_INTERVAL === '1wk') {
-                // [W] 長期投資：第一道 + 第二道eLeader
-                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
+                // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
+                buy_signal = _1st2nd_pass && _3rd_pass;
 
             } else if (SCAN_INTERVAL === '1d') {
-                // 中期投資：第一道 + 第二道eLeader + 第三道5分K
-                const _1st_pass = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
-
-                // 第三道：5分K（RSI↑ AND MACD↑）AND（5分K近3根條件A or B）
-                let _3rd_pass = false;
-                try {
-                    const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
-                    const _5mData = await fetchWithFallback(
-                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}${_5mSuffix}?interval=5m&range=5d`
-                    ).catch(async () => {
-                        if (/^\d{4,6}$/.test(code)) return await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${code}.TWO?interval=5m&range=5d`);
-                        throw new Error('no 5m data');
-                    });
-                    const _5mC  = _5mData.indicators.quote[0].close.filter(v=>v!=null);
-                    const _5mLo = (_5mData.indicators.quote[0].low ||[]).filter(v=>v!=null&&!isNaN(v));
-                    const _5mHi = (_5mData.indicators.quote[0].high||[]).filter(v=>v!=null&&!isNaN(v));
-                    if (_5mC.length >= 5) {
-                        const _5mRsiNow = calcRSI(_5mC);
-                        const _5mRsiPrv = calcRSI(_5mC.slice(0,-1));
-                        const _5mMacd   = calcMACDHist(_5mC);
-                        const _5mRsiOk  = _5mRsiNow > _5mRsiPrv && _5mRsiNow > _p2;
-                        const _5mMacdOk = _5mMacd && _5mMacd.now > _5mMacd.prev;
-                        // 5分K近3根條件A or B（鏡像買進策略）
-                        const _5mn = 3;
-                        const _5mLn = _5mLo.slice(-_5mn);
-                        const _5mHn = _5mHi.slice(-_5mn);
-                        const _5mB  = calcBoll(_5mC);
-                        const _5mA  = _5mB && _5mLn.some(l => l <= _5mB.lower * _p3) && _5mRsiOk && _5mMacdOk;
-                        const _5mB2 = _5mB && _5mLn.every(l => l < _5mB.mid) && _5mHn.every(h => h < _5mB.upper) && _5mMacdOk;
-                        _3rd_pass = (_5mA || _5mB2);
-                    }
-                } catch(e) { _3rd_pass = false; }
-
-                buy_signal = _1st_pass && _3rd_pass;
+                // 中期投資：第一道日K + 第二道eLeader + 第三道5分K（三道缺一不可）
+                buy_signal = _1st2nd_pass && _3rd_pass;
 
             } else {
-                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
+                // 其他週期：同樣需要三道
+                buy_signal = _1st2nd_pass && _3rd_pass;
             }
 
             if (buy_signal) {
@@ -1745,7 +1746,7 @@
                 const snap  = await getDoc(fsDoc);
                 if (!snap.exists()) {
                     statusEl.textContent = '⚪ 尚無執行紀錄';
-                    statusEl.className = 'text-[12px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
                     return;
                 }
                 const d      = snap.data();
@@ -1754,17 +1755,17 @@
                 const cnt    = Number(d.signal_count) || 0;
                 if (status === 'signal' && cnt > 0) {
                     statusEl.textContent = `🔥 上次有訊號 ${cnt}支 ${t}`;
-                    statusEl.className = 'text-[12px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700';
                 } else if (status === 'completed') {
                     statusEl.textContent = `🟢 上次無訊號 ${t}`;
-                    statusEl.className = 'text-[12px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700';
                 } else {
                     statusEl.textContent = `⚪ ${t || '待機中'}`;
-                    statusEl.className = 'text-[12px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+                    statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
                 }
             } catch(e) {
                 statusEl.textContent = '❓ 狀態查詢失敗';
-                statusEl.className = 'text-[12px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
+                statusEl.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500';
             }
         }
 
@@ -2368,7 +2369,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     document.getElementById(`wl-card-${code}`).outerHTML =
                         `<div id="wl-card-${code}-retry" class="border-2 border-amber-200 bg-amber-50 rounded-[2rem] p-5 flex items-center gap-3">
                             <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-500 flex items-center justify-center font-black">${code[0]}</div>
-                            <div><div class="font-black">${code}</div><div class="text-[12px] text-amber-500">網路繁忙，自動重試中...</div></div>
+                            <div><div class="font-black">${code}</div><div class="text-[10px] text-amber-500">網路繁忙，自動重試中...</div></div>
                         </div>`;
                 }
             });
@@ -2394,7 +2395,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         if (retryEl) retryEl.outerHTML =
                             `<div class="border-2 border-rose-200 bg-rose-50 rounded-[2rem] p-5 flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center font-black">${code[0]}</div>
-                                <div><div class="font-black">${code}</div><div class="text-[12px] text-rose-400">無法取得資料</div></div>
+                                <div><div class="font-black">${code}</div><div class="text-[10px] text-rose-400">無法取得資料</div></div>
                             </div>`;
                     }
                 });
@@ -2438,10 +2439,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             resultDiv.classList.remove('hide');
             resultDiv.innerHTML = all.map(({ code, tag }) =>
                 `<div id="sc-card-${code}" class="border-2 border-slate-700 bg-slate-900 rounded-[2rem] p-4 flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-xl bg-slate-700 text-slate-300 flex items-center justify-center font-black text-base">${code[0]}</div>
+                    <div class="w-9 h-9 rounded-xl bg-slate-700 text-slate-300 flex items-center justify-center font-black text-sm">${code[0]}</div>
                     <span class="font-black text-white">${code}</span>
-                    <span class="text-[12px] text-slate-400 ml-1">(${tag})</span>
-                    <span class="ml-auto text-sm text-blue-400 font-black animate-pulse">診斷中...</span>
+                    <span class="text-[10px] text-slate-400 ml-1">(${tag})</span>
+                    <span class="ml-auto text-xs text-blue-400 font-black animate-pulse">診斷中...</span>
                 </div>`
             ).join('');
             document.getElementById('last-diagnostic-time').innerText = new Date().toLocaleTimeString();
@@ -2461,16 +2462,16 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     const name = stockNameMap[code] || '未定義資產';
                     const cardHtml = makeDiagCard(code, result, true, tag === '持股')
                         .replace(
-                            `<div class="text-[12px] ${result.rsi_trend === 'rising' ? 'text-emerald-400' : 'text-rose-400'} uppercase">${name}</div>`,
-                            `<div class="text-[12px] text-slate-400 uppercase">${name} <span class="text-blue-400">(${tag})</span></div>`
+                            `<div class="text-[10px] ${result.rsi_trend === 'rising' ? 'text-emerald-400' : 'text-rose-400'} uppercase">${name}</div>`,
+                            `<div class="text-[10px] text-slate-400 uppercase">${name} <span class="text-blue-400">(${tag})</span></div>`
                         );
                     document.getElementById(`sc-card-${code}`).outerHTML = cardHtml;
                 } catch(e) {
                     document.getElementById(`sc-card-${code}`).outerHTML =
                         `<div class="border-2 border-rose-800 bg-slate-900 rounded-[2rem] p-4 flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-xl bg-slate-700 text-rose-400 flex items-center justify-center font-black text-base">${code[0]}</div>
+                            <div class="w-9 h-9 rounded-xl bg-slate-700 text-rose-400 flex items-center justify-center font-black text-sm">${code[0]}</div>
                             <span class="font-black text-white">${code}</span>
-                            <span class="text-[12px] text-rose-400 ml-1">無法取得資料</span>
+                            <span class="text-[10px] text-rose-400 ml-1">無法取得資料</span>
                         </div>`;
                 }
             });
@@ -2627,14 +2628,14 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             const list = document.getElementById('watchlist-list');
             document.getElementById('watchlist-count').innerText = watchlist.length;
             if (watchlist.length === 0) {
-                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-sm italic font-black uppercase tracking-widest">No Watchlist</div>`;
+                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-300 text-xs italic font-black uppercase tracking-widest">No Watchlist</div>`;
                 return;
             }
             const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
             const filtered_wl = (wlCatFilter === 'all' ? watchlist : watchlist.filter(s => (s.cat||'tw') === wlCatFilter))
                 .slice().sort((a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code));
             if (filtered_wl.length === 0) {
-                list.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm font-black uppercase">此分類尚無股票</div>`;
+                list.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs font-black uppercase">此分類尚無股票</div>`;
                 lucide.createIcons(); return;
             }
             list.innerHTML = filtered_wl.map(s => {
@@ -2646,7 +2647,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
                     const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
                     const bollClr = { near_upper:'text-amber-600', mid_zone:'text-slate-500', near_lower:'text-emerald-600' };
-                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[13px] font-black px-1">
+                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[11px] font-black px-1">
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
@@ -2654,7 +2655,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 return `<div class="flex items-center gap-2 p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-3 shrink-0">
                         <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
-                        <div><div class="font-black text-xl tracking-tight">${s.code}</div><div class="text-[12px] font-black text-slate-400 uppercase">${name}</div></div>
+                        <div><div class="font-black text-lg tracking-tight">${s.code}</div><div class="text-[10px] font-black text-slate-400 uppercase">${name}</div></div>
                     </div>
                     ${rsiHtml}
                     <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2 shrink-0"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
@@ -2779,7 +2780,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 knob.style.transform = 'translateX(28px)';
                 label.textContent    = 'ON';
                 label.style.color    = '#fff';
-                label.className      = 'absolute left-1.5 text-[11px] font-black text-white';
+                label.className      = 'absolute left-1.5 text-[9px] font-black text-white';
                 settings.style.opacity = '1';
                 settings.style.pointerEvents = 'auto';
                 _startAutoScanLoop();
@@ -2792,7 +2793,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 knob.style.transform = 'translateX(0px)';
                 label.textContent = 'OFF';
                 label.style.color = '';
-                label.className = 'absolute right-1.5 text-[11px] font-black text-slate-400';
+                label.className = 'absolute right-1.5 text-[9px] font-black text-slate-400';
                 settings.style.opacity = '0.4';
                 settings.style.pointerEvents = 'none';
                 _stopAutoScanLoop();
@@ -2895,7 +2896,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 btn.style.background = '#2563eb';
                 knob.style.transform = 'translateX(28px)';
                 label.textContent    = 'ON';
-                label.className      = 'absolute left-1.5 text-[11px] font-black text-white';
+                label.className      = 'absolute left-1.5 text-[9px] font-black text-white';
                 settings.style.opacity = '1';
                 settings.style.pointerEvents = 'auto';
                 _startWlAutoScanLoop();
@@ -2905,7 +2906,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 btn.style.background = '';
                 knob.style.transform = 'translateX(0px)';
                 label.textContent = 'OFF';
-                label.className = 'absolute right-1.5 text-[11px] font-black text-slate-400';
+                label.className = 'absolute right-1.5 text-[9px] font-black text-slate-400';
                 settings.style.opacity = '0.4';
                 settings.style.pointerEvents = 'none';
                 _stopWlAutoScanLoop();
