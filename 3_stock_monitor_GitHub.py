@@ -339,7 +339,7 @@ def get_cash_delivery_set():
         'Accept': 'application/json'
     }
 
-    def _fetch_with_retry(url, max_retry=3, wait_sec=5, timeout=15):
+    def _fetch_with_retry(url, max_retry=2, wait_sec=5, timeout=15):
         """重試機制：最多重試 max_retry 次，每次失敗等 wait_sec 秒"""
         import requests as _req
         for attempt in range(1, max_retry + 1):
@@ -367,7 +367,7 @@ def get_cash_delivery_set():
                 codes.add(str(code).strip())
         print(f'  ✅ TWSE全額交割上市：{len(codes)} 支')
     else:
-        print(f'  ❌ TWSE全額交割：重試3次均失敗')
+        print(f'  ❌ TWSE全額交割：重試2次均失敗')
 
     # ── 來源2：TPEX OpenAPI（上櫃全額交割，重試3次）─────────────
     before = len(codes)
@@ -379,7 +379,7 @@ def get_cash_delivery_set():
                 codes.add(str(code).strip())
         print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
     else:
-        print(f'  ❌ TPEX全額交割：重試3次均失敗')
+        print(f'  ❌ TPEX全額交割：重試2次均失敗')
 
     # ── 來源3：備援 TWSE HTML 表格（前兩個都失敗且 codes 仍空時）──
     if not codes:
@@ -1125,7 +1125,9 @@ def main_task():
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
 
-    if ENABLE_CASH_DELIVERY_CHECK:
+    # ✅ 期貨5分K模式 或 純美股時段（無台股）時，跳過全額交割check（台股才有此制度）
+    _skip_cash = (TEST_MODE == '5mk') or ('TW' not in active_markets and 'CRYPTO' not in active_markets)
+    if ENABLE_CASH_DELIVERY_CHECK and not _skip_cash:
         print(f"\n🔍 正在更新全額交割股清單...")
         get_cash_delivery_set()
 
