@@ -183,7 +183,7 @@ ENABLE_INDEX_FILTER  = True    # True=啟用大盤過濾警告 / False=忽略大
 
 # ── 【２-6】全額交割股預警策略 ───────────────────────────────────
 ENABLE_CASH_DELIVERY_CHECK = True   # True=啟用全額交割預警 / False=關閉
-CASH_DELIVERY_CACHE_HOURS  = 24     # 全額交割清單快取時間（小時，建議24）
+CASH_DELIVERY_CACHE_HOURS  = 72     # 全額交割清單快取時間（小時，72=3天，API失敗時仍可用舊資料）
 
 # ── 【２-7】做空入場策略：空頭三道關卡條件 ────────────────────────
 # ⚠️ 做空策略嚴禁用於當沖或隔日沖，僅供中長期空頭佈局參考
@@ -318,11 +318,13 @@ def get_cash_delivery_set():
     取得全額交割股票代碼 Set（上市+上櫃）。
     快取 CASH_DELIVERY_CACHE_HOURS 小時，避免重複抓取。
     回傳 set of str（純代碼，如 '1234'）
+    ✅ v7改善：timeout 15秒、每來源重試3次（間隔5秒）、快取延長72小時
     """
     if not ENABLE_CASH_DELIVERY_CHECK:
         return set()
 
     from datetime import datetime as _dt
+    import time as _time
     now = _dt.now()
     with _cash_delivery_lock:
         # 快取未過期則直接回傳
@@ -337,49 +339,56 @@ def get_cash_delivery_set():
         'Accept': 'application/json'
     }
 
-    # ── 來源1：TWSE OpenAPI（上市全額交割）────────────────────
-    try:
+    def _fetch_with_retry(url, max_retry=3, wait_sec=5, timeout=15):
+        """重試機制：最多重試 max_retry 次，每次失敗等 wait_sec 秒"""
         import requests as _req
-        r = _req.get(
-            'https://openapi.twse.com.tw/v1/company/cashPaymentStocks',
-            headers=headers, timeout=10
-        )
-        if r.status_code == 200:
-            data = r.json()
-            for item in data:
-                code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
-                if code:
-                    codes.add(str(code).strip())
-            print(f'  ✅ TWSE全額交割上市：{len(codes)} 支')
-    except Exception as e:
-        print(f'  ⚠️ TWSE全額交割抓取失敗：{e}')
+        for attempt in range(1, max_retry + 1):
+            try:
+                r = _req.get(url, headers=headers, timeout=timeout)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data:  # 確認回傳非空
+                        return data
+                    print(f'  ⚠️ 第{attempt}次：回傳空白，{"重試中..." if attempt < max_retry else "放棄"}')
+                else:
+                    print(f'  ⚠️ 第{attempt}次：HTTP {r.status_code}，{"重試中..." if attempt < max_retry else "放棄"}')
+            except Exception as e:
+                print(f'  ⚠️ 第{attempt}次失敗：{e}，{"重試中..." if attempt < max_retry else "放棄"}')
+            if attempt < max_retry:
+                _time.sleep(wait_sec)
+        return None
 
-    # ── 來源2：TPEX OpenAPI（上櫃全額交割）────────────────────
-    try:
-        import requests as _req
-        r2 = _req.get(
-            'https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks',
-            headers=headers, timeout=10
-        )
-        if r2.status_code == 200:
-            data2 = r2.json()
-            before = len(codes)
-            for item in data2:
-                code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
-                if code:
-                    codes.add(str(code).strip())
-            print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
-    except Exception as e:
-        print(f'  ⚠️ TPEX全額交割抓取失敗：{e}')
+    # ── 來源1：TWSE OpenAPI（上市全額交割，重試3次）─────────────
+    data1 = _fetch_with_retry('https://openapi.twse.com.tw/v1/company/cashPaymentStocks')
+    if data1:
+        for item in data1:
+            code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
+            if code:
+                codes.add(str(code).strip())
+        print(f'  ✅ TWSE全額交割上市：{len(codes)} 支')
+    else:
+        print(f'  ❌ TWSE全額交割：重試3次均失敗')
 
-    # ── 來源3：備援 TWSE HTML 表格（若前兩個都失敗且 codes 仍空）──
+    # ── 來源2：TPEX OpenAPI（上櫃全額交割，重試3次）─────────────
+    before = len(codes)
+    data2 = _fetch_with_retry('https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks')
+    if data2:
+        for item in data2:
+            code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
+            if code:
+                codes.add(str(code).strip())
+        print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
+    else:
+        print(f'  ❌ TPEX全額交割：重試3次均失敗')
+
+    # ── 來源3：備援 TWSE HTML 表格（前兩個都失敗且 codes 仍空時）──
     if not codes:
         try:
             import requests as _req
             from bs4 import BeautifulSoup as _BS
             r3 = _req.get(
                 'https://www.twse.com.tw/zh/page/trading/exchange/TWTB4U.html',
-                headers=headers, timeout=10
+                headers=headers, timeout=15
             )
             soup = _BS(r3.text, 'html.parser')
             for td in soup.select('table td:first-child'):
@@ -390,12 +399,20 @@ def get_cash_delivery_set():
         except Exception as e:
             print(f'  ⚠️ 備援HTML全額交割抓取失敗：{e}')
 
+    # ── 快取：有資料才更新，保留舊快取避免空白覆蓋 ──────────────
     with _cash_delivery_lock:
-        _cash_delivery_cache['codes'] = codes
-        _cash_delivery_cache['ts']    = now
+        if codes:  # 有資料才更新快取（空白時保留舊快取，避免覆蓋昨天的正確資料）
+            _cash_delivery_cache['codes'] = codes
+            _cash_delivery_cache['ts']    = now
+        elif _cash_delivery_cache['ts'] is None:
+            # 第一次就全部失敗，記錄空快取
+            _cash_delivery_cache['codes'] = codes
+            _cash_delivery_cache['ts']    = now
+        else:
+            print(f'  ⚠️ 本次抓取失敗，保留舊快取（{len(_cash_delivery_cache["codes"])} 支）')
 
-    print(f'  📋 全額交割股共 {len(codes)} 支（含上市+上櫃）')
-    return codes
+    print(f'  📋 全額交割股共 {len(_cash_delivery_cache["codes"])} 支（含上市+上櫃）')
+    return _cash_delivery_cache['codes']
 
 # ============================================================
 # 【４．交易時段與數據抓取核心】
