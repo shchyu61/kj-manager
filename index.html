@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131153</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131253</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1639,7 +1639,8 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}`;
+                const _mT = _currentScanMode === 'daily' ? '中期投資' : '長期投資';
+                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}\n投資模式：${_mT}\n⚠️ 嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -1669,7 +1670,8 @@
             const scanTime = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
-                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利`;
+                const _mT2 = _currentScanMode === 'daily' ? '中期投資' : '長期投資';
+                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利\n投資模式：${_mT2}\n⚠️ 嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
