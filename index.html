@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131253</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131353</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1209,6 +1209,15 @@
             const macd_prev = ema12(closes.slice(0,-1)) - ema26(closes.slice(0,-1));
             return { now: macd_now, prev: macd_prev };
         };
+        // ── eLeader 25條件 JS版（第二道關卡）──────────────────────────
+        const _rm=(a,n)=>a.map((_,i)=>{if(i<n-1)return null;let s=0;for(let j=i-n+1;j<=i;j++)s+=a[j];return s/n;});
+        const _rs=(a,n)=>a.map((_,i)=>{if(i<n-1)return null;const m=a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n;let v=0;for(let j=i-n+1;j<=i;j++)v+=(a[j]-m)**2;return Math.sqrt(v/(n-1));});
+        const _ea=(a,n)=>{const k=2/(n+1),r=new Array(a.length).fill(null);let si=0;while(si<a.length&&a[si]===null)si++;if(si>=a.length)return r;r[si]=a[si];for(let i=si+1;i<a.length;i++)r[i]=(a[i]!==null&&r[i-1]!==null)?a[i]*k+r[i-1]*(1-k):null;return r;};
+        const _ra=(a,n=14)=>{const r=new Array(a.length).fill(null);if(a.length<n+1)return r;let g=0,ls=0;for(let i=1;i<=n;i++){const d=a[i]-a[i-1];if(d>=0)g+=d;else ls-=d;}let ag=g/n,al=ls/n;r[n]=al===0?100:100-100/(1+ag/al);for(let i=n+1;i<a.length;i++){const d=a[i]-a[i-1];ag=(ag*(n-1)+Math.max(d,0))/n;al=(al*(n-1)+Math.max(-d,0))/n;r[i]=al===0?100:100-100/(1+ag/al);}return r;};
+        const _ma=(a,f=12,sl=26,sg=9)=>{const kf=2/(f+1),ks=2/(sl+1),kg=2/(sg+1),ml=new Array(a.length).fill(null),sgl=new Array(a.length).fill(null),hl=new Array(a.length).fill(null);let ef=a[0],es=a[0];for(let i=1;i<a.length;i++){ef=a[i]*kf+ef*(1-kf);es=a[i]*ks+es*(1-ks);if(i>=sl-1)ml[i]=ef-es;}const fi=ml.findIndex(v=>v!==null);if(fi>=0){sgl[fi]=ml[fi];for(let i=fi+1;i<a.length;i++)if(ml[i]!==null&&sgl[i-1]!==null)sgl[i]=ml[i]*kg+sgl[i-1]*(1-kg);for(let i=fi;i<a.length;i++)if(ml[i]!==null&&sgl[i]!==null)hl[i]=ml[i]-sgl[i];}return{ml,sgl,hl};};
+        const _g=(a,sh=0)=>{const i=a.length-1-sh;return i>=0?a[i]:null;};
+        const calcElInd=(op,hi,lo,cl,vo)=>{if(cl.length<30)return null;const mc2=_rm(cl,2),mc20=_rm(cl,20),mo2=_rm(op,2),mh2=_rm(hi,2),ml2=_rm(lo,2),mv5=_rm(vo,5),s20=_rs(cl,20),s2=_rs(cl,2);const bt20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m+2*s20[i]:null),bb20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m-2*s20[i]:null),bt2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m+2*s2[i]:null),bb2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m-2*s2[i]:null);const rsi=_ra(cl,14),ersi=_ea(rsi,9),{ml:macd,sgl:msig,hl:mosc}=_ma(cl,12,26,9),emacd=_ea(macd,9),{ml:macd_o}=_ma(op,12,26,9);return{op,hi,lo,cl,vo,mc2,mc20,mo2,mh2,ml2,mv5,bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o};};
+        const checkElBuy=(d)=>{if(!d)return false;const{op:o,hi:h,lo:l,cl:c,mc2,mc20,mo2,mh2,ml2,mv5,bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o}=d,g=_g;if(g(c,3)===null||g(bb20,3)===null||g(rsi,3)===null)return false;if(!(g(rsi,1)<78&&g(c)>g(ml2)&&g(h)>g(o)&&g(c)>g(l)))return false;const C01=g(h,1)>g(bb20,1)&&g(bt2,1)<g(bt20,1)&&g(bb2)>g(bb20),C02=g(mosc)>g(mosc,1),C03=(g(mc20)>g(mc20,1)&&g(bt20)>g(bt20,1)&&g(rsi)>g(rsi,1))||(g(mc20,1)<g(mc20,2)&&(g(bb20,1)<g(bb20,2)||(g(mo2,1)<g(mo2,2)&&g(o)>g(mo2)))&&g(rsi,2)<g(rsi,3)&&g(rsi,1)>g(rsi,2)&&g(rsi)>g(rsi,1)&&g(ersi,1)>g(ersi,2)),C04=(g(c,1)>g(mc2,1)||g(c,1)>g(mc20,1))&&g(o)<g(mc20,1),gA=C01&&C02&&C03&&C04;const C11=g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2),C12=g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)<g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(c)>g(mo2),C21=g(mc20,1)<g(mc20,2)&&g(bt20)<g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(bb20)<g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1),C22=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(ersi,1)>g(rsi,1)&&g(emacd)>g(macd)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(ml2),C23=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)<g(msig,1)&&g(macd)>g(macd,1),C24=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(mo2)<g(bb20)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2)<g(mo2,1)&&g(o,1)<g(mo2,1)&&g(o)>g(mo2),C25=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bt20)>g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(c,1)<g(bb20,1)&&g(o)<g(bb20,1)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(c)>g(mo2),C26=g(mc20,1)<g(mc20,2)&&g(h,1)<g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(ersi,1)&&g(ersi,1)>g(ersi,2)&&g(macd,1)>g(macd,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o),C27=g(mc20,1)<g(mc20,2)&&g(o,1)<g(bb20,1)&&g(macd_o)<0&&g(rsi,1)<g(rsi,2)&&g(ersi,2)<35&&g(mo2,1)<g(bb20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(l,1),C28=g(mc20,1)<g(mc20,2)&&g(o,1)<g(mc20,1)&&g(c,1)>g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(ersi,1)>g(ersi,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(l);const C41=g(mc20,1)>g(mc20,2)&&g(bb20)>g(bb20,1)&&g(bt20)<g(bt20,1)&&g(ersi,1)>g(rsi,1)&&g(emacd,1)>g(macd,1)&&g(o,1)<g(mc20,1)&&g(h,1)>g(mc20,1)&&g(mo2,1)<g(mc20,1)&&g(mo2)<g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2)&&g(l)>=g(l,1),C42=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(o)<g(bb20,1)&&g(o,1)>g(mc20,1)&&g(mo2,1)>g(l,2)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2),C43=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(o),C44=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(emacd,2)&&g(o)<g(mc20,1)&&g(mo2)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(h)<g(mo2)&&g(ml2,1)>=g(ml2,2)&&g(l)<g(ml2)&&g(c)>g(ml2),C45=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(macd,1)&&g(ersi,1)>g(rsi,1)&&g(o,1)<g(mo2,1)&&g(rsi,1)>g(rsi,2)&&g(o)>g(mo2)&&g(c,1)>g(mo2,1)&&g(mo2)<g(mo2,1)&&g(ml2,1)<g(bb20,1)&&g(c)>g(o),C46=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(h,1)>g(bt20,1)&&g(c)>g(bt20)&&g(c,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(o)<g(mo2),C47=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(macd)>g(macd,1)&&g(mo2,1)>g(mc20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2,1),C48=g(mc20,1)>g(mc20,2)&&g(bt20,2)<g(bt20,3)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi)>g(rsi,1)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)>g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o,1),C49=g(mc20,1)>g(mc20,2)&&g(h,2)<g(bt20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(ersi)>g(ersi,1)&&g(macd,1)>g(macd,2)&&g(o,1)>g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2),C50=g(mc20,2)>g(mc20,3)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(rsi)<g(ersi)&&g(emacd,1)<g(macd,1)&&g(bt20,2)>g(bt20,3)&&g(bb20,2)>g(bb20,3)&&g(mo2,1)<g(mo2,2)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2);const C61=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,2)<g(o,2)&&g(c,1)>g(o,1)&&g(bb20,1)>g(bb20,2)&&g(bt2,1)>g(bt2,2)&&g(bb2,1)<g(bb2,2)&&g(mo2,1)<g(mc20,2)&&g(mo2,1)<g(mo2,2)&&g(mv5)>g(mv5,1)&&g(d.vo[d.vo.length-1])>g(mv5)&&g(h)>g(o),C62=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,1)<g(o,1)&&g(o,1)>g(mc20,1)&&g(bb20,1)<g(bb20,2)&&g(mh2,1)>g(mh2,2)&&g(ml2,1)>g(ml2,2)&&g(c,1)>=g(mc2,1)&&g(l)<g(o)&&g(c)>g(o),C63=g(mc20)>g(mc20,1)&&g(bb20)>g(bb20,1)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(ersi)>g(ersi,1)&&g(c)>g(mo2,1),C66=g(c,1)>g(o,1)&&g(mc20,2)>g(mc20,3)&&g(mc20,1)>g(mc20,2)&&g(l,1)>g(mc20,1)&&g(bt20,1)>g(bt20,2)&&g(bt2,1)>g(bt20,1)&&g(bb20)<g(bb20,1)&&g(o,1)<g(bt20,1)&&g(o)<g(bt20)&&g(macd)>g(msig)&&g(o,1)<g(mo2,1)&&g(c,1)>g(mo2,1)&&g(c,1)>=g(ml2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(o),C71=g(c,1)>g(o,1)&&g(c,2)<g(o,2)&&g(bb2,2)>g(bb20,2)&&g(ml2,2)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(o,1)<g(mc20,1)&&((g(mo2)>g(mo2,1)&&g(h,1)<g(mh2,1)&&g(c)>g(mc2))||(g(mo2)<g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2)))&&g(o)>g(mo2)&&g(ml2)>=g(ml2,1)&&g(c,1)>=g(mc2,1);const gB=C11||C12||C21||C22||C23||C24||C25||C26||C27||C28||C41||C42||C43||C44||C45||C46||C47||C48||C49||C50||C61||C62||C63||C66||C71;return gA||gB;};
 
         // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
 
@@ -1558,16 +1567,28 @@
             let buy_signal = false;
             let conditions = [];
 
+            // ── 第二道：eLeader 25條件（安全獨立，不影響既有資料）──────
+            let _el2nd = false;
+            try {
+                const _quo2 = yResult.indicators.quote[0];
+                const _rc2  = (_quo2.close  || []);
+                const _vi2  = _rc2.map((_,i)=>i).filter(i=>_rc2[i]!=null&&!isNaN(_rc2[i]));
+                const _elC  = _vi2.map(i=>_rc2[i]);
+                const _elO  = _vi2.map(i=>{const v=(_quo2.open  ||[])[i];return(v!=null&&!isNaN(v))?v:_rc2[i];});
+                const _elH  = _vi2.map(i=>{const v=(_quo2.high  ||[])[i];return(v!=null&&!isNaN(v))?v:_rc2[i];});
+                const _elL  = _vi2.map(i=>{const v=(_quo2.low   ||[])[i];return(v!=null&&!isNaN(v))?v:_rc2[i];});
+                const _elV  = _vi2.map(i=>{const v=(_quo2.volume||[])[i];return(v!=null&&!isNaN(v))?Number(v):0;});
+                _el2nd = checkElBuy(calcElInd(_elO, _elH, _elL, _elC, _elV));
+            } catch(_e2) { _el2nd = false; }
+
             if (SCAN_INTERVAL === '1wk') {
-                // [W]
-                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+                // [W] 長期投資：第一道 + 第二道eLeader
+                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
 
             } else if (SCAN_INTERVAL === '1d') {
-                // 日K三道關卡
-                // 第一道：日K 3根條件A or B（_n=_p1d=3，_r1/_r2已用3根計算）
-                const _1st_pass = (_r1 || _r2) && rsiNow > _p2;
+                // 中期投資：第一道 + 第二道eLeader + 第三道5分K
+                const _1st_pass = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
 
-                // 第二道：eLeader（網頁版無eLeader，用日K條件A/B作為位階確認，已在第一道完成）
                 // 第三道：5分K（RSI↑ AND MACD↑）AND（5分K近3根條件A or B）
                 let _3rd_pass = false;
                 try {
@@ -1601,8 +1622,7 @@
                 buy_signal = _1st_pass && _3rd_pass;
 
             } else {
-                // .
-                buy_signal = (_r1 || _r2) && rsiNow > _p2;
+                buy_signal = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
             }
 
             if (buy_signal) {
