@@ -1,7 +1,7 @@
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
-# 更新日期：(由AI每次改版時依照對話視窗提供的日期,並經由使用者確認後為準)（新增期貨5分K模式）
+# 更新日期：(由AI每次改版時依照對話視窗提供的日期,並經由使用者確認後為準)（新增期貨5分K模式：TEST_MODE="5mk"，週一13:00~週三11:30）
 # 適用：台股1845支 + 美股38支 + 虛擬幣3支 + 三合一追蹤【安聯月配息基金】
 # 通知方式：Gmail發信到 shchyu61@gmail.com
 # 重要：本程式原則上只適用週K，可視情況用於日K以下
@@ -16,27 +16,27 @@ DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 # 【１．設定區】
 
 # 驗證篩選模式：
-#   False  = 正式模式（週K三層嚴格過濾）
-#   True   = 測試模式
-#   '5mk'  = 期貨5分K模式（週一15:01~週三13:30）
-# ✅ 兩路控制（任一皆可）：
-#   本機筆電：直接改下方預設值 'False'
-#   GitHub Actions：futures-scan Job 自動帶入 TEST_MODE='5mk'，不需改程式碼
-import os as _os_tm
-_tm_raw = _os_tm.environ.get('TEST_MODE', 'False')
-if   _tm_raw == 'False': TEST_MODE = False
-elif _tm_raw == 'True':  TEST_MODE = True
-else:                    TEST_MODE = _tm_raw   # '5mk' 保持字串
+#   False  = 正式模式（週K三層嚴格過濾，正式交易監控）
+#   True   = 測試模式（只發測試Gmail確認通知是否正常）
+#   '5mk'  = 期貨5分K模式（週一13:00~週三11:30，只掃台指近月）
+TEST_MODE = False   # 切換：False / True / '5mk'
 
-# ── 【期貨5分K專屬設定】──────────────────────────────────────────
-FUTURES_5MK_TARGETS  = ['^TWII']   # 台指期替代標的
-FUTURES_5MK_INTERVAL = 300         # 每5分鐘掃描一次
+# ── 【期貨5分K專屬設定】（TEST_MODE = '5mk' 時才啟用）──────────
+# 執行時段：週一13:00 → 週三大盤收盤11:30（日盤+夜盤+隔日日盤）
+# 掃描標的：台灣加權指數（^TWII）作為台指期替代標的
+# 通知對象：僅 shchyu61@gmail.com（本人專屬，家人親友不適用）
+FUTURES_5MK_TARGETS  = ['^TWII']   # 期貨標的（可加入 'TXFF' 等）
+FUTURES_5MK_INTERVAL = 300         # 每300秒（5分鐘）掃描一次
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 
 # Gmail設定
 # ✅ 💻【本機】執行：直接填入帳號密碼
 # ✅ ☁️【雲端】GitHub Actions執行：自動從 GitHub Secrets 讀取，不需填寫
 import os as _os
+
+# Firebase設定（雲端版）
+FIREBASE_PROJECT_ID = 'kj-wealth-manager'
+FIREBASE_CRED_ENV   = 'FIREBASE_SERVICE_KEY'
 GMAIL_ACCOUNT  = _os.environ.get("GMAIL_ACCOUNT",  "shchyu61@gmail.com") # 您Gmail（寄件人）
 GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # ☁️【雲端】從Secrets讀取；或💻【本機】填入密碼格式："xxxx xxxx xxxx xxxx"（密碼可刪。實戰要補上。）。
 NOTIFY_EMAIL   = "shchyu61@gmail.com"       # 收通知的信箱（可與寄件人同一個）
@@ -68,66 +68,11 @@ CRYPTO_LIST = [
 # 持有清單（賣出/平倉只掃這些）
 HOLDINGS_US     = ['KO', 'O', 'PFE']
 HOLDINGS_CRYPTO = ['BTC-USD', 'ETH-USD', 'DOGE-USD']
+
+FX_LIST = ['EURUSD=X', 'JPY=X', 'CHFUSD=X', 'USDTWD=X']
+HOLDINGS_FX = []
 HOLDINGS_TW     = ['2330', '3037','3147','6188']  # 有台股持有時填入，例如：['2330', '2317']
 
-# ============================================================
-# 【１-1．Firebase 期貨狀態寫入（方案B：Python寫，網頁讀）】
-# 每次期貨5分K掃描結束後，把狀態寫入 Firebase
-# 網頁登入後讀同一路徑，不需要 Token 在前端，F12 看不到敏感資訊
-# Firestore 路徑：artifacts/kj-wealth-manager/public/futures_status
-# ============================================================
-FIREBASE_PROJECT_ID = 'kj-wealth-manager'
-FIREBASE_CRED_ENV   = 'FIREBASE_SERVICE_KEY'
-
-def write_futures_status_to_firebase(status: str, scan_time: str, signal_count: int):
-    cred_json = _os_tm.environ.get(FIREBASE_CRED_ENV, '')
-    if not cred_json:
-        print('  ℹ️ FIREBASE_SERVICE_KEY 未設定，跳過Firebase狀態寫入')
-        return
-    try:
-        import json as _json, urllib.request as _req, urllib.parse as _up
-        import base64 as _b64, time as _time
-        cred = _json.loads(cred_json)
-        token_url = 'https://oauth2.googleapis.com/token'
-        header  = _b64.urlsafe_b64encode(_json.dumps({'alg':'RS256','typ':'JWT'}).encode()).rstrip(b'=')
-        now_ts  = int(_time.time())
-        payload = _b64.urlsafe_b64encode(_json.dumps({
-            'iss': cred['client_email'], 'sub': cred['client_email'],
-            'aud': 'https://oauth2.googleapis.com/token',
-            'iat': now_ts, 'exp': now_ts + 3600,
-            'scope': 'https://www.googleapis.com/auth/datastore'
-        }).encode()).rstrip(b'=')
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import padding
-        from cryptography.hazmat.backends import default_backend
-        private_key = serialization.load_pem_private_key(
-            cred['private_key'].encode(), password=None, backend=default_backend())
-        sig_input = header + b'.' + payload
-        signature = private_key.sign(sig_input, padding.PKCS1v15(), hashes.SHA256())
-        jwt_token = sig_input + b'.' + _b64.urlsafe_b64encode(signature).rstrip(b'=')
-        body = _up.urlencode({'grant_type':'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                              'assertion':jwt_token.decode()}).encode()
-        r = _req.urlopen(_req.Request(token_url, data=body,
-                         headers={'Content-Type':'application/x-www-form-urlencoded'}))
-        access_token = _json.loads(r.read())['access_token']
-        fs_url = (f'https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}'
-                  f'/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/futures_status')
-        doc_body = _json.dumps({'fields': {
-            'status':       {'stringValue': status},
-            'scan_time':    {'stringValue': scan_time},
-            'signal_count': {'integerValue': str(signal_count)},
-            'updated_at':   {'stringValue': scan_time},
-        }}).encode()
-        patch_url = fs_url + '?updateMask.fieldPaths=status&updateMask.fieldPaths=scan_time&updateMask.fieldPaths=signal_count&updateMask.fieldPaths=updated_at'
-        req2 = _req.Request(patch_url, data=doc_body, method='PATCH',
-                            headers={'Authorization': f'Bearer {access_token}',
-                                     'Content-Type': 'application/json'})
-        _req.urlopen(req2)
-        print(f'  ✅ Firebase期貨狀態已寫入：{status} / {scan_time} / 訊號{signal_count}支')
-    except Exception as e:
-        print(f'  ⚠️ Firebase狀態寫入失敗（不影響主流程）：{e}')
-
-# ============================================================
 # ============================================================
 # 【２．策略參數設定區】← 所有策略的可調數值都在這裡，不需往下翻
 # ============================================================
@@ -140,14 +85,15 @@ def write_futures_status_to_firebase(status: str, scan_time: str, signal_count: 
 # ✅【K棒數量等比換算】─ 依K棒換算文件，切換週期時根數同步換算
 #   週K = 3根（基準，3根≈3週）
 #   日K = 3根（與週K統一，確認當下位階即可）
-#   5分K = 54根（含夜盤的近期K棒，主力夜盤為主戰場）
+#   5分K = 54根（≈1個台灣日盤：270分÷5=54根，剔除夜盤後使用）
 BUY_LOOKBACK_BARS    = 3      # 週K回看根數（條件A/B共用）
 BUY_LOOKBACK_DAILY   = 3      # 日K回看根數（與週K統一，3根即可確認位階）
-BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤）
+BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤，主力夜盤為主戰場）
 # ── 【掃描週期模式】切換此處決定scan_stock用哪個週期把關 ──────────
 # 'weekly' = 週K三道關卡（第一道週K3根/第二道日K eLeader/第三道5分K3根）
 # 'daily'  = 日K三道關卡（第一道日K3根/第二道日K eLeader/第三道5分K3根）
-SCAN_MODE = 'daily'    # 切換：'weekly' / 'daily'
+# 'mixed'=混合模式(週K三道 OR 日K三道，任一通過即觸發)
+SCAN_MODE = 'mixed'   # 切換：'weekly' / 'daily' / 'mixed'
 BUY_RSI_MIN          = 35     # 買進RSI最低門檻（條件A，RSI需 > 此值才視為上升有效）
 BUY_BOLL_TOLERANCE   = 1.02   # 布林下緣容忍度（1.02=允許價格在下緣上方2%內仍觸發）
 
@@ -172,8 +118,11 @@ ENABLE_INDEX_FILTER  = True    # True=啟用大盤過濾警告 / False=忽略大
 # 若需強制停止進場，請將 main_task 中大盤判斷區的 print 改為 return
 
 # ── 【２-6】全額交割股預警策略 ───────────────────────────────────
+# 全額交割股 = 財務惡化警訊，是下市前最重要的早期指標！
+# 持股在清單：❌❌終極警報，請儘速評估是否出清
+# 觀察股在清單：⚠️ 勿碰預警，等恢復正常交割再說
 ENABLE_CASH_DELIVERY_CHECK = True   # True=啟用全額交割預警 / False=關閉
-CASH_DELIVERY_CACHE_HOURS  = 24     # 全額交割清單快取時間（小時，建議24）
+CASH_DELIVERY_CACHE_HOURS  = 72     # 全額交割清單快取時間（小時，72=3天）
 
 # ── 【２-7】做空入場策略：空頭三道關卡條件 ────────────────────────
 # ⚠️ 做空策略嚴禁用於當沖或隔日沖，僅供中長期空頭佈局參考
@@ -280,7 +229,6 @@ def get_delisting_risk(ticker):
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
 
-
     # 4. 寫入本地快取（下次同一支股票在期限內不再重查）
     delisting_cache[ticker] = {
         'is_at_risk': is_at_risk,
@@ -304,88 +252,75 @@ _cash_delivery_cache = {'codes': set(), 'ts': None}
 _cash_delivery_lock  = _threading.Lock()
 
 def get_cash_delivery_set():
-    """
-    取得全額交割股票代碼 Set（上市+上櫃）。
-    快取 CASH_DELIVERY_CACHE_HOURS 小時，避免重複抓取。
-    回傳 set of str（純代碼，如 '1234'）
-    """
+    """全額交割股 Set，重試2次，快取72小時，空白時保留舊快取"""
     if not ENABLE_CASH_DELIVERY_CHECK:
         return set()
-
     from datetime import datetime as _dt
+    import time as _time
     now = _dt.now()
     with _cash_delivery_lock:
-        # 快取未過期則直接回傳
         if _cash_delivery_cache['ts'] is not None:
             elapsed = (now - _cash_delivery_cache['ts']).total_seconds() / 3600
             if elapsed < CASH_DELIVERY_CACHE_HOURS:
                 return _cash_delivery_cache['codes']
-
     codes = set()
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Accept': 'application/json'
-    }
-
-    # ── 來源1：TWSE OpenAPI（上市全額交割）────────────────────
-    try:
+    headers = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
+    def _fetch(url):
         import requests as _req
-        r = _req.get(
-            'https://openapi.twse.com.tw/v1/company/cashPaymentStocks',
-            headers=headers, timeout=10
-        )
-        if r.status_code == 200:
-            data = r.json()
-            for item in data:
-                code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
-                if code:
-                    codes.add(str(code).strip())
-            print(f'  ✅ TWSE全額交割上市：{len(codes)} 支')
-    except Exception as e:
-        print(f'  ⚠️ TWSE全額交割抓取失敗：{e}')
-
-    # ── 來源2：TPEX OpenAPI（上櫃全額交割）────────────────────
-    try:
-        import requests as _req
-        r2 = _req.get(
-            'https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks',
-            headers=headers, timeout=10
-        )
-        if r2.status_code == 200:
-            data2 = r2.json()
-            before = len(codes)
-            for item in data2:
-                code = item.get('公司代號') or item.get('Code') or item.get('code') or ''
-                if code:
-                    codes.add(str(code).strip())
-            print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
-    except Exception as e:
-        print(f'  ⚠️ TPEX全額交割抓取失敗：{e}')
-
-    # ── 來源3：備援 TWSE HTML 表格（若前兩個都失敗且 codes 仍空）──
+        for attempt in range(1, 3):
+            try:
+                r = _req.get(url, headers=headers, timeout=15)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data:
+                        return data
+                print(f'  ⚠️ 第{attempt}次失敗，{"重試中..." if attempt < 2 else "放棄"}')
+            except Exception as e:
+                print(f'  ⚠️ 第{attempt}次失敗：{e}，{"重試中..." if attempt < 2 else "放棄"}')
+            if attempt < 2:
+                _time.sleep(5)
+        return None
+    d1 = _fetch('https://openapi.twse.com.tw/v1/company/cashPaymentStocks')
+    if d1:
+        for item in d1:
+            c = item.get('公司代號') or item.get('Code') or item.get('code') or ''
+            if c: codes.add(str(c).strip())
+        print(f'  ✅ TWSE全額交割上市：{len(codes)} 支')
+    else:
+        print(f'  ❌ TWSE全額交割：重試2次均失敗')
+    before = len(codes)
+    d2 = _fetch('https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks')
+    if d2:
+        for item in d2:
+            c = item.get('公司代號') or item.get('Code') or item.get('code') or ''
+            if c: codes.add(str(c).strip())
+        print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
+    else:
+        print(f'  ❌ TPEX全額交割：重試2次均失敗')
     if not codes:
         try:
             import requests as _req
             from bs4 import BeautifulSoup as _BS
-            r3 = _req.get(
-                'https://www.twse.com.tw/zh/page/trading/exchange/TWTB4U.html',
-                headers=headers, timeout=10
-            )
+            r3 = _req.get('https://www.twse.com.tw/zh/page/trading/exchange/TWTB4U.html',
+                          headers=headers, timeout=15)
             soup = _BS(r3.text, 'html.parser')
             for td in soup.select('table td:first-child'):
-                code = td.get_text(strip=True)
-                if code.isdigit() and len(code) == 4:
-                    codes.add(code)
+                c = td.get_text(strip=True)
+                if c.isdigit() and len(c) == 4: codes.add(c)
             print(f'  ✅ 備援HTML全額交割：{len(codes)} 支')
         except Exception as e:
-            print(f'  ⚠️ 備援HTML全額交割抓取失敗：{e}')
-
+            print(f'  ⚠️ 備援HTML失敗：{e}')
     with _cash_delivery_lock:
-        _cash_delivery_cache['codes'] = codes
-        _cash_delivery_cache['ts']    = now
-
-    print(f'  📋 全額交割股共 {len(codes)} 支（含上市+上櫃）')
-    return codes
+        if codes:
+            _cash_delivery_cache['codes'] = codes
+            _cash_delivery_cache['ts'] = now
+        elif _cash_delivery_cache['ts'] is None:
+            _cash_delivery_cache['codes'] = codes
+            _cash_delivery_cache['ts'] = now
+        else:
+            print(f'  ⚠️ 本次抓取失敗，保留舊快取（{len(_cash_delivery_cache["codes"])} 支）')
+    print(f'  📋 全額交割股共 {len(_cash_delivery_cache["codes"])} 支（含上市+上櫃）')
+    return _cash_delivery_cache['codes']
 
 # ============================================================
 # 【４．交易時段與數據抓取核心】
@@ -430,8 +365,10 @@ def get_active_markets():
     # 週三 11:30 以前（日盤結束）
     elif weekday == 2 and time_val <= 11*60+30:
         is_futures_time = True
+
     if is_futures_time:
-        active.append('FUTURES')
+        active.append('FUTURES')  # 台指期5分K
+
     return active
 
 def get_stock_data(ticker, period='2y', interval='1wk', cache=None):
@@ -512,7 +449,7 @@ def save_notified(data):
 # 【７．技術指標計算】
 # ============================================================
 def calc_indicators(df):
-    if df is None or len(df) < 50:
+    if df is None or len(df) < 26:
         return None
     try:
         # 處理MultiIndex欄位
@@ -864,7 +801,7 @@ def scan_stock(ticker, is_holding=False):
     if 'five_min_cache' not in globals(): five_min_cache = {}
 
     try:
-        # 0. 【最高優先級①】全額交割股預警
+        # 0. 【最高優先級①】全額交割股預警（比Yahoo Finance下市偵測更早）
         _code_only = ticker.replace('.TW','').replace('.TWO','')
         _cash_set  = get_cash_delivery_set()
         if _cash_set and _code_only in _cash_set:
@@ -903,33 +840,41 @@ def scan_stock(ticker, is_holding=False):
             return None
 
         # ── 第一道：週K/日K統一用3根（條件A or B）────────────────
+        # weekly：用週K 3根
+        # daily ：用日K 3根（與週K根數相同，確認當下位階即可）
         if not TEST_MODE:
             if SCAN_MODE == 'daily':
+                # 日K模式第一道：日K 3根，條件A or B
                 _df1st = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
                 if _df1st is None or len(_df1st) < 50: return None
                 _df1st = calc_indicators(_df1st)
                 if _df1st is None: return None
-                _is_long_ok  = check_buy_precondition(_df1st)   # 日K 3根
+                # BUY_LOOKBACK_BARS=3，不換算，直接跑
+                _is_long_ok  = check_buy_precondition(_df1st)
                 _is_short_ok = check_short_precondition(_df1st)
             else:
-                _is_long_ok  = check_buy_precondition(df_w)     # 週K 3根
+                # 週K模式第一道：用週K 3根（原設計）
+                _is_long_ok  = check_buy_precondition(df_w)
                 _is_short_ok = check_short_precondition(df_w)
             if not _is_long_ok and not _is_short_ok:
-                return None
+                return None   # 多空都不過才跳過
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
 
         # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
+        # 兩種模式統一：eLeader必過才繼續（確保不在高檔區追高）
         df_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
         if df_d is None or len(df_d) < 50: return None
         df_d = calc_indicators(df_d)
         if df_d is None: return None
 
         if _is_long_ok:
+            # 多頭：日K eLeader 25條件（買進）
             is_eleader_ok = check_buy_eleader(df_d) is not None
             if not is_eleader_ok:
                 return None
         else:
+            # 空頭：日K eLeader 25條件（做空）
             is_eleader_short_ok = check_short_eleader(df_d) is not None
             if not is_eleader_short_ok:
                 return None
@@ -959,13 +904,16 @@ def scan_stock(ticker, is_holding=False):
             macd_5m_ok = False
 
         rsi_5m_ok = (last_rsi > prev_rsi and last_rsi > BUY_RSI_MIN)
+
+        # ── 第三道：5分K（RSI AND MACD）AND（5分K近3根條件A or B）────
+        # 週K/日K模式統一，避免過度密集觸發
         rsi_5m_falling  = (last_rsi < prev_rsi and last_rsi < (100 - BUY_RSI_MIN))
-        macd_5m_falling = not macd_5m_ok
-        cond_5m_buy   = check_buy_precondition(df_5m)
-        cond_5m_short = check_short_precondition(df_5m)
+        macd_5m_falling = not macd_5m_ok  # MACD柱下降
+        cond_5m_buy     = check_buy_precondition(df_5m)    # 買進：近3根5分K條件A or B
+        cond_5m_short   = check_short_precondition(df_5m)  # 做空：近3根5分K鏡像條件A or B
 
         if _is_long_ok:
-            # 多頭第三道：（RSI↑ AND MACD↑）AND（5分K買進條件A or B）
+            # ── 多頭第三道：（RSI↑ AND MACD↑）AND（5分K買進條件A or B）
             if not (rsi_5m_ok and macd_5m_ok and cond_5m_buy):
                 return None
             c = float(df_5m['Close'].iloc[-1])
@@ -975,6 +923,7 @@ def scan_stock(ticker, is_holding=False):
             return ('BUY', c, float(ref_df['Low'].iloc[-1]), float(ref_df['boll_bot20'].iloc[-1]),
                     float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
         else:
+            # ── 空頭第三道：（RSI↓ AND MACD↓）AND（5分K做空條件A or B）
             if not (rsi_5m_falling and macd_5m_falling and cond_5m_short):
                 return None
             c = float(df_5m['Close'].iloc[-1])
@@ -983,6 +932,7 @@ def scan_stock(ticker, is_holding=False):
             print(f"🔥 {ticker} 觸發【{mode_tag}三道關卡 空頭做空】，成交價：{c}")
             return ('SHORT', c, float(ref_df['High'].iloc[-1]), float(ref_df['boll_top20'].iloc[-1]),
                     float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
+ 
     except Exception as e:
         # 靜默跳過錯誤
         return None
@@ -1068,6 +1018,25 @@ if today not in notified:
 # ============================================================
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
+def scan_stock_mixed(ticker, is_holding=False):
+    """混合模式：週K三道 OR 日K三道，任一通過即觸發"""
+    global SCAN_MODE
+    SCAN_MODE = 'weekly'
+    r_w = scan_stock(ticker, is_holding)
+    SCAN_MODE = 'mixed'
+    if r_w and r_w[0] in ('BUY', 'SHORT'):
+        return r_w + ('長期投資',)
+    SCAN_MODE = 'daily'
+    r_d = scan_stock(ticker, is_holding)
+    SCAN_MODE = 'mixed'
+    if r_d and r_d[0] in ('BUY', 'SHORT'):
+        return r_d + ('中期投資',)
+    for r in (r_w, r_d):
+        if r and r[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
+            return r
+    return None
+
+
 def main_task():
     # 🔥 宣告 global 確保全域共用
     global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals
@@ -1098,7 +1067,9 @@ def main_task():
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
 
-    if ENABLE_CASH_DELIVERY_CHECK:
+    # 掃描前預先抓取全額交割清單（快取後不重複抓）
+    _skip_cash = (TEST_MODE == '5mk') or ('TW' not in active_markets and 'CRYPTO' not in active_markets)
+    if ENABLE_CASH_DELIVERY_CHECK and not _skip_cash:
         print(f"\n🔍 正在更新全額交割股清單...")
         get_cash_delivery_set()
 
@@ -1180,12 +1151,18 @@ def main_task():
             # --- [優化: 加入 try...except 容錯, 避免網路閃斷中斷掃描] ---
             try:
                 is_holding = ticker in holdings_tw_full
-                result = scan_stock(ticker, is_holding)
+                if SCAN_MODE == 'mixed':
+                    result_raw = scan_stock_mixed(ticker, is_holding)
+                    _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
+                    result = result_raw[:-1] if _mlabel else result_raw
+                else:
+                    result = scan_stock(ticker, is_holding)
+                    _mlabel = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             
                 if result:
                     code = ticker.split('.')[0] 
                     if result[0] == 'BUY':
-                        buy_signals.append(('台股', code, *result[1:]))
+                        buy_signals.append(('台股', code, *result[1:], _mlabel if _mlabel else ''))
                     elif result[0] == 'SELL':
                         sell_signals.append(('台股', code, *result[1:]))
                     elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
@@ -1232,12 +1209,18 @@ def main_task():
         print(f'\n📊 美股掃描：共{len(US_STOCKS)}支')
         for ticker in US_STOCKS:
             is_holding = ticker in HOLDINGS_US
-            result = scan_stock(ticker, is_holding)
+            if SCAN_MODE == 'mixed':
+                result_raw = scan_stock_mixed(ticker, is_holding)
+                _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
+                result = result_raw[:-1] if _mlabel else result_raw
+            else:
+                result = scan_stock(ticker, is_holding)
+                _mlabel = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             
             # ✅ 正確：result 取得後立刻判斷
             if result:
                 if result[0] == 'BUY':
-                    buy_signals.append(('美股', ticker, *result[1:]))
+                    buy_signals.append(('美股', ticker, *result[1:], _mlabel if _mlabel else ''))
                 elif result[0] == 'SELL':
                     sell_signals.append(('美股', ticker, *result[1:]))
                 elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
@@ -1257,38 +1240,76 @@ def main_task():
         print(f'\n📊 虛擬幣掃描：共{len(CRYPTO_LIST)}支')
         for ticker in CRYPTO_LIST:
             is_holding = ticker in HOLDINGS_CRYPTO
-            result = scan_stock(ticker, is_holding)
+            if SCAN_MODE == 'mixed':
+                result_raw = scan_stock_mixed(ticker, is_holding)
+                _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
+                result = result_raw[:-1] if _mlabel else result_raw
+            else:
+                result = scan_stock(ticker, is_holding)
+                _mlabel = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             if result:
                 # 【更正處】將原本刪掉的此行「name = ticker.replace('-USD', '')」 下行的買進和賣出全部改為 ticker
                 if result[0] == 'BUY':
-                    buy_signals.append(('虛擬幣', ticker, *result[1:]))
+                    buy_signals.append(('虛擬幣', ticker, *result[1:], _mlabel if _mlabel else ''))
                 elif result[0] == 'SELL':
                     sell_signals.append(('虛擬幣', ticker, *result[1:]))
                 elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
                     delist_signals.append(('虛擬幣', ticker, result[0], result[1]))
             time.sleep(0.1) # 稍微加快掃描速度
 
+
+    # ── 外匯掃描（做多+做空）────────────────────────────────────
+    if TEST_MODE == '5mk':
+        print('\n📊 外匯：期貨5分K模式，跳過')
+    elif 'US' not in active_markets and 'CRYPTO' not in active_markets:
+        print('\n📊 外匯：非交易時段，跳過')
+    else:
+        print(f'\n📊 外匯掃描：共{len(FX_LIST)}支（做多+做空）')
+        for ticker in FX_LIST:
+            is_holding = ticker in HOLDINGS_FX
+            if SCAN_MODE == 'mixed':
+                result_raw = scan_stock_mixed(ticker, is_holding)
+                _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
+                result = result_raw[:-1] if _mlabel else result_raw
+            else:
+                result = scan_stock(ticker, is_holding)
+                _mlabel = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
+            if result:
+                if result[0] == 'BUY':
+                    buy_signals.append(('外匯', ticker, *result[1:], _mlabel if _mlabel else ''))
+                elif result[0] == 'SELL':
+                    sell_signals.append(('外匯', ticker, *result[1:]))
+                elif result[0] == 'SHORT':
+                    sell_signals.append(('外匯做空', ticker, *result[1:]))
+            time.sleep(0.1)
+
     # ── 期貨5分K掃描（TEST_MODE='5mk'且FUTURES在active_markets時執行）──
     if 'FUTURES' in active_markets and TEST_MODE == '5mk':
-        # ✅ 持倉狀態：跨掃描週期持續追蹤（程式重啟會重置，建議搭配方案B手動開關）
+        # ✅ 持倉狀態：多倉/空倉分開追蹤
         if '_futures_is_holding' not in dir(): _futures_is_holding = False
         if '_futures_is_short'   not in dir(): _futures_is_short   = False
         _pos_str = '多倉🔴' if _futures_is_holding else ('空倉🔵' if _futures_is_short else '空手⬜')
+        _mode_str = f'SCAN_MODE={SCAN_MODE}' if 'SCAN_MODE' in dir() else SCAN_MODE
         print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}')
-        print(f'   持倉狀態：{_pos_str}')
+        print(f'   持倉狀態：{_pos_str}　掃描模式：{_mode_str}')
         for ticker in FUTURES_5MK_TARGETS:
             try:
                 # ══════════════════════════════════════════════
-                # ✅【三道關卡】期貨5分K進場先決條件（同本機版）
-                # 第一道：週K位階（check_buy_precondition，3根）
-                # 第二道：日K eLeader（check_buy_eleader）
-                # 第三道：5分K 54根條件A/B + RSI門檻
+                # 5分K掃描：RSI + MACD柱 轉折判斷
+                # 日K門檻：參考用（印出日K位階供參考，但不強制擋住）
+                # ══════════════════════════════════════════════
+                # ══════════════════════════════════════════════
+                # ✅【三道關卡】期貨5分K進場先決條件
+                # 第一道：週K位階（check_buy_precondition，BUY_LOOKBACK_BARS=3根）
+                # 第二道：日K eLeader條件（check_buy_eleader）
+                # 第三道：5分K 54根條件A/B + RSI門檻（BUY_LOOKBACK_5MK=54根）
                 # ══════════════════════════════════════════════
 
                 # ── 第一道：日K 3根位階──
                 df5_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
                 if df5_d is None or len(df5_d) < 50:
-                    print(f'  ⚠️ {ticker} 日K資料不足，跳過'); continue
+                    print(f'  ⚠️ {ticker} 日K資料不足，跳過')
+                    continue
                 df5_d = calc_indicators(df5_d)
                 if df5_d is None: continue
                 _orig5 = BUY_LOOKBACK_BARS
@@ -1303,128 +1324,177 @@ def main_task():
                 # ── 第二道：日K eLeader ──────────────────────
                 # （df5_d已在上面取得，直接使用）
                 if check_buy_eleader(df5_d) is None:
-                    print(f'  ❌ {ticker} 第二道日K eLeader未通過，跳過'); continue
+                    print(f'  ❌ {ticker} 第二道日K eLeader未通過，跳過')
+                    continue
                 print(f'  ✅ {ticker} 第二道日K eLeader通過')
 
                 # ── 第三道：5分K 54根條件A/B ────────────────
-                # ✅【夜盤保留】主力以夜盤為主戰場
+                # ✅【夜盤保留】主力以夜盤為主戰場，不剔除夜盤
+                # period='5d' 確保足夠近期夜盤+日盤K棒（約1000+根）
                 df5 = yf.download(ticker, period='5d', interval='5m', progress=False)
                 if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
-                    print(f'  ⚠️ {ticker} 5分K資料不足，跳過'); continue
+                    print(f'  ⚠️ {ticker} 5分K資料不足（需>={BUY_LOOKBACK_5MK+2}根），跳過')
+                    continue
                 df5 = calc_indicators(df5)
-                if df5 is None: continue
+                if df5 is None:
+                    continue
 
+                # ✅【K棒數量條件A/B】使用BUY_LOOKBACK_5MK=54根，與週K條件邏輯一致
                 n5 = BUY_LOOKBACK_5MK
-                l5=df5['Low']; h5=df5['High']; bb5=df5['boll_bot20']
-                bt5=df5['boll_top20']; bm5=df5['ma_c_20']; mh5=df5['macd_hist']; rsi5=df5['rsi14']
-                rsi_now=float(rsi5.iloc[-1]); rsi_prev=float(rsi5.iloc[-2])
-                mh_now=float(mh5.iloc[-1]);   mh_prev=float(mh5.iloc[-2])
-                close=float(df5['Close'].iloc[-1]); boll_bot=float(bb5.iloc[-1]); boll_top=float(bt5.iloc[-1])
-                now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+                l5   = df5['Low']
+                h5   = df5['High']
+                bb5  = df5['boll_bot20']
+                bt5  = df5['boll_top20']
+                bm5  = df5['ma_c_20']
+                mh5  = df5['macd_hist']
+                rsi5 = df5['rsi14']
 
-                _5mk_cond_A = (l5.iloc[-n5:] <= bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE).any() and rsi_now>rsi_prev and mh_now>mh_prev
+                rsi_now  = float(rsi5.iloc[-1])
+                rsi_prev = float(rsi5.iloc[-2])
+                mh_now   = float(mh5.iloc[-1])
+                mh_prev  = float(mh5.iloc[-2])
+                close    = float(df5['Close'].iloc[-1])
+                boll_bot = float(bb5.iloc[-1])
+                boll_top = float(bt5.iloc[-1])
+
+                rsi_rising   = rsi_now > rsi_prev
+                macd_rising  = mh_now  > mh_prev
+                rsi_falling  = rsi_now < rsi_prev
+                macd_falling = mh_now  < mh_prev
+
+                # ── 條件A：近54根任一最低價<=布林下緣 AND RSI↑ AND MACD柱↑
+                _5mk_cond_A = (l5.iloc[-n5:] <= bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE).any() and rsi_rising and macd_rising
+                # ── 條件B：近54根最低均<布林中軌 AND 最高均<布林上軌 AND 前N根MACD縮 AND 當根MACD放大
                 _5mk_low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
                 _5mk_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
-                _5mk_macd_shr = len(mh5)>=n5+1 and all(float(mh5.iloc[-n5-1+j])>float(mh5.iloc[-n5+j]) for j in range(n5-1))
-                _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and mh_now>mh_prev
+                _5mk_macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
+                _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and macd_rising
                 _5mk_buy = (_5mk_cond_A or _5mk_cond_B) and rsi_now > BUY_RSI_MIN
 
-                # ── 5分鐘內最多2封上限（防吵機制）────────────
-                _now_ts = time.time()
-                if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
-                send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
-                _can_send = len(send_gmail._futures_log) < 2
+                near_lower   = close  <= boll_bot * BUY_BOLL_TOLERANCE
+                near_upper   = close  >= boll_top * 1.00
+                now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+                # ── 日K位階參考（印出但不擋住掃描）──────────────
+                try:
+                    df_d5 = yf.download(ticker, period='10d', interval='1d', progress=False)
+                    if df_d5 is not None and not df_d5.empty and len(df_d5) >= 5:
+                        df_d5 = calc_indicators(df_d5)
+                        if df_d5 is not None:
+                            _daily_buy  = check_buy_precondition(df_d5)
+                            _daily_sell = check_sell_condition(df_d5)
+                            _zone = '低檔✅' if _daily_buy else ('高檔⚠️' if _daily_sell else '中軌區間')
+                            print(f'  ℹ️ {ticker} 日K位階：{_zone}（供參考）')
+                except: pass
 
-                # ── 做空三道關卡 ─────────────────────────────
+                # ══════════════════════════════════════════════
+                # ✅【做空三道關卡】鏡像多方，捕捉高檔反轉訊號
+                # 第一道：週K觸碰上軌（check_short_precondition）
+                # 第二道：日K eLeader 25條件全部反向
+                # 第三道：5分K 54根條件A/B反向 + RSI↓ AND MACD↓
+                # ══════════════════════════════════════════════
                 _short_1st = _1st_short  # ✅ 已在第一道判斷完成
-                _short_2nd = check_short_eleader(df5_d) is not None if _short_1st else False
-                _5mk_short_A = (h5.iloc[-n5:] >= bt5.iloc[-n5:] * 1.00).any() and rsi_now<rsi_prev and mh_now<mh_prev
+                _short_2nd = False
+                if _short_1st:
+                    _short_2nd = check_short_eleader(df5_d) is not None
+                # 第三道做空條件A/B（鏡像多方）
+                _5mk_short_A = (h5.iloc[-n5:] >= bt5.iloc[-n5:] * 1.00).any() and rsi_falling and macd_falling
                 _5mk_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).all()
                 _5mk_low_bot   = (l5.iloc[-n5:] > bb5.iloc[-n5:]).all()
-                _5mk_macd_exp  = len(mh5)>=n5+1 and all(float(mh5.iloc[-n5-1+j])<float(mh5.iloc[-n5+j]) for j in range(n5-1))
-                _5mk_short_B   = _5mk_high_mid and _5mk_low_bot and _5mk_macd_exp and mh_now<mh_prev
+                _5mk_macd_exp  = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) < float(mh5.iloc[-n5+j]) for j in range(n5-1))
+                _5mk_short_B   = _5mk_high_mid and _5mk_low_bot and _5mk_macd_exp and macd_falling
                 _5mk_short = _short_1st and _short_2nd and (_5mk_short_A or _5mk_short_B) and rsi_now < (100 - BUY_RSI_MIN)
 
                 _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')
-
-                # ★ 深夜嚴格買進條件：RSI>55、MACD柱>0且上升、當根漲幅>0.5%
-                _candle_pct = 0.0
-                try:
-                    _open5 = float(df5m['Open'].iloc[-1])
-                    if _open5 > 0: _candle_pct = (close - _open5) / _open5 * 100
-                except: pass
-                _night_strict_buy = (rsi_now > 55 and mh_now > 0 and mh_now > mh_prev and _candle_pct > 0.5)
-                _allow_night_buy  = not _is_night_now or _night_strict_buy
-                _night_buy_tag = ''
-                if _is_night_now and _night_strict_buy:
-                    _wd_name = {0:'週日',1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六'}.get(now_tz.weekday(),'')
-                    _night_buy_tag = f"\n🌙【{_wd_name}深夜大行情】漲幅:{_candle_pct:.1f}% RSI:{rsi_now:.0f} 立即查看！"
-
-                # ★ 深夜嚴格做空條件：RSI<45、MACD柱<0且下降、當根跌幅>0.5%
-                _candle_pct_s = 0.0
-                try:
-                    _open5s = float(df5m['Open'].iloc[-1])
-                    if _open5s > 0: _candle_pct_s = (_open5s - close) / _open5s * 100
-                except: pass
-                _night_strict_short = (rsi_now < 45 and mh_now < 0 and mh_now < mh_prev and _candle_pct_s > 0.5)
-                _allow_night_short  = not _is_night_now or _night_strict_short
-                _night_short_tag = ''
-                if _is_night_now and _night_strict_short:
-                    _wd_name2 = {0:'週日',1:'週一',2:'週二',3:'週三',4:'週四',5:'週五',6:'週六'}.get(now_tz.weekday(),'')
-                    _night_short_tag = f"\n🌙【{_wd_name2}深夜大跌】跌幅:{_candle_pct_s:.1f}% RSI:{rsi_now:.0f} 立即查看！"
-
-                # ── 買進 ──
-                if _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE and _allow_night_buy and not _futures_is_holding:
-                    if not _can_send:
-                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+                # ✅ 深夜01~05有持倉：只掃平倉，跳過買進
+                if _5mk_buy and near_lower and not (_is_night_now and _futures_is_holding):
+                    # ── 5分鐘內最多2封上限 ──────────────────────
+                    _now_ts = time.time()
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
+                    if len(send_gmail._futures_log) >= 2:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
                     else:
                         send_gmail._futures_log.append(_now_ts)
-                        _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}",
-                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n標的：{ticker}\n收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n漲幅：{_candle_pct:+.2f}%\n時間：{now_str_f}{_night_buy_tag}")
-                        print(f"  {'✅' if _ok else '❌'} {ticker} 買進訊號{'已發送' if _ok else '發送失敗'}")
+                        msg = (
+                            f"💻【本機】⭐【期貨5分K買進訊號】⭐\n"
+                            f"標的：{ticker}\n"
+                            f"收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\n"
+                            f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"
+                            f"時間：{now_str_f}"
+                        )
+                        _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}", msg)
+                        print(f"  {'✅' if _ok else '❌'} {ticker} 5分K買進訊號{'已發送' if _ok else '發送失敗'}")
+                        # ✅ 方案A：買進訊號發出 → 記錄持倉狀態
                         _futures_is_holding = True
-                        write_futures_status_to_firebase('holding', now_str_f, 1)
                         print(f"  📌 持倉狀態已標記：is_futures_holding=True")
-                elif rsi_now < rsi_prev and mh_now < mh_prev and close >= boll_top * 1.00:
-                    if not _can_send:
-                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
+
+                elif rsi_falling and macd_falling and near_upper:
+                    # ── 5分鐘內最多2封上限 ──────────────────────
+                    _now_ts = time.time()
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
+                    if len(send_gmail._futures_log) >= 2:
+                        print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
                     else:
                         send_gmail._futures_log.append(_now_ts)
-                        _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}",
-                            f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n標的：{ticker}\n收盤：{close:.2f}　布林上緣：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n時間：{now_str_f}")
-                        print(f"  {'✅' if _ok else '❌'} {ticker} 平倉訊號{'已發送' if _ok else '發送失敗'}")
+                        msg = (
+                            f"💻【本機】🔔【期貨5分K平倉訊號】🔔\n"
+                            f"標的：{ticker}\n"
+                            f"收盤：{close:.2f}　布林上緣：{boll_top:.2f}\n"
+                            f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
+                            f"時間：{now_str_f}"
+                        )
+                        _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}", msg)
+                        print(f"  {'✅' if _ok else '❌'} {ticker} 5分K平倉訊號{'已發送' if _ok else '發送失敗'}")
+                        # ✅ 方案A：平倉訊號發出 → 清除持倉狀態
                         _futures_is_holding = False
-                        write_futures_status_to_firebase('no_signal', now_str_f, 0)
                         print(f"  📌 持倉狀態已清除：is_futures_holding=False")
-                # ── 做空 ──
-                elif _5mk_short and close >= boll_top * 1.00 and _allow_night_short and not _futures_is_short:
-                    if not _can_send:
+                # ✅【做空訊號】三道關卡通過且接近布林上軌，且深夜無空倉
+                elif _5mk_short and near_upper and not (_is_night_now and _futures_is_short):
+                    _now_ts = time.time()
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
+                    if len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
-                        _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}",
-                            f"☁️【雲端】🔻【期貨5分K做空訊號】🔻\n標的：{ticker}\n收盤：{close:.2f}　布林上軌：{boll_top:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↓）\n跌幅：{_candle_pct_s:+.2f}%\n時間：{now_str_f}{_night_short_tag}")
+                        msg = (
+                            f"💻【本機】🔻【期貨5分K做空訊號】🔻\n"
+                            f"標的：{ticker}\n"
+                            f"收盤：{close:.2f}　布林上軌：{boll_top:.2f}\n"
+                            f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
+                            f"時間：{now_str_f}"
+                        )
+                        _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short   = True
-                        _futures_is_holding = False
-                        write_futures_status_to_firebase('short', now_str_f, 1)
+                        _futures_is_holding = False  # 做空時清除多倉
                         print(f"  📌 空倉狀態已標記：is_futures_short=True")
 
-                elif _futures_is_short and _5mk_buy and close <= boll_bot * BUY_BOLL_TOLERANCE:
-                    if not _can_send:
+                # ✅【空倉回補（平空）】RSI↑ AND MACD柱↑ AND 近布林下軌 → 回補平倉
+                elif _futures_is_short and _5mk_buy and near_lower:
+                    _now_ts = time.time()
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
+                    if len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
-                        _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}",
-                            f"☁️【雲端】🟢【期貨5分K平空回補】🟢\n標的：{ticker}\n收盤：{close:.2f}　布林下軌：{boll_bot:.2f}\nRSI：{rsi_prev:.1f}→{rsi_now:.1f}（↑）\n時間：{now_str_f}")
-                        print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補{'已發送' if _ok else '發送失敗'}")
+                        msg = (
+                            f"💻【本機】🟢【期貨5分K平空回補】🟢\n"
+                            f"標的：{ticker}\n"
+                            f"收盤：{close:.2f}　布林下軌：{boll_bot:.2f}\n"
+                            f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"
+                            f"時間：{now_str_f}"
+                        )
+                        _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg)
+                        print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short = False
-                        write_futures_status_to_firebase('no_signal', now_str_f, 0)
                         print(f"  📌 空倉狀態已清除：is_futures_short=False")
 
                 else:
                     _pos = '多倉中' if _futures_is_holding else ('空倉中' if _futures_is_short else '空手')
-                    print(f"  ℹ️ {ticker} RSI={rsi_now:.1f} 未達條件（{_pos}）")
+                    print(f"  ℹ️ {ticker} 5分K：RSI={rsi_now:.1f}({'↑' if rsi_rising else '↓'})  MACD={'↑' if macd_rising else '↓'}  位置：{_pos}")
             except Exception as e:
                 print(f'  ❌ 期貨5分K掃描 {ticker} 失敗：{e}')
 
@@ -1502,10 +1572,12 @@ def main_task():
             body = f"掃描時間：{now_str}\n\n"
 
             for s in filtered:
-                market, code, c, l, bb, r, rp = s
+                market, code, c, l, bb, r, rp = s[:7]
+                _ml = s[7] if len(s) > 7 and isinstance(s[7], str) and s[7] in ('長期投資','中期投資') else ('中期投資' if SCAN_MODE=='daily' else '長期投資')
                 body += (
                     f"⭐【買進訊號】⭐\n"
                     f"市場：{market}　代碼：{code}\n"
+                    f"投資模式：{_ml}\n"
                     f"最低價：{l:.2f}　布林下緣：{bb:.2f}\n"
                     f"收盤價：{c:.2f}\n"
                     f"RSI：{rp:.1f} → {r:.1f}（↑上升）\n"
@@ -1553,16 +1625,10 @@ def main_task():
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
 
 # =====================
-# 無訊號
+# 無訊號（只印Console，不發Gmail，避免通知疲乏）
 # =====================
     if not buy_signals and not sell_signals and not delist_signals:
         print(f"📊 [{now_str}] 本次掃描無符合條件的股票，不發送通知。")
-
-    # ── 期貨5分K模式：每次掃描結束後寫入 Firebase 狀態 ──
-    if TEST_MODE == '5mk':
-        _sig_count = len(buy_signals) + len(sell_signals)
-        _status    = 'completed' if _sig_count == 0 else 'signal'
-        write_futures_status_to_firebase(_status, now_str, _sig_count)
 
     print("\n✅ 全部完成！請查收Gmail通知。")
 
@@ -1581,34 +1647,49 @@ if __name__ == "__main__":
 
     # === [期貨5分K模式]：TEST_MODE = '5mk' ===
     if TEST_MODE == '5mk':
+        # 檢查是否在期貨交易時段
         tz_f = pytz.timezone('Asia/Taipei')
         now_f = datetime.now(tz_f)
         wd_f  = now_f.weekday()
         tv_f  = now_f.hour * 60 + now_f.minute
-        in_futures = ((wd_f==0 and tv_f>=13*60) or (wd_f==1 and (tv_f<1*60 or tv_f>=5*60)) or (wd_f==2 and tv_f<=11*60+30))  # 週一13:00~週三11:30，深夜01~05除外
+
+        in_futures = (
+            (wd_f == 0 and tv_f >= 13*60) or                             # 週一13:00後
+            (wd_f == 1 and (tv_f < 1*60 or tv_f >= 5*60)) or            # 週二（排除深夜01:00~05:00）
+            (wd_f == 2 and tv_f <= 11*60+30)                             # 週三11:30前
+        )
+
         if not in_futures:
-            print(f"[{test_now}] ❌ 非期貨5分K時段，直接結束")
-            time.sleep(5); exit()
-        IS_GITHUB = bool(_os_tm.environ.get('GITHUB_ACTIONS', ''))
-        if IS_GITHUB:
-            print(f"🚀 [☁️GitHub Actions] 期貨5分K單次掃描　標的：{FUTURES_5MK_TARGETS}")
-            try: main_task()
-            except Exception as e: print(f"掃描發生錯誤: {e}")
-            print("✅ 單次掃描完成，等待 cron 下次觸發")
+            print(f"[{test_now}] ❌ 非期貨5分K時段（週一13:00~週三11:30，深夜01~05除外），直接結束")
+            time.sleep(5)
             exit()
-        else:
-            print(f"🚀 [💻本機] 期貨5分K模式啟動　標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
-            while True:
-                now_l = datetime.now(pytz.timezone('Asia/Taipei'))
-                wd_l  = now_l.weekday(); tv_l = now_l.hour*60+now_l.minute
-                _is_night_l = (wd_l==1 and 1*60<=tv_l<5*60)
-                if not((wd_l==0 and tv_l>=13*60) or (wd_l==1 and (tv_l<1*60 or tv_l>=5*60)) or (wd_l==2 and tv_l<=11*60+30) or (_is_night_l and (_futures_is_holding or _futures_is_short))):
-                    print("✅ 期貨5分K時段結束，監控結束"); break
-                try: main_task()
-                except Exception as e: print(f"掃描發生錯誤: {e}")
-                print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒...")
-                time.sleep(FUTURES_5MK_INTERVAL)
-            exit()
+
+        print(f"🚀 期貨5分K模式啟動（週一13:00~週三11:30）")
+        print(f"   標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
+        print(f"   專屬帳號：{FUTURES_5MK_OWNER}")
+
+        # 持續掃描直到週三11:30結束
+        while True:
+            now_loop = datetime.now(pytz.timezone('Asia/Taipei'))
+            wd_l  = now_loop.weekday()
+            tv_l  = now_loop.hour * 60 + now_loop.minute
+            _is_night = (wd_l == 1 and 1*60 <= tv_l < 5*60)  # 週二深夜01~05
+            in_f  = (
+                (wd_l == 0 and tv_l >= 13*60) or
+                (wd_l == 1 and (tv_l < 1*60 or tv_l >= 5*60)) or  # 排除深夜01:00~05:00
+                (wd_l == 2 and tv_l <= 11*60+30) or
+                (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉
+            )
+            if not in_f:
+                print(f"✅ 期貨5分K時段結束（週三11:30），監控結束")
+                break
+            try:
+                main_task()
+            except Exception as e:
+                print(f"掃描發生錯誤: {e}")
+            print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒（5分鐘）...")
+            time.sleep(FUTURES_5MK_INTERVAL)
+        exit()
 
     # === [精準測試模式]：不受交易時間限制，發送兩封關鍵測試信後即結束 ===
     if TEST_MODE:
