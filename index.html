@@ -213,7 +213,7 @@
                 <span class="font-black text-base tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131353</span>
+                <span class="text-[9px] font-black text-slate-300 tracking-widest select-none">v04131453</span>
                 <button id="btn-logout" class="hide text-[10px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -451,6 +451,20 @@
                             </button>
                         </div>
                     </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-500">混合模式</span>
+                            <button id="btn-scan-mixed" onclick="toggleMixedMode()"
+                                role="switch" aria-checked="false"
+                                class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
+                                style="min-width:3.5rem;">
+                                <span id="mixed-knob"
+                                    class="absolute left-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+                                    style="transform:translateX(0px);">
+                                </span>
+                                <span id="mixed-label"
+                                    class="absolute right-1.5 text-[9px] font-black text-slate-400">OFF</span>
+                            </button>
+                        </div>
 
                     <!-- 期貨5分K模式：僅 shchyu61@gmail.com 可見 -->
                     <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1.5">
@@ -1801,6 +1815,71 @@
             window.showAlert((mode === 'daily' ? '📊 已切換中期投資模式' : '📊 已切換長期投資模式') + '　請按「啟動AI診斷」開始掃描');
         };
 
+        // ── 混合模式（週K+日K同時掃描）────────────────────────────
+        let _mixedMode = false;
+        window.toggleMixedMode = () => {
+            _mixedMode = !_mixedMode;
+            const btn   = document.getElementById('btn-scan-mixed');
+            const knob  = document.getElementById('mixed-knob');
+            const label = document.getElementById('mixed-label');
+            const lbl2  = document.getElementById('scan-mode-label');
+            if (_mixedMode) {
+                btn.style.background = '#7c3aed';
+                knob.style.transform = 'translateX(28px)';
+                label.textContent = 'ON';
+                label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                btn.setAttribute('aria-checked','true');
+                if (lbl2) lbl2.textContent = '混合模式';
+                window.showAlert('📊 已切換混合模式（週K+日K同時掃描）　請按「啟動AI診斷」');
+            } else {
+                btn.style.background = '';
+                btn.className = btn.className.replace(/bg-\S+/,'bg-slate-300');
+                knob.style.transform = 'translateX(0px)';
+                label.textContent = 'OFF';
+                label.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#64748b;';
+                btn.setAttribute('aria-checked','false');
+                const _mode = _currentScanMode === 'daily' ? '中期投資' : '長期投資';
+                if (lbl2) lbl2.textContent = _mode;
+                window.showAlert('📊 已關閉混合模式，回到' + _mode + '　請按「啟動AI診斷」');
+            }
+            if (typeof diagCache !== 'undefined') diagCache.clear();
+        };
+
+        // ── 混合模式分析函數：同一標的跑兩次，回傳有訊號的結果 ──
+        const analyzeMixed = async (code) => {
+            const results = [];
+            // 週K掃描
+            const _savedInterval = SCAN_INTERVAL, _savedRange = SCAN_RANGE;
+            try {
+                SCAN_INTERVAL = '1wk'; SCAN_RANGE = '2y';
+                diagCache.delete(code);
+                const r1 = await analyzeStock(code);
+                if (r1 && r1.buy_signal) results.push({ result: r1, mode: '長期投資' });
+            } catch(e) {}
+            // 日K掃描
+            try {
+                SCAN_INTERVAL = '1d'; SCAN_RANGE = '1y';
+                diagCache.delete(code);
+                const r2 = await analyzeStock(code);
+                if (r2 && r2.buy_signal) results.push({ result: r2, mode: '中期投資' });
+            } catch(e) {}
+            // 還原
+            SCAN_INTERVAL = _savedInterval; SCAN_RANGE = _savedRange;
+            // 回傳：有訊號優先，否則回傳週K結果（用於顯示RSI/布林）
+            if (results.length > 0) return results[0];
+            // 無訊號：回傳週K結果供UI顯示
+            try {
+                SCAN_INTERVAL = '1wk'; SCAN_RANGE = '2y';
+                diagCache.delete(code);
+                const r0 = await analyzeStock(code);
+                SCAN_INTERVAL = _savedInterval; SCAN_RANGE = _savedRange;
+                return { result: r0, mode: null };
+            } catch(e) {
+                SCAN_INTERVAL = _savedInterval; SCAN_RANGE = _savedRange;
+                return null;
+            }
+        };
+
         // ✅ 登入後從 Firebase 讀取個人掃描模式設定
         const _loadScanModePref = async (email) => {
             try {
@@ -2261,9 +2340,18 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             const _failedCodes = new Set();  // 記錄失敗的股票，之後自動重試
             const tasks = watchlist.map(s => async () => {
                 const code = s.code;
-                const cached = getCached(code);
+                const cached = _mixedMode ? null : getCached(code);
                 try {
-                    const result = cached || await analyzeStock(code);
+                    let result, _mxLabel = null;
+                    if (_mixedMode) {
+                        const _mr = await analyzeMixed(code);
+                        result = _mr ? _mr.result : null;
+                        _mxLabel = _mr ? _mr.mode : null;
+                        if (!result) throw new Error('mixed no data');
+                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
+                    } else {
+                        result = cached || await analyzeStock(code);
+                    }
                     document.getElementById(`wl-card-${code}`).outerHTML = makeDiagCard(code, result, false);
                 } catch(e) {
                     console.error(`[analyzeStock ${code}] 失敗:`, e.message, e.stack?.split('\n')[1]);
@@ -2351,7 +2439,16 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
             const tasks = all.map(({ code, tag }) => async () => {
                 try {
-                    const result = await analyzeStock(code); // 有快取自動跳過抓取
+                    let result, _mxLabel = null;
+                    if (_mixedMode) {
+                        const _mr = await analyzeMixed(code);
+                        result = _mr ? _mr.result : null;
+                        _mxLabel = _mr ? _mr.mode : null;
+                        if (!result) throw new Error('mixed no data');
+                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
+                    } else {
+                        result = await analyzeStock(code); // 有快取自動跳過抓取
+                    }
                     const name = stockNameMap[code] || '未定義資產';
                     const cardHtml = makeDiagCard(code, result, true, tag === '持股')
                         .replace(
@@ -2383,7 +2480,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 const name = stockNameMap[code] || code;
                 const bollText = { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[cached.boll_position] || '';
                 if (cached.buy_signal) {
-                    manualBuySignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: cached.conditions.join('、') });
+                    manualBuySignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: cached.conditions.join('、'), mixedLabel: cached._mixedLabel || null });
                 }
                 // 賣出訊號只針對持股
                 if (tag === '持股' && cached.sell_signal) {
