@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141306</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141318</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1438,7 +1438,10 @@
             const _rg = _forceRange    || SCAN_RANGE;
             // 快取 key 包含 interval，避免不同週期互相覆蓋
             const _cacheKey = _forceInterval ? `${code}_${_forceInterval}` : code;
-            const cached = _forceInterval ? diagCache.get(_cacheKey) : getCached(code);
+            // ✅ diagCache.get 回傳 {result,ts}，需取 .result；getCached 直接回傳 result
+            const cached = _forceInterval
+                ? (diagCache.get(_cacheKey)?.result || null)
+                : getCached(code);
             if (cached) return cached;
 
             // 1-1. 全額交割股判斷（優先於技術分析）
