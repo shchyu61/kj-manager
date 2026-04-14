@@ -30,7 +30,7 @@ FUTURES_5MK_INTERVAL = 300         # 每300秒（5分鐘）掃描一次
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 
 # Gmail設定
-# ✅ 💻【本機】執行：直接填入帳號密碼
+# ✅ ☁️【雲端】執行：直接填入帳號密碼
 # ✅ ☁️【雲端】GitHub Actions執行：自動從 GitHub Secrets 讀取，不需填寫
 import os as _os
 
@@ -38,7 +38,7 @@ import os as _os
 FIREBASE_PROJECT_ID = 'kj-wealth-manager'
 FIREBASE_CRED_ENV   = 'FIREBASE_SERVICE_KEY'
 GMAIL_ACCOUNT  = _os.environ.get("GMAIL_ACCOUNT",  "shchyu61@gmail.com") # 您Gmail（寄件人）
-GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # ☁️【雲端】從Secrets讀取；或💻【本機】填入密碼格式："xxxx xxxx xxxx xxxx"（密碼可刪。實戰要補上。）。
+GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # ☁️【雲端】從Secrets讀取；或☁️【雲端】填入密碼格式："xxxx xxxx xxxx xxxx"（密碼可刪。實戰要補上。）。
 NOTIFY_EMAIL   = "shchyu61@gmail.com"       # 收通知的信箱（可與寄件人同一個）
 
 # 台股持有股票，要去此章節最下面的第51行自己輸入。
@@ -1018,6 +1018,54 @@ if today not in notified:
 # ============================================================
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
+def read_tw_prescreened():
+    """從Firebase讀取台股預篩清單（只需讀取public路徑）"""
+    try:
+        import json, os
+        import requests as _req
+
+        # 取得 Firebase 服務帳號憑證（優先環境變數，次選本機檔案）
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            cred_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(cred_file):
+                with open(cred_file, 'r', encoding='utf-8') as f:
+                    cred_json = f.read()
+
+        if not cred_json:
+            return None  # 無憑證，跳過
+
+        cred = json.loads(cred_json)
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        credentials = _sa.Credentials.from_service_account_info(
+            cred, scopes=['https://www.googleapis.com/auth/datastore']
+        )
+        credentials.refresh(_gtr.Request())
+        token = credentials.token
+
+        url = (
+            f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+            f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened"
+        )
+        resp = _req.get(url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            fields = resp.json().get('fields', {})
+            codes_raw = fields.get('codes', {}).get('arrayValue', {}).get('values', [])
+            codes = [v.get('stringValue','') for v in codes_raw if v.get('stringValue')]
+            updated_at = fields.get('updated_at', {}).get('stringValue', '—')
+            count = int(fields.get('count', {}).get('integerValue', 0))
+            return {'codes': codes, 'updated_at': updated_at, 'count': count}
+        else:
+            return None
+    except Exception as e:
+        print(f"  ⚠️ Firebase預篩清單讀取失敗：{e}")
+        return None
+
+
 def scan_stock_mixed(ticker, is_holding=False):
     """混合模式：週K三道 OR 日K三道，任一通過即觸發"""
     global SCAN_MODE
@@ -1036,6 +1084,66 @@ def scan_stock_mixed(ticker, is_holding=False):
             return r
     return None
 
+
+
+# ============================================================
+# 【Firebase 預篩清單寫入】
+# 將通過第一道條件的台股代碼寫入 Firebase public 路徑
+# 網頁版讀取後直接跑第二道+第三道，大幅節省時間
+# ============================================================
+def write_tw_prescreened(codes_list):
+    """將預篩台股代碼清單寫入 Firebase（保密：只存代碼，不存策略）"""
+    try:
+        import json, os
+        import requests as _req
+        from datetime import datetime
+        import pytz
+
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            print("  ⚠️ Firebase 憑證未設定，跳過預篩清單寫入")
+            return False
+
+        cred = json.loads(cred_json)
+        tz = pytz.timezone('Asia/Taipei')
+        now_str = datetime.now(tz).strftime('%Y/%m/%d %H:%M')
+
+        # 取得 Access Token
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        credentials = _sa.Credentials.from_service_account_info(
+            cred,
+            scopes=['https://www.googleapis.com/auth/datastore']
+        )
+        credentials.refresh(_gtr.Request())
+        token = credentials.token
+
+        # 寫入 Firestore REST API
+        url = (
+            f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+            f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened"
+        )
+        payload = {
+            "fields": {
+                "codes":      {"arrayValue": {"values": [{"stringValue": c} for c in codes_list]}},
+                "count":      {"integerValue": str(len(codes_list))},
+                "updated_at": {"stringValue": now_str},
+            }
+        }
+        resp = _req.patch(
+            url, json=payload,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            timeout=15
+        )
+        if resp.status_code in (200, 201):
+            print(f"  ✅ Firebase 預篩清單已更新：{len(codes_list)} 支 ({now_str})")
+            return True
+        else:
+            print(f"  ❌ Firebase 寫入失敗：{resp.status_code} {resp.text[:100]}")
+            return False
+    except Exception as e:
+        print(f"  ⚠️ Firebase 寫入異常：{e}")
+        return False
 
 def main_task():
     # 🔥 宣告 global 確保全域共用
@@ -1143,7 +1251,8 @@ def main_task():
         holdings_tw_full = [c + '.TW' for c in HOLDINGS_TW] + [c + '.TWO' for c in HOLDINGS_TW]
         total_tw = len(tw_list)
         print(f'\n📊 台股掃描：共{total_tw}支')
-    
+        _tw_prescreened = []  # 收集通過第一道篩選的代碼（供網頁版使用）
+
         for i, ticker in enumerate(tw_list):
             if (i+1) % 50 == 0:
                 print(f'  進度：{i+1}/{total_tw}...')
@@ -1151,6 +1260,15 @@ def main_task():
             # --- [優化: 加入 try...except 容錯, 避免網路閃斷中斷掃描] ---
             try:
                 is_holding = ticker in holdings_tw_full
+                # ── 快速第一道：只用週K 3根判斷，符合才進完整掃描 ──
+                try:
+                    _df1st = get_stock_data(ticker, period='2y', interval='1wk', cache=weekly_cache)
+                    if _df1st is not None and len(_df1st) >= 5:
+                        _df1st = calc_indicators(_df1st)
+                        if _df1st is not None and check_buy_precondition(_df1st):
+                            _tw_prescreened.append(ticker.split('.')[0])
+                except Exception:
+                    pass
                 if SCAN_MODE == 'mixed':
                     result_raw = scan_stock_mixed(ticker, is_holding)
                     _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
@@ -1172,6 +1290,13 @@ def main_task():
                 print(f'  ⚠️ 跳過 {ticker} 掃描異常: {e}')
                 continue
             time.sleep(0.1) # 稍微加快掃描速度
+
+        # 台股掃描完成後，將預篩清單寫入 Firebase（供網頁版快速使用）
+        if _tw_prescreened:
+            print(f'\n🔍 正在將 {len(_tw_prescreened)} 支預篩台股寫入Firebase...')
+            write_tw_prescreened(_tw_prescreened)
+        else:
+            print('\n🔍 本次預篩：無台股通過條件')
 
 # ── 美股掃描（加入道瓊週K過濾，對應截圖轉折邏輯） ──────────
     if TEST_MODE == '5mk':
@@ -1416,7 +1541,7 @@ def main_task():
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         msg = (
-                            f"💻【本機】⭐【期貨5分K買進訊號】⭐\n"
+                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"
@@ -1438,7 +1563,7 @@ def main_task():
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         msg = (
-                            f"💻【本機】🔔【期貨5分K平倉訊號】🔔\n"
+                            f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林上緣：{boll_top:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
@@ -1459,7 +1584,7 @@ def main_task():
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         msg = (
-                            f"💻【本機】🔻【期貨5分K做空訊號】🔻\n"
+                            f"☁️【雲端】🔻【期貨5分K做空訊號】🔻\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林上軌：{boll_top:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
@@ -1481,7 +1606,7 @@ def main_task():
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         msg = (
-                            f"💻【本機】🟢【期貨5分K平空回補】🟢\n"
+                            f"☁️【雲端】🟢【期貨5分K平空回補】🟢\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林下軌：{boll_bot:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"

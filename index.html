@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04140813</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141130</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -548,6 +548,17 @@
                         <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
                     </div>
                 </div>
+                <!-- ✅ AI預篩清單資訊卡（每天14:00由雲端自動更新）-->
+                <div id="tw-prescreen-card" class="mt-3 rounded-2xl p-3" style="background:#e8f5e9; border:1.5px solid #43a047; display:none;">
+                    <div class="text-sm font-black mb-1" style="color:#1b5e20;">🔍 台股 AI 預篩清單</div>
+                    <div id="tw-prescreen-info" class="text-[12px] leading-relaxed" style="color:#2e7d32;">讀取中...</div>
+                    <button onclick="startPrescreenScan()"
+                        class="mt-2 w-full py-2 rounded-xl font-black text-sm text-white"
+                        style="background:#2e7d32;">
+                        ⚡ 一鍵深度分析 AI 預篩股
+                    </button>
+                </div>
+
                 <!-- ✅ 自動掃描控制面板（需開著瀏覽器）-->
                 <div class="mt-3 rounded-2xl p-4 space-y-3" style="background:#f0f8ff; border:1px solid #90c0f0;">
                     <div class="flex items-center justify-between">
@@ -849,6 +860,7 @@
                 }
                 window.renderStocks();
                 window.renderWatchlist();
+                loadTwPrescreened().catch(()=>{}); // 非同步載入AI預篩清單
             } catch (e) {
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
@@ -1890,6 +1902,41 @@
             }
         };
 
+        // ── AI預篩清單：從Firebase讀取（每天14:00由雲端自動更新）────────
+        let _twPrescreenedCache = null;  // {codes:[], count:0, updated_at:''}
+
+        const loadTwPrescreened = async () => {
+            try {
+                const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+                const ref = doc(window.db, 'artifacts', window.appId, 'public', 'tw_prescreened');
+                const snap = await getDoc(ref);
+                if (snap.exists()) {
+                    const d = snap.data();
+                    _twPrescreenedCache = {
+                        codes:      (d.codes || []),
+                        count:      parseInt(d.count || 0),
+                        updated_at: d.updated_at || '—'
+                    };
+                    updatePrescreenCard();
+                    return _twPrescreenedCache;
+                }
+            } catch(e) { console.log('預篩清單讀取:', e.message); }
+            return null;
+        };
+
+        const updatePrescreenCard = () => {
+            const card = document.getElementById('tw-prescreen-card');
+            const info = document.getElementById('tw-prescreen-info');
+            if (!card || !info) return;
+            if (_twPrescreenedCache && _twPrescreenedCache.count > 0) {
+                info.textContent = `待深度分析：${_twPrescreenedCache.count} 支｜系統更新：${_twPrescreenedCache.updated_at}`;
+                card.style.display = 'block';
+            } else {
+                info.textContent = '尚無預篩資料，請等待系統自動更新';
+                card.style.display = 'block';
+            }
+        };
+
         // ✅ 登入後從 Firebase 讀取個人掃描模式設定
         const _loadScanModePref = async (email) => {
             try {
@@ -2422,6 +2469,64 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
 
         // ── 智能診斷：持股＋觀察兩清單（工作池版）─────────────
+        // ── 一鍵深度分析 AI 預篩股（從Firebase取得預篩清單，只跑第二道+第三道）────
+        window.startPrescreenScan = async () => {
+            if (!_twPrescreenedCache || _twPrescreenedCache.count === 0) {
+                await loadTwPrescreened();
+            }
+            if (!_twPrescreenedCache || _twPrescreenedCache.codes.length === 0) {
+                window.showAlert('⚠️ 尚無AI預篩資料，請等待系統自動更新後再試。');
+                return;
+            }
+            const codes = _twPrescreenedCache.codes;
+            window.showAlert(`⚡ 開始深度分析 ${codes.length} 支 AI 預篩台股...`);
+
+            // 顯示進度條
+            const progress = document.getElementById('scan-progress');
+            const resultList = document.getElementById('scan-result-list');
+            if (progress) { progress.style.width = '0%'; progress.parentElement.classList.remove('hide'); }
+            if (resultList) { resultList.innerHTML = ''; resultList.classList.remove('hide'); }
+
+            const buySignals = [], sellSignals = [];
+            await fetchCashDeliveryStocks().catch(() => {});
+
+            for (let idx = 0; idx < codes.length; idx++) {
+                const code = codes[idx];
+                try {
+                    let result, _mxLabel = null;
+                    if (_mixedMode) {
+                        const _mr = await analyzeMixed(code);
+                        result = _mr ? _mr.result : null;
+                        _mxLabel = _mr ? _mr.mode : null;
+                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
+                    } else {
+                        result = await analyzeStock(code);
+                    }
+                    if (!result) continue;
+
+                    // 顯示診斷卡
+                    const cardHtml = makeDiagCard(code, result, true, false);
+                    if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
+
+                    if (result.buy_signal)  buySignals.push({ code, price: result.price, rsi: result.rsi,
+                        boll: { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[result.boll_position],
+                        conditions: result.conditions.join('、'), mixedLabel: result._mixedLabel || null });
+                    if (result.sell_signal) sellSignals.push({ code, price: result.price, rsi: result.rsi,
+                        boll: { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[result.boll_position],
+                        conditions: result.conditions.join('、') });
+                } catch(e) { console.error(`[預篩分析 ${code}]`, e.message); }
+                if (progress) progress.style.width = `${Math.round((idx+1)/codes.length*100)}%`;
+            }
+
+            if (buySignals.length > 0)  sendBuyNotify(buySignals);
+            if (sellSignals.length > 0) sendSellNotify(sellSignals);
+
+            const total = buySignals.length + sellSignals.length;
+            window.showAlert(total > 0
+                ? `✅ 深度分析完成！發現 ${buySignals.length} 支買進 / ${sellSignals.length} 支賣出訊號`
+                : `✅ 深度分析完成，本次無符合條件的訊號`);
+        };
+
         window.startManualScan = async () => {
             const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
             const _sortFn = (a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code);
