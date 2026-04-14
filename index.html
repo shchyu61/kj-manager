@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141229</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141253</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1905,11 +1905,11 @@
                         count:      parseInt(d.count || 0),
                         updated_at: d.updated_at || '—'
                     };
-                    updatePrescreenCard();
-                    return _twPrescreenedCache;
                 }
-            } catch(e) { console.log('預篩清單讀取:', e.message); }
-            return null;
+            } catch(e) { console.log('預筌清單讀取:', e.message); }
+            // ✅ 無論成功/失敗/無資料，都顯示卡片（讓使用者知道功能存在）
+            updatePrescreenCard();
+            return _twPrescreenedCache;
         };
 
         const updatePrescreenCard = () => {
