@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141253</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141306</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1326,7 +1326,7 @@
             if (Date.now() - entry.ts > CACHE_TTL) { diagCache.delete(code); return null; }
             return entry.result;
         };
-        const setCache = (code, result) => diagCache.set(code, { result, ts: Date.now() });
+        const setCache = (key, result) => diagCache.set(key, { result, ts: Date.now() });
 
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         // ✅ 自己的 Cloudflare Worker（最穩定，不會被Yahoo封鎖）
@@ -1680,7 +1680,7 @@
                 rsi: Math.round(rsiNow * 10) / 10,
                 rsi_trend, boll_position, buy_signal, sell_signal, conditions
             };
-            setCache(code, result);
+            setCache(_cacheKey, result);
             return result;
         };
 
