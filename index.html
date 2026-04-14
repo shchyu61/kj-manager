@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141130</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141229</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1432,9 +1432,13 @@
         };
 
         // ── 主分析函數（含快取+多proxy）────────────────────────
-        const analyzeStock = async (code) => {
-            // 1. 有快取直接回傳
-            const cached = getCached(code);
+        const analyzeStock = async (code, _forceInterval = null, _forceRange = null) => {
+            // 局部 interval/range（優先使用強制參數，避免並行競態問題）
+            const _iv = _forceInterval || SCAN_INTERVAL;
+            const _rg = _forceRange    || SCAN_RANGE;
+            // 快取 key 包含 interval，避免不同週期互相覆蓋
+            const _cacheKey = _forceInterval ? `${code}_${_forceInterval}` : code;
+            const cached = _forceInterval ? diagCache.get(_cacheKey) : getCached(code);
             if (cached) return cached;
 
             // 1-1. 全額交割股判斷（優先於技術分析）
@@ -1505,12 +1509,12 @@
                         } else { throw new Error('FinMind US no data'); }
                     } catch(_e) {
                         yResult = await fetchWithFallback(
-                            `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                            `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${_iv}&range=${_rg}`);
                     }
                 } else {
                     // 虛擬幣/指數/期貨 → Worker
                     yResult = await fetchWithFallback(
-                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${SCAN_INTERVAL}&range=${SCAN_RANGE}`);
+                        `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=${_iv}&range=${_rg}`);
                 }
             }
 
@@ -1547,7 +1551,7 @@
 
             //
             const _p1=((0xF>>1)-4),_p1d=((0xF>>1)-4),_p1m=((0x6C>>1)+(-(-0)));
-            const _p1_auto = SCAN_INTERVAL === '1d' ? _p1d : SCAN_INTERVAL === '5m' ? _p1m : _p1;
+            const _p1_auto = _iv === '1d' ? _p1d : _iv === '5m' ? _p1m : _p1;
             const _p2 = 35, _p3 = 1.03, _p4 = 1.00;
 
             const price  = closes[closes.length - 1];
@@ -1566,7 +1570,7 @@
             const rsi_trend = _t1 ? 'rising' : 'falling';
 
             // .
-            const _n = _p1_auto;  // ✅ 自動依SCAN_INTERVAL使用對應週期根數
+            const _n = _p1_auto;  // ✅ 自動依_iv使用對應週期根數
             const _lows_n  = lows.slice(-_n);
             const _highs_n = highs.slice(-_n);
             // [A1]
@@ -1648,11 +1652,11 @@
 
             const _1st2nd_pass = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
 
-            if (SCAN_INTERVAL === '1wk') {
+            if (_iv === '1wk') {
                 // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
                 buy_signal = _1st2nd_pass && _3rd_pass;
 
-            } else if (SCAN_INTERVAL === '1d') {
+            } else if (_iv === '1d') {
                 // 中期投資：第一道日K + 第二道eLeader + 第三道5分K（三道缺一不可）
                 buy_signal = _1st2nd_pass && _3rd_pass;
 
@@ -1869,37 +1873,21 @@
 
         // ── 混合模式分析函數：同一標的跑兩次，回傳有訊號的結果 ──
         const analyzeMixed = async (code) => {
+            // ✅ 修正競態：不修改全域 SCAN_INTERVAL，改用參數直接傳入 analyzeStock
+            // 並行執行週K和日K，速度更快且不互相干擾
             const results = [];
-            // 週K掃描
-            const _savedInterval = SCAN_INTERVAL, _savedRange = SCAN_RANGE;
-            try {
-                SCAN_INTERVAL = '1wk'; SCAN_RANGE = '2y';
-                diagCache.delete(code);
-                const r1 = await analyzeStock(code);
-                if (r1 && r1.buy_signal) results.push({ result: r1, mode: '長期投資' });
-            } catch(e) {}
-            // 日K掃描
-            try {
-                SCAN_INTERVAL = '1d'; SCAN_RANGE = '1y';
-                diagCache.delete(code);
-                const r2 = await analyzeStock(code);
-                if (r2 && r2.buy_signal) results.push({ result: r2, mode: '中期投資' });
-            } catch(e) {}
-            // 還原
-            SCAN_INTERVAL = _savedInterval; SCAN_RANGE = _savedRange;
-            // 回傳：有訊號優先，否則回傳週K結果（用於顯示RSI/布林）
+            const [r1, r2] = await Promise.allSettled([
+                analyzeStock(code, '1wk', '2y'),
+                analyzeStock(code, '1d',  '1y'),
+            ]);
+            const wk = r1.status === 'fulfilled' ? r1.value : null;
+            const dk = r2.status === 'fulfilled' ? r2.value : null;
+            if (wk && wk.buy_signal)  results.push({ result: wk, mode: '長期投資' });
+            if (dk && dk.buy_signal)  results.push({ result: dk, mode: '中期投資' });
+            // 有訊號：優先回傳長期，其次中期
             if (results.length > 0) return results[0];
-            // 無訊號：回傳週K結果供UI顯示
-            try {
-                SCAN_INTERVAL = '1wk'; SCAN_RANGE = '2y';
-                diagCache.delete(code);
-                const r0 = await analyzeStock(code);
-                SCAN_INTERVAL = _savedInterval; SCAN_RANGE = _savedRange;
-                return { result: r0, mode: null };
-            } catch(e) {
-                SCAN_INTERVAL = _savedInterval; SCAN_RANGE = _savedRange;
-                return null;
-            }
+            // 無訊號：回傳週K結果供UI顯示RSI/布林
+            return { result: wk, mode: null };
         };
 
         // ── AI預篩清單：從Firebase讀取（每天14:00由雲端自動更新）────────
