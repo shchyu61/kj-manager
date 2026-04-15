@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151459</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151803</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -729,9 +729,11 @@
             // 黃金/貴金屬
             "GC=F": "黃金期貨(現貨黃金)", "SI=F": "白銀期貨",
             "GLD": "黃金ETF", "IAU": "iShares黃金ETF",
-            // 虛擬幣
+            // 虛擬幣（與CRYPTO_LIST完全一致）
             "BTC-USD": "比特幣", "ETH-USD": "以太幣", "DOGE-USD": "狗狗幣",
-            "BTC": "比特幣", "ETH": "以太幣", "SOL": "Solana",
+            // 外匯（與FX_LIST完全一致）
+            "EURUSD=X": "EUR/USD 歐元/美元", "JPY=X": "USD/JPY 美元/日圓",
+            "CHFUSD=X": "CHF/USD 瑞郎/美元", "USDTWD=X": "USD/TWD 美元/台幣",
         };
 
         // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
