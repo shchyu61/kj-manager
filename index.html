@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151803</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151820</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -335,6 +335,21 @@
                         </div>
                         <div id="wl-auto-scan-status" class="text-[12px] font-black" style="color:#4a6a9a;">⏸ 自動掃描已停止</div>
                     </div>
+                    <!-- 持股清單：虛擬幣提示 -->
+                    <div id="st-crypto-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
+                        🪙 虛擬幣建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#f7931a; font-weight:900;">BTC-USD</span>（比特幣）　
+                        <span style="color:#627eea; font-weight:900;">ETH-USD</span>（以太幣）<br>
+                        <span style="color:#c2a633; font-weight:900;">DOGE-USD</span>（狗狗幣）
+                    </div>
+                    <!-- 持股清單：外匯提示 -->
+                    <div id="st-fx-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
+                        💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
+                        <span style="color:#1a6a2a; font-weight:900;">JPY=X</span>（美元/日圓）<br>
+                        <span style="color:#1a6a2a; font-weight:900;">CHFUSD=X</span>（美元/瑞郎）　
+                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）
+                    </div>
                 </div>
                 <!-- 分類Tab -->
                 <div id="wl-cat-tabs" class="flex gap-2 mb-3 overflow-x-auto pb-1">
@@ -396,6 +411,21 @@
                         <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
                         <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
+                    </div>
+                    <!-- 持股清單：虛擬幣提示 -->
+                    <div id="st-crypto-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
+                        🪙 虛擬幣建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#f7931a; font-weight:900;">BTC-USD</span>（比特幣）　
+                        <span style="color:#627eea; font-weight:900;">ETH-USD</span>（以太幣）<br>
+                        <span style="color:#c2a633; font-weight:900;">DOGE-USD</span>（狗狗幣）
+                    </div>
+                    <!-- 持股清單：外匯提示 -->
+                    <div id="st-fx-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
+                        💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
+                        <span style="color:#1a6a2a; font-weight:900;">JPY=X</span>（美元/日圓）<br>
+                        <span style="color:#1a6a2a; font-weight:900;">CHFUSD=X</span>（美元/瑞郎）　
+                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）
                     </div>
                 </div>
                 <!-- 分類Tab -->
@@ -2669,10 +2699,23 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if (maps[v]) { const el=document.getElementById(maps[v]); if(el) el.classList.remove('hide'); }
             }
             if (e.target.id === 'new-stock-cat') {
-                const hint = document.getElementById('stock-fund-hint');
-                if (hint) hint.classList.toggle('hide', e.target.value !== 'fund');
-                const goldHint = document.getElementById('st-gold-hint');
-                if (goldHint) goldHint.classList.toggle('hide', e.target.value !== 'gold');
+                const _stHints = {
+                    'fund':   'stock-fund-hint',
+                    'gold':   'st-gold-hint',
+                    'crypto': 'st-crypto-hint',
+                    'fx':     'st-fx-hint',
+                };
+                // 全部先隱藏
+                Object.values(_stHints).forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('hide');
+                });
+                // 顯示對應的
+                const _targetHint = _stHints[e.target.value];
+                if (_targetHint) {
+                    const el = document.getElementById(_targetHint);
+                    if (el) el.classList.remove('hide');
+                }
             }
         });
 
