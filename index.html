@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151240</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151459</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -2545,9 +2545,12 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         window.startManualScan = async () => {
             const _catOrder = { tw:0, us:1, fund:2, crypto:3, fx:4 };
             const _sortFn = (a,b) => (_catOrder[a.cat||'tw']??9) - (_catOrder[b.cat||'tw']??9) || a.code.localeCompare(b.code);
+            // ✅ 去重：同一代碼同時在持股和觀察清單時，優先標示「持股」，只出現1次
+            const _stockCodes = new Set(stocks.map(s => s.code));
+            const _dedupWatch = watchlist.filter(s => !_stockCodes.has(s.code));
             const all = [
                 ...stocks.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '持股' })),
-                ...watchlist.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '觀察' }))
+                ..._dedupWatch.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '觀察' }))
             ];
             if (all.length === 0) { window.showAlert('請先新增股票。'); return; }
             // 掃描前預載全額交割清單
