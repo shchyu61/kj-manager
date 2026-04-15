@@ -432,17 +432,80 @@ def send_gmail(subject, body):
 # ============================================================
 # 【６．通知紀錄讀寫函數】
 # ============================================================
+# ============================================================
+# 【Firebase notified 讀寫】（解決 GitHub Actions 無狀態重複通知）
+# ============================================================
+def load_notified_firebase():
+    """從 Firebase 讀取 notified 記錄（雲端版跨執行共用）"""
+    try:
+        import json, os
+        import requests as _req
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            return {}
+        cred = json.loads(cred_json)
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        credentials = _sa.Credentials.from_service_account_info(
+            cred, scopes=['https://www.googleapis.com/auth/datastore'])
+        credentials.refresh(_gtr.Request())
+        token = credentials.token
+        url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+               f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/notified_log")
+        resp = _req.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        if resp.status_code == 200:
+            fields = resp.json().get('fields', {})
+            data_str = fields.get('data', {}).get('stringValue', '{}')
+            return json.loads(data_str)
+    except Exception as e:
+        print(f"  ⚠️ Firebase notified 讀取失敗：{e}")
+    return {}
+
+def save_notified_firebase(data):
+    """將 notified 記錄寫入 Firebase（雲端版跨執行共用）"""
+    try:
+        import json, os
+        import requests as _req
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            return
+        cred = json.loads(cred_json)
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        credentials = _sa.Credentials.from_service_account_info(
+            cred, scopes=['https://www.googleapis.com/auth/datastore'])
+        credentials.refresh(_gtr.Request())
+        token = credentials.token
+        url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+               f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/notified_log")
+        payload = {"fields": {"data": {"stringValue": json.dumps(data, ensure_ascii=False)}}}
+        _req.patch(url, json=payload,
+                   headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                   timeout=10)
+    except Exception as e:
+        print(f"  ⚠️ Firebase notified 寫入失敗：{e}")
+
 def load_notified():
+    """載入通知紀錄：雲端版優先用Firebase，本機版用json檔"""
+    import os
+    # 雲端版：FIREBASE_CRED_ENV 存在時用 Firebase
+    if os.environ.get(FIREBASE_CRED_ENV):
+        return load_notified_firebase()
+    # 本機版：用json檔
     if os.path.exists('4_notified_today.json'):
         try:
             with open('4_notified_today.json', 'r', encoding='utf-8') as f:
                 return json.load(f)
         except:
             print("⚠️ 通知紀錄檔損壞，已重置")
-            return {}
     return {}
 
 def save_notified(data):
+    """儲存通知紀錄：雲端版優先用Firebase，本機版用json檔"""
+    import os
+    if os.environ.get(FIREBASE_CRED_ENV):
+        save_notified_firebase(data)
+        return
     with open('4_notified_today.json', 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 # ============================================================
@@ -569,7 +632,16 @@ def check_buy_precondition(df):
         macd_expand    = float(mh.iloc[-1]) > float(mh.iloc[-2])
         cond_B = low_below_mid and high_below_top and macd_shrink and macd_expand
 
-        return cond_A or cond_B
+        # ── 條件C（大盤強多頭時放寬門檻）──────────────────────────
+        # 大盤週K近N根最低價都沒碰中軌（強多頭），個股只需近N根任一最低價 <= 布林中軌
+        # 且 RSI上升 AND MACD柱放大，視為低相對位階可進場
+        try:
+            low_touch_mid = (l.iloc[-n:] <= bm.iloc[-n:]).any()
+            cond_C = low_touch_mid and rsi_rising and macd_rising
+        except Exception:
+            cond_C = False
+
+        return cond_A or cond_B or cond_C
     except Exception as e:
         # print(f"Precondition Error: {e}") # 偵錯用
         return False
@@ -912,10 +984,27 @@ def scan_stock(ticker, is_holding=False):
         cond_5m_buy     = check_buy_precondition(df_5m)    # 買進：近3根5分K條件A or B
         cond_5m_short   = check_short_precondition(df_5m)  # 做空：近3根5分K鏡像條件A or B
 
+        # ── 方案C：開盤時間才嚴格要求5分K位階條件，非開盤時間只需RSI↑ AND MACD↑ ──
+        import pytz as _pytzC
+        from datetime import datetime as _dtC
+        _now_tp = _dtC.now(_pytzC.timezone('Asia/Taipei'))
+        _is_trading = (
+            _now_tp.weekday() < 5 and
+            ((_now_tp.hour == 9) or
+             (10 <= _now_tp.hour <= 12) or
+             (_now_tp.hour == 13 and _now_tp.minute <= 30))
+        )
+
         if _is_long_ok:
-            # ── 多頭第三道：（RSI↑ AND MACD↑）AND（5分K買進條件A or B）
-            if not (rsi_5m_ok and macd_5m_ok and cond_5m_buy):
-                return None
+            # ── 多頭第三道
+            if _is_trading:
+                # 開盤時間：嚴格（RSI↑ AND MACD↑ AND 5分K位階條件A/B/C）
+                if not (rsi_5m_ok and macd_5m_ok and cond_5m_buy):
+                    return None
+            else:
+                # 非開盤時間：寬鬆（只需RSI↑ AND MACD↑，位階條件放行）
+                if not (rsi_5m_ok and macd_5m_ok):
+                    return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
             mode_tag = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
@@ -923,9 +1012,13 @@ def scan_stock(ticker, is_holding=False):
             return ('BUY', c, float(ref_df['Low'].iloc[-1]), float(ref_df['boll_bot20'].iloc[-1]),
                     float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
         else:
-            # ── 空頭第三道：（RSI↓ AND MACD↓）AND（5分K做空條件A or B）
-            if not (rsi_5m_falling and macd_5m_falling and cond_5m_short):
-                return None
+            # ── 空頭第三道
+            if _is_trading:
+                if not (rsi_5m_falling and macd_5m_falling and cond_5m_short):
+                    return None
+            else:
+                if not (rsi_5m_falling and macd_5m_falling):
+                    return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
             mode_tag = '中期投資' if SCAN_MODE == 'daily' else '長期投資'

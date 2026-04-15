@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04141318</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151240</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1605,6 +1605,13 @@
             })() : false;
             const _r2 = _x2 && _x3 && _x4 && _t2;  //
 
+            // [C] 條件C：大盤強多頭時放寬門檻（近N根任一最低價 <= 布林中軌 + RSI↑ + MACD↑）
+            const _x5 = _lows_n.some((l, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && l <= _b.mid;
+            });
+            const _r3 = _x5 && _t1 && _t2;  // 條件C
+
             // [3]
             let buy_signal = false;
             let conditions = [];
@@ -1625,6 +1632,17 @@
 
             // ── 【三道關卡共用5分K邏輯】週K和日K都需要通過第三道5分K ──
             // 第三道：5分K（RSI↑ AND MACD↑）AND（5分K近3根條件A or B）
+            // ── 方案C：判斷是否台股開盤時間（09:00~13:30 週一~五 台北時間）
+            const _nowTW = new Date(new Date().toLocaleString('en-US', {timeZone:'Asia/Taipei'}));
+            const _dayTW = _nowTW.getDay(); // 0=日,1=一,...,5=五,6=六
+            const _hrTW  = _nowTW.getHours();
+            const _minTW = _nowTW.getMinutes();
+            const _isTradingHour = (
+                _dayTW >= 1 && _dayTW <= 5 &&
+                ((_hrTW === 9) || (_hrTW >= 10 && _hrTW <= 12) ||
+                 (_hrTW === 13 && _minTW <= 30))
+            );
+
             let _3rd_pass = false;
             try {
                 const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
@@ -1649,11 +1667,17 @@
                     const _5mB  = calcBoll(_5mC);
                     const _5mA  = _5mB && _5mLn.some(l => l <= _5mB.lower * _p3) && _5mRsiOk && _5mMacdOk;
                     const _5mB2 = _5mB && _5mLn.every(l => l < _5mB.mid) && _5mHn.every(h => h < _5mB.upper) && _5mMacdOk;
+                    if (_isTradingHour) {
+                    // 開盤時間：嚴格（RSI↑ AND MACD↑ AND 5分K位階條件A or B）
                     _3rd_pass = (_5mA || _5mB2);
+                } else {
+                    // 非開盤時間：寬鬆（只需RSI↑ AND MACD↑）
+                    _3rd_pass = (_5mRsiOk && _5mMacdOk);
+                }
                 }
             } catch(e) { _3rd_pass = false; }
 
-            const _1st2nd_pass = (_r1 || _r2) && rsiNow > _p2 && _el2nd;
+            const _1st2nd_pass = (_r1 || _r2 || _r3) && rsiNow > _p2 && _el2nd;
 
             if (_iv === '1wk') {
                 // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
