@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151820</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151853</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -2685,6 +2685,21 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             if (active) {
                 active.style.background = cat === 'gold' ? '#b8860b' : '#1a3a8a';
                 active.style.color = '#fff';
+            }
+            // ✅ Tab切換時同步顯示對應說明卡
+            const _stHintMap = {
+                'fund':   'stock-fund-hint',
+                'gold':   'st-gold-hint',
+                'crypto': 'st-crypto-hint',
+                'fx':     'st-fx-hint',
+            };
+            ['stock-fund-hint','st-gold-hint','st-crypto-hint','st-fx-hint'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hide');
+            });
+            if (_stHintMap[cat]) {
+                const el = document.getElementById(_stHintMap[cat]);
+                if (el) el.classList.remove('hide');
             }
             window.renderStocks();
         };
