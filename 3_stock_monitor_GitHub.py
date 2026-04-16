@@ -1,6 +1,6 @@
 # ============================================================
 
-SCRIPT_VERSION = '04161016'  # 版本號：每次覆蓋前確認此號碼
+SCRIPT_VERSION = '04161016'
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
 # 更新日期：(由AI每次改版時依照對話視窗提供的日期,並經由使用者確認後為準)（新增期貨5分K模式：TEST_MODE="5mk"，週一13:00~週三11:30）
@@ -12,7 +12,7 @@ SCRIPT_VERSION = '04161016'  # 版本號：每次覆蓋前確認此號碼
 USE_CACHE = True
 WEEKLY_REFRESH_HOUR = 8   # 每天早上更新一次週K
 five_min_cache = {}  # ✅ 新增 5 分鐘 K 線快取容器
-DELISTING_CHECK_DAYS = 3  # 每3天檢查一次下市風險（3天兼顧效能與即時性，可改1~7）
+DELISTING_CHECK_DAYS = 1  # 每1天重新查詢下市風險（3天兼顧效能與即時性，可改1~7）
 DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 # ============================================================
 # 【１．設定區】
@@ -215,22 +215,14 @@ def get_delisting_risk(ticker):
             except:
                 msg = f"⚠️【第4階段警報】官方公告下市日期：{delist_date}，請儘速確認！"
 
-        # ── 【第5階段】查無即時報價（停牌或已下市）────────────────
-        elif info.get('regularMarketPrice') is None and info.get('currentPrice') is None:
-            df_test = yf.download(ticker, period='5d', interval='1d', progress=False)
-            if df_test is None or (hasattr(df_test, 'empty') and df_test.empty):
-                is_at_risk = True
-                msg = "❌【第5階段警報】近5日查無交易資料，疑似已停牌或下市，請立即確認！"
-
-        # ── 市值異常歸零（財務崩潰早期警訊）────────────────────────
-        elif info.get('marketCap') is not None and info.get('marketCap') == 0:
-            is_at_risk = True
-            msg = "⚠️ 市值歸零，財務狀況極度異常，建議立即確認！"
+        # ── 【第5階段】停用 .info 欄位判斷（yfinance 新版台股常回傳空dict）
+        elif not delist_date:
+            pass  # 不再用 .info 欄位判斷下市
 
     except Exception as e:
         _es = str(e)
-        if any(k in _es for k in ['Too Many Requests','Rate limit','429','rate_limit','HTTPError']):
-            return False, ''  # ⏭️ 速率限制/網路錯誤，不視為下市
+        if any(k in _es for k in ["Too Many Requests","Rate limit","429","HTTPError","ConnectionError"]):
+            return False, ""
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
 
@@ -1116,68 +1108,6 @@ if today not in notified:
 # ============================================================
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
-def write_tw_prescreened(codes_list):
-    """將預篩台股寫入 Firebase（v04161016）"""
-    try:
-        import json, os, requests as _req
-        from datetime import datetime; import pytz
-        cred_json = os.environ.get(FIREBASE_CRED_ENV)
-        if not cred_json:
-            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
-            if os.path.exists(_cf):
-                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
-        if not cred_json: print("  ⚠️ Firebase憑證未設定"); return False
-        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
-        _creds = _sa.Credentials.from_service_account_info(json.loads(cred_json),
-            scopes=['https://www.googleapis.com/auth/datastore'])
-        _creds.refresh(_gtr.Request())
-        _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
-        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
-                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened")
-        _r = _req.patch(_url, timeout=15,
-            headers={"Authorization": f"Bearer {_creds.token}", "Content-Type": "application/json"},
-            json={"fields": {
-                "codes": {"arrayValue": {"values": [{"stringValue": c} for c in codes_list]}},
-                "count": {"integerValue": str(len(codes_list))},
-                "updated_at": {"stringValue": _now}}})
-        if _r.status_code in (200,201):
-            print(f"  ✅ Firebase 預篩清單已更新：{len(codes_list)} 支 ({_now})"); return True
-        print(f"  ❌ Firebase 預篩寫入失敗：{_r.status_code}"); return False
-    except Exception as e: print(f"  ⚠️ Firebase 預篩異常：{e}"); return False
-
-
-def write_alerts_to_firebase(delist_list, cash_list):
-    """寫入下市警報+全額交割到 Firebase（v04161016）"""
-    try:
-        import json, os, requests as _req
-        from datetime import datetime; import pytz
-        cred_json = os.environ.get(FIREBASE_CRED_ENV)
-        if not cred_json:
-            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
-            if os.path.exists(_cf):
-                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
-        if not cred_json: return False
-        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
-        _creds = _sa.Credentials.from_service_account_info(json.loads(cred_json),
-            scopes=['https://www.googleapis.com/auth/datastore'])
-        _creds.refresh(_gtr.Request())
-        _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
-        _data = json.dumps({
-            'delist': [{'market':s[0],'code':s[1],'type':s[2],'msg':s[3]} for s in delist_list],
-            'cash':   [{'code':c} for c in cash_list],
-            'updated_at': _now}, ensure_ascii=False)
-        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
-                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/alerts_cache")
-        _r = _req.patch(_url, timeout=15,
-            headers={"Authorization": f"Bearer {_creds.token}", "Content-Type": "application/json"},
-            json={"fields": {"data": {"stringValue": _data}}})
-        if _r.status_code in (200,201):
-            print(f"  ✅ Firebase 警報快取已更新（下市:{len(delist_list)}支 全額:{len(cash_list)}支）({_now})")
-            return True
-    except Exception as e: print(f"  ⚠️ Firebase 警報異常：{e}")
-    return False
-
-
 def read_tw_prescreened():
     """從Firebase讀取台股預篩清單（只需讀取public路徑）"""
     try:
@@ -1224,6 +1154,9 @@ def read_tw_prescreened():
     except Exception as e:
         print(f"  ⚠️ Firebase預篩清單讀取失敗：{e}")
         return None
+
+
+
 
 
 def scan_stock_mixed(ticker, is_holding=False):
@@ -1330,7 +1263,7 @@ def main_task():
 
     # (以下請確保第 13, 14 章的掃描與發信代碼, 全部都要縮排在 def main_task 之下)
     print(f"\n{'='*55}")
-    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else f'{SCAN_MODE}模式'}）  v{SCRIPT_VERSION}")
+    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else f'{SCAN_MODE}模式'}）")
     print(f"  掃描時間：{now_str}")
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
@@ -1454,12 +1387,6 @@ def main_task():
             time.sleep(0.1) # 稍微加快掃描速度
 
         # 台股掃描完成後，將預篩清單寫入 Firebase（供網頁版快速使用）
-        if _tw_prescreened:
-            print(f'\n🔍 正在將 {len(_tw_prescreened)} 支預篩台股寫入Firebase...')
-            write_tw_prescreened(_tw_prescreened)
-        else:
-            print('\n🔍 本次預篩：無台股通過條件')
-
         if _tw_prescreened:
             print(f'\n🔍 正在將 {len(_tw_prescreened)} 支預篩台股寫入Firebase...')
             write_tw_prescreened(_tw_prescreened)
@@ -1920,12 +1847,6 @@ def main_task():
 # =====================
 # 無訊號（只印Console，不發Gmail，避免通知疲乏）
 # =====================
-    try:
-        _tracked = set(s[1] for s in buy_signals+sell_signals+delist_signals if len(s)>1)
-        _ct = [c for c in (get_cash_delivery_set() or set()) if c in _tracked]
-        write_alerts_to_firebase(delist_signals, _ct)
-    except Exception as _ae: print(f'  ⚠️ 警報快取異常: {_ae}')
-
     if not buy_signals and not sell_signals and not delist_signals:
         print(f"📊 [{now_str}] 本次掃描無符合條件的股票，不發送通知。")
 
