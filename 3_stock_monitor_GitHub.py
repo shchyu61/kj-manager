@@ -1,4 +1,6 @@
 # ============================================================
+
+SCRIPT_VERSION = '04161016'  # 版本號：每次覆蓋前確認此號碼
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
 # 更新日期：(由AI每次改版時依照對話視窗提供的日期,並經由使用者確認後為準)（新增期貨5分K模式：TEST_MODE="5mk"，週一13:00~週三11:30）
@@ -32,9 +34,6 @@ FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 # Gmail設定
 # ✅ ☁️【雲端】執行：直接填入帳號密碼
 # ✅ ☁️【雲端】GitHub Actions執行：自動從 GitHub Secrets 讀取，不需填寫
-# ── 版本號（每次部署確認用）──────────────────────
-SCRIPT_VERSION = '04161016'
-
 import os as _os
 
 # Firebase設定（雲端版）
@@ -229,10 +228,9 @@ def get_delisting_risk(ticker):
             msg = "⚠️ 市值歸零，財務狀況極度異常，建議立即確認！"
 
     except Exception as e:
-        err_str = str(e)
-        if any(k in err_str for k in ['Too Many Requests', 'Rate limit', '429']):
-            print(f'  ⏭️ {ticker} Yahoo速率限制，跳過下市檢查')
-            return False, ''
+        _es = str(e)
+        if any(k in _es for k in ['Too Many Requests','Rate limit','429','rate_limit','HTTPError']):
+            return False, ''  # ⏭️ 速率限制/網路錯誤，不視為下市
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
 
@@ -1119,66 +1117,64 @@ if today not in notified:
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
 def write_tw_prescreened(codes_list):
-    """將預篩台股寫入 Firebase"""
+    """將預篩台股寫入 Firebase（v04161016）"""
     try:
         import json, os, requests as _req
         from datetime import datetime; import pytz
         cred_json = os.environ.get(FIREBASE_CRED_ENV)
-        if not cred_json and False:
-            cred_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
-            if os.path.exists(cred_file):
-                with open(cred_file, 'r', encoding='utf-8') as f: cred_json = f.read()
-        if not cred_json: print("  ⚠️ Firebase憑證未設定，跳過預篩寫入"); return False
-        cred = json.loads(cred_json)
-        tz = pytz.timezone('Asia/Taipei'); now_str = datetime.now(tz).strftime('%Y/%m/%d %H:%M')
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json: print("  ⚠️ Firebase憑證未設定"); return False
         import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
-        creds = _sa.Credentials.from_service_account_info(cred, scopes=['https://www.googleapis.com/auth/datastore'])
-        creds.refresh(_gtr.Request()); token = creds.token
-        url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
-               f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened")
-        payload = {"fields": {
-            "codes":      {"arrayValue": {"values": [{"stringValue": c} for c in codes_list]}},
-            "count":      {"integerValue": str(len(codes_list))},
-            "updated_at": {"stringValue": now_str},
-        }}
-        resp = _req.patch(url, json=payload,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, timeout=15)
-        if resp.status_code in (200, 201):
-            print(f"  ✅ Firebase 預篩清單已更新：{len(codes_list)} 支 ({now_str})"); return True
-        print(f"  ❌ Firebase 預篩寫入失敗：{resp.status_code}"); return False
-    except Exception as e:
-        print(f"  ⚠️ Firebase 預篩寫入異常：{e}"); return False
+        _creds = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+            scopes=['https://www.googleapis.com/auth/datastore'])
+        _creds.refresh(_gtr.Request())
+        _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened")
+        _r = _req.patch(_url, timeout=15,
+            headers={"Authorization": f"Bearer {_creds.token}", "Content-Type": "application/json"},
+            json={"fields": {
+                "codes": {"arrayValue": {"values": [{"stringValue": c} for c in codes_list]}},
+                "count": {"integerValue": str(len(codes_list))},
+                "updated_at": {"stringValue": _now}}})
+        if _r.status_code in (200,201):
+            print(f"  ✅ Firebase 預篩清單已更新：{len(codes_list)} 支 ({_now})"); return True
+        print(f"  ❌ Firebase 預篩寫入失敗：{_r.status_code}"); return False
+    except Exception as e: print(f"  ⚠️ Firebase 預篩異常：{e}"); return False
 
 
 def write_alerts_to_firebase(delist_list, cash_list):
-    """寫入下市警報+全額交割股到 Firebase（供網頁版讀取）"""
+    """寫入下市警報+全額交割到 Firebase（v04161016）"""
     try:
         import json, os, requests as _req
         from datetime import datetime; import pytz
         cred_json = os.environ.get(FIREBASE_CRED_ENV)
-        if not cred_json and False:
-            cred_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
-            if os.path.exists(cred_file):
-                with open(cred_file, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
         if not cred_json: return False
-        cred = json.loads(cred_json)
-        tz = pytz.timezone('Asia/Taipei'); now_str = datetime.now(tz).strftime('%Y/%m/%d %H:%M')
         import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
-        creds = _sa.Credentials.from_service_account_info(cred, scopes=['https://www.googleapis.com/auth/datastore'])
-        creds.refresh(_gtr.Request()); token = creds.token
-        data = json.dumps({
+        _creds = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+            scopes=['https://www.googleapis.com/auth/datastore'])
+        _creds.refresh(_gtr.Request())
+        _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+        _data = json.dumps({
             'delist': [{'market':s[0],'code':s[1],'type':s[2],'msg':s[3]} for s in delist_list],
             'cash':   [{'code':c} for c in cash_list],
-            'updated_at': now_str
-        }, ensure_ascii=False)
-        url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
-               f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/alerts_cache")
-        resp = _req.patch(url, json={"fields": {"data": {"stringValue": data}}},
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, timeout=15)
-        if resp.status_code in (200, 201):
-            print(f"  ✅ Firebase 警報快取已更新（下市:{len(delist_list)}支 全額:{len(cash_list)}支）({now_str})")
+            'updated_at': _now}, ensure_ascii=False)
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/alerts_cache")
+        _r = _req.patch(_url, timeout=15,
+            headers={"Authorization": f"Bearer {_creds.token}", "Content-Type": "application/json"},
+            json={"fields": {"data": {"stringValue": _data}}})
+        if _r.status_code in (200,201):
+            print(f"  ✅ Firebase 警報快取已更新（下市:{len(delist_list)}支 全額:{len(cash_list)}支）({_now})")
             return True
-    except Exception as e: print(f"  ⚠️ Firebase 警報快取異常：{e}")
+    except Exception as e: print(f"  ⚠️ Firebase 警報異常：{e}")
     return False
 
 
@@ -1925,9 +1921,9 @@ def main_task():
 # 無訊號（只印Console，不發Gmail，避免通知疲乏）
 # =====================
     try:
-        _tracked = set(s[1] for s in buy_signals + sell_signals + delist_signals if len(s) > 1)
-        _cash_t = [c for c in (get_cash_delivery_set() or set()) if c in _tracked]
-        write_alerts_to_firebase(delist_signals, _cash_t)
+        _tracked = set(s[1] for s in buy_signals+sell_signals+delist_signals if len(s)>1)
+        _ct = [c for c in (get_cash_delivery_set() or set()) if c in _tracked]
+        write_alerts_to_firebase(delist_signals, _ct)
     except Exception as _ae: print(f'  ⚠️ 警報快取異常: {_ae}')
 
     if not buy_signals and not sell_signals and not delist_signals:
