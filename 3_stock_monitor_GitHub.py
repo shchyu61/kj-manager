@@ -227,10 +227,9 @@ def get_delisting_risk(ticker):
 
     except Exception as e:
         err_str = str(e)
-        # ✅ 速率限制（Rate Limit）不是下市，跳過不警報
         if any(k in err_str for k in ['Too Many Requests', 'Rate limit', '429', 'rate_limit']):
             print(f'  ⏭️ {ticker} Yahoo速率限制，跳過下市檢查')
-            return False, ''  # Rate Limit：不是下市，直接回傳安全
+            return False, ''
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
 
@@ -1116,6 +1115,78 @@ if today not in notified:
 # ============================================================
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
+# ============================================================
+# 【Firebase 警報快取寫入】
+# 將下市警報和全額交割股資訊寫入 Firebase，供網頁版家人/房客讀取
+# 路徑：artifacts/kj-wealth-manager/public/alerts_cache
+# ============================================================
+def write_alerts_to_firebase(delist_list, cash_delivery_list):
+    """寫入下市警報+全額交割股到 Firebase（24小時快取）"""
+    try:
+        import json, os
+        import requests as _req
+        from datetime import datetime
+        import pytz
+
+        # 優先環境變數，次選本機json檔
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            cred_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(cred_file):
+                with open(cred_file, 'r', encoding='utf-8') as f:
+                    cred_json = f.read()
+        if not cred_json:
+            return False
+
+        cred = json.loads(cred_json)
+        tz = pytz.timezone('Asia/Taipei')
+        now_str = datetime.now(tz).strftime('%Y/%m/%d %H:%M')
+
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        credentials = _sa.Credentials.from_service_account_info(
+            cred, scopes=['https://www.googleapis.com/auth/datastore'])
+        credentials.refresh(_gtr.Request())
+        token = credentials.token
+
+        # 整理下市警報
+        delist_items = []
+        for s in delist_list:
+            market, code, dtype, dmsg = s
+            delist_items.append({
+                'market': market, 'code': code,
+                'type': dtype, 'msg': dmsg
+            })
+
+        # 整理全額交割股（只記錄被持股清單追蹤的）
+        cash_items = [{'code': c} for c in cash_delivery_list]
+
+        payload_data = json.dumps({
+            'delist':    delist_items,
+            'cash':      cash_items,
+            'updated_at': now_str
+        }, ensure_ascii=False)
+
+        url = (
+            f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+            f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/alerts_cache"
+        )
+        payload = {"fields": {"data": {"stringValue": payload_data}}}
+        resp = _req.patch(url, json=payload,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            timeout=15)
+
+        if resp.status_code in (200, 201):
+            print(f"  ✅ Firebase 警報快取已更新（下市:{len(delist_items)}支 全額交割:{len(cash_items)}支）({now_str})")
+            return True
+        else:
+            print(f"  ❌ Firebase 警報快取寫入失敗：{resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"  ⚠️ Firebase 警報快取寫入異常：{e}")
+        return False
+
+
 def read_tw_prescreened():
     """從Firebase讀取台股預篩清單（只需讀取public路徑）"""
     try:
@@ -1850,6 +1921,14 @@ def main_task():
 # =====================
 # 無訊號（只印Console，不發Gmail，避免通知疲乏）
 # =====================
+    # ✅ 寫入 Firebase 警報快取（下市+全額交割，供網頁版家人/房客讀取）
+    try:
+        _tracked = set(s[1] for s in buy_signals + sell_signals + delist_signals if len(s) > 1)
+        _cash_tracked = [c for c in (get_cash_delivery_set() or set()) if c in _tracked]
+        write_alerts_to_firebase(delist_signals, _cash_tracked)
+    except Exception as _ae:
+        print(f'  ⚠️ Firebase警報快取寫入異常: {_ae}')
+
     if not buy_signals and not sell_signals and not delist_signals:
         print(f"📊 [{now_str}] 本次掃描無符合條件的股票，不發送通知。")
 

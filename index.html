@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04151853</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04160959</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -352,6 +352,8 @@
 
         <!-- 監控頁面 -->
         <div id="page-monitor" class="space-y-6">
+            <!-- Firebase 警報橫幅：下市+全額交割 -->
+            <div id="alerts-bar" style="display:none; background:#fff0f0; border:1.5px solid #cc0000; border-radius:14px; padding:10px 14px;"></div>
             <div class="flex justify-between items-end px-2">
                 <div>
                     <h3 class="text-2xl font-black italic tracking-tight uppercase">Multi-Asset Monitor</h3>
@@ -877,7 +879,8 @@
                 }
                 window.renderStocks();
                 window.renderWatchlist();
-                loadTwPrescreened().catch(()=>{}); // 非同步載入AI預篩清單
+                loadTwPrescreened().catch(()=>{});
+        loadAlertsCache().catch(()=>{});  // 登入後讀取下市+全額交割警報 // 非同步載入AI預篩清單
             } catch (e) {
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
@@ -1936,6 +1939,47 @@
 
         // ── AI預篩清單：從Firebase讀取（每天14:00由雲端自動更新）────────
         let _twPrescreenedCache = null;  // {codes:[], count:0, updated_at:''}
+
+        // ── Firebase 警報快取（下市+全額交割，每天更新）────────────────
+        let _alertsCache = null;
+
+        const loadAlertsCache = async () => {
+            try {
+                const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+                const ref = doc(window.db, 'artifacts', window.appId, 'public', 'alerts_cache');
+                const snap = await getDoc(ref);
+                if (snap.exists()) {
+                    const raw = snap.data()?.data;
+                    if (raw) _alertsCache = JSON.parse(raw);
+                }
+            } catch(e) { console.log('警報快取讀取:', e.message); }
+            renderAlertsBar();
+        };
+
+        const renderAlertsBar = () => {
+            const bar = document.getElementById('alerts-bar');
+            if (!bar) return;
+            if (!_alertsCache) { bar.style.display = 'none'; return; }
+            const { delist = [], cash = [], updated_at = '' } = _alertsCache;
+            if (delist.length === 0 && cash.length === 0) { bar.style.display = 'none'; return; }
+
+            let html = `<div class="font-black text-sm mb-1" style="color:#7a0000;">⚠️ 系統警報（更新：${updated_at}）</div>`;
+            if (delist.length > 0) {
+                const hold = delist.filter(d => d.type === 'DELIST_HOLD');
+                const watch = delist.filter(d => d.type === 'DELIST_WATCH');
+                if (hold.length > 0) {
+                    html += `<div class="text-[12px] font-black" style="color:#cc0000;">❌ 持股下市警報：${hold.map(d=>d.code).join('、')}</div>`;
+                }
+                if (watch.length > 0) {
+                    html += `<div class="text-[12px] font-black" style="color:#cc6600;">⚠️ 觀察下市預警：${watch.map(d=>d.code).join('、')}</div>`;
+                }
+            }
+            if (cash.length > 0) {
+                html += `<div class="text-[12px] font-black" style="color:#996600;">🔔 全額交割股：${cash.map(c=>c.code).join('、')}</div>`;
+            }
+            bar.innerHTML = html;
+            bar.style.display = 'block';
+        };
 
         const loadTwPrescreened = async () => {
             try {
