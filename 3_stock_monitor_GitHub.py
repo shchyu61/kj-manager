@@ -226,6 +226,11 @@ def get_delisting_risk(ticker):
             msg = "⚠️ 市值歸零，財務狀況極度異常，建議立即確認！"
 
     except Exception as e:
+        err_str = str(e)
+        # ✅ 速率限制（Rate Limit）不是下市，跳過不警報
+        if any(k in err_str for k in ['Too Many Requests', 'Rate limit', '429', 'rate_limit']):
+            print(f'  ⏭️ {ticker} Yahoo速率限制，跳過下市檢查')
+            return False, ''  # Rate Limit：不是下市，直接回傳安全
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
 
