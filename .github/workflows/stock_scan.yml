@@ -1,6 +1,7 @@
 # ============================================================
 # GitHub Actions：股票自動掃描排程
 # 檔案位置：.github/workflows/stock_scan.yml
+# 最後更新：2026/04/17
 # 說明：
 #   scan job      → 每週一~五 09:00 和 13:30（台灣時間）自動執行
 #   futures-scan  → 週一13:00~週三11:30，日盤/夜盤每5分鐘，深夜01~05每15分鐘
@@ -43,7 +44,7 @@ on:
 
 jobs:
   # ============================================================
-  # Job 1：週K掃描（原有，不動）
+  # Job 1：週K掃描
   # ============================================================
   scan:
     runs-on: ubuntu-latest
@@ -54,27 +55,32 @@ jobs:
       - name: 取得程式碼
         uses: actions/checkout@v4
 
-      # 2. 安裝 Python 3.11
+      # 2. 安裝 Python 3.12
       - name: 安裝 Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       # 3. 安裝所需套件
+      # ✅ 2026/04/17 新增 google-auth（Firebase預篩快取+警報快取寫入）
+      #              新增 requests（Firebase REST API）
+      #              新增 beautifulsoup4（全額交割備援HTML解析）
       - name: 安裝套件
         run: |
-          pip install yfinance pandas pandas-ta pytz twstock
+          pip install yfinance pandas pandas-ta pytz twstock google-auth requests beautifulsoup4
 
       # 4. 執行股票掃描（密碼從 GitHub Secrets 讀取）
+      # ✅ 2026/04/17 新增 FIREBASE_SERVICE_KEY（Firebase預篩快取+警報快取+notified寫入）
       - name: 執行股票掃描
         env:
-          GMAIL_ACCOUNT:  ${{ secrets.GMAIL_ACCOUNT }}
-          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+          GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
         run: |
           python 3_stock_monitor_GitHub.py
 
   # ============================================================
-  # Job 2：期貨5分K掃描（新增）
+  # Job 2：期貨5分K掃描
   # TEST_MODE='5mk' 由環境變數傳入，Python 自行判斷時段
   # 非時段（週一15:01前、週三13:30後）Python 會直接 exit
   # ============================================================
@@ -87,7 +93,7 @@ jobs:
       - name: 取得程式碼
         uses: actions/checkout@v4
 
-      # 2. 安裝 Python 3.11
+      # 2. 安裝 Python 3.12
       - name: 安裝 Python
         uses: actions/setup-python@v5
         with:
@@ -96,12 +102,9 @@ jobs:
       # 3. 安裝所需套件
       - name: 安裝套件
         run: |
-          pip install yfinance pandas pandas-ta pytz twstock cryptography
+          pip install yfinance pandas pandas-ta pytz twstock cryptography google-auth requests
 
       # 4. 執行期貨5分K掃描
-      #    TEST_MODE='5mk' → 觸發期貨模式
-      #    Python 內部時段判斷：非時段直接 exit，不發任何通知
-      #    FIREBASE_SERVICE_KEY → Service Account JSON，用於寫入期貨狀態到 Firebase
       - name: 執行期貨5分K掃描
         env:
           GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
