@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04160959</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04182321</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -352,8 +352,6 @@
 
         <!-- 監控頁面 -->
         <div id="page-monitor" class="space-y-6">
-            <!-- Firebase 警報橫幅：下市+全額交割 -->
-            <div id="alerts-bar" style="display:none; background:#fff0f0; border:1.5px solid #cc0000; border-radius:14px; padding:10px 14px;"></div>
             <div class="flex justify-between items-end px-2">
                 <div>
                     <h3 class="text-2xl font-black italic tracking-tight uppercase">Multi-Asset Monitor</h3>
@@ -879,8 +877,7 @@
                 }
                 window.renderStocks();
                 window.renderWatchlist();
-                loadTwPrescreened().catch(()=>{});
-        loadAlertsCache().catch(()=>{});  // 登入後讀取下市+全額交割警報 // 非同步載入AI預篩清單
+                loadTwPrescreened().catch(()=>{}); // 非同步載入AI預篩清單
             } catch (e) {
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
@@ -1632,6 +1629,65 @@
             });
             const _r3 = _x5 && _t1 && _t2;  // 條件C
 
+            // [D] 條件D（上軌做多：K棒在上軌附近，強多頭進場策略）
+            // 位階：近5根每一根最低價都在中軌以上
+            const _dN = 5;
+            const _lows5  = lows.slice(-_dN);
+            const _highs5 = highs.slice(-_dN);
+            const _boll_now = calcBoll(closes);
+            const _all_above_mid = _boll_now && _lows5.every(l => l > _boll_now.mid);
+
+            // OSC（macd_hist）近5根值
+            const _oscVals = Array.from({length: _dN}, (_, i) => {
+                const _mc = calcMACDHist(closes.slice(0, closes.length - _dN + i + 1));
+                return _mc ? _mc.now : null;
+            }).filter(v => v !== null);
+
+            // 1a：近5根任意連續3根 OSC 連跌
+            const _osc3Drop = _oscVals.length >= 3 && Array.from({length: _oscVals.length-2}, (_,j) =>
+                _oscVals[j] > _oscVals[j+1] && _oscVals[j+1] > _oscVals[j+2]
+            ).some(Boolean);
+            // 1b：前1根 OSC 高於前2根（OSC轉升）
+            const _macdPrev2 = calcMACDHist(closes.slice(0,-2));
+            const _macdPrev1 = calcMACDHist(closes.slice(0,-1));
+            const _oscPrevRise = _macdPrev1 && _macdPrev2 && _macdPrev1.now > _macdPrev2.now;
+            // 1c：當根 MACD柱↑（已有 _t2）
+
+            // 2a：近5根任意連續3根 DIF > MACD（macd_line > macd_signal）
+            // 用 calcMACDFull 取DIF和Signal（若無此函數，用 calcMACDHist 的 dif/sig 欄位）
+            const _getMACDFull = (cls) => {
+                if (cls.length < 26) return null;
+                const ema12 = cls.reduce((acc,v,i) => { const k=2/13; return i===0?[v]:([...acc, acc[acc.length-1]*(1-k)+v*k]); }, []);
+                const ema26 = cls.reduce((acc,v,i) => { const k=2/27; return i===0?[v]:([...acc, acc[acc.length-1]*(1-k)+v*k]); }, []);
+                const dif = ema12[ema12.length-1] - ema26[ema26.length-1];
+                const prev9 = Array.from({length:9},(_,i)=>{
+                    const c2=cls.slice(0,cls.length-8+i);
+                    if(c2.length<26) return null;
+                    const e12=c2.reduce((a,v,j)=>{const k=2/13;return j===0?[v]:([...a,a[a.length-1]*(1-k)+v*k]);}, []);
+                    const e26=c2.reduce((a,v,j)=>{const k=2/27;return j===0?[v]:([...a,a[a.length-1]*(1-k)+v*k]);}, []);
+                    return e12[e12.length-1]-e26[e26.length-1];
+                }).filter(v=>v!==null);
+                const sig = prev9.length>0 ? prev9.reduce((a,v,i)=>{const k=2/10;return i===0?v:a*(1-k)+v*k;},prev9[0]) : dif;
+                return {dif, sig};
+            };
+            const _difAbove5 = Array.from({length:_dN}, (_,i) => {
+                const _fm = _getMACDFull(closes.slice(0, closes.length - _dN + i + 1));
+                return _fm ? _fm.dif > _fm.sig : false;
+            });
+            const _dif3Up = Array.from({length:_difAbove5.length-2}, (_,j) =>
+                _difAbove5[j] && _difAbove5[j+1] && _difAbove5[j+2]
+            ).some(Boolean);
+            // 2b：前1根 DIF < MACD
+            const _fmPrev = _getMACDFull(closes.slice(0,-1));
+            const _difPrevBelow = _fmPrev && _fmPrev.dif < _fmPrev.sig;
+            // 2c：當根 DIF > MACD
+            const _fmNow = _getMACDFull(closes);
+            const _difNowAbove = _fmNow && _fmNow.dif > _fmNow.sig;
+
+            // 條件D只在週K模式生效
+            const _r4 = (_iv === '1wk') && _all_above_mid && _osc3Drop && _oscPrevRise && _t2 && _t1 &&
+                        _dif3Up && _difPrevBelow && _difNowAbove;  // 條件D（上軌做多，僅週K）
+
             // [3]
             let buy_signal = false;
             let conditions = [];
@@ -1697,7 +1753,7 @@
                 }
             } catch(e) { _3rd_pass = false; }
 
-            const _1st2nd_pass = (_r1 || _r2 || _r3) && rsiNow > _p2 && _el2nd;
+            const _1st2nd_pass = (_r1 || _r2 || _r3 || _r4) && rsiNow > _p2 && _el2nd;
 
             if (_iv === '1wk') {
                 // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
@@ -1719,8 +1775,48 @@
                 if (conditions.length === 0) conditions.push('E2');                //
             }
 
+            // [D鏡像] 條件D做空（上軌做空鏡像：近5根最高價都在中軌以下）
+            // 1a：近5根任意連續3根 OSC 連漲
+            const _osc3Rise = _oscVals.length >= 3 && Array.from({length: _oscVals.length-2}, (_,j) =>
+                _oscVals[j] < _oscVals[j+1] && _oscVals[j+1] < _oscVals[j+2]
+            ).some(Boolean);
+            // 1b：前1根 OSC 低於前2根（OSC轉跌）
+            const _oscPrevDrop = _macdPrev1 && _macdPrev2 && _macdPrev1.now < _macdPrev2.now;
+            // 1c：當根 MACD柱↓（!_t2）
+            // 2a：近5根任意連續3根 DIF < MACD
+            const _difBelow5 = Array.from({length:_dN}, (_,i) => {
+                const _fm = _getMACDFull(closes.slice(0, closes.length - _dN + i + 1));
+                return _fm ? _fm.dif < _fm.sig : false;
+            });
+            const _dif3Down = Array.from({length:_difBelow5.length-2}, (_,j) =>
+                _difBelow5[j] && _difBelow5[j+1] && _difBelow5[j+2]
+            ).some(Boolean);
+            // 2b：前1根 DIF > MACD
+            const _difPrevAbove = _fmPrev && _fmPrev.dif > _fmPrev.sig;
+            // 2c：當根 DIF < MACD（!_difNowAbove）
+            // 位階：近5根每一根最高價都在中軌以下
+            const _all_below_mid = _boll_now && highs.slice(-_dN).every(h => h < _boll_now.mid);
+
+            const _r4_short = (_iv === '1wk') && _all_below_mid && _osc3Rise && _oscPrevDrop && !_t2 && !_t1 &&
+                              _dif3Down && _difPrevAbove && _fmNow && _fmNow.dif < _fmNow.sig;  // 條件D空頭鏡像，僅週K
+
             // [S]
-            const sell_signal = boll_position === 'near_upper' && !_t1 && !_t2;
+            // 條件D出場（只在週K且近N根最低價都在中軌以上時生效）
+            const _macdNow  = calcMACDHist(closes);
+            const _macdPrvX = calcMACDHist(closes.slice(0,-1));
+            const _bm_cur   = calcBoll(closes);
+            const _lows_n_sell = lows.slice(-_n);
+            const _still_above = _bm_cur && _lows_n_sell.every(l => l > _bm_cur.mid);
+            // 出場A：OSC↓ AND DIF跌破MACD（兩個同時）
+            const _exitA_osc  = _macdNow && _macdPrvX && _macdNow.now < _macdPrvX.now;
+            const _exitA_dif  = _fmNow && _fmNow.dif < _fmNow.sig;
+            const _condD_exitA = (_iv === '1wk') && _still_above && _exitA_osc && _exitA_dif;
+            // 出場B：近N根任一最低價 ≤ 中軌
+            const _condD_exitB = (_iv === '1wk') && _still_above &&
+                                 _bm_cur && _lows_n_sell.some(l => l <= _bm_cur.mid);
+
+            const sell_signal = (boll_position === 'near_upper' && !_t1 && !_t2) ||
+                                _r4_short || _condD_exitA || _condD_exitB;
 
             const result = {
                 price: price.toFixed(2),
@@ -1939,47 +2035,6 @@
 
         // ── AI預篩清單：從Firebase讀取（每天14:00由雲端自動更新）────────
         let _twPrescreenedCache = null;  // {codes:[], count:0, updated_at:''}
-
-        // ── Firebase 警報快取（下市+全額交割，每天更新）────────────────
-        let _alertsCache = null;
-
-        const loadAlertsCache = async () => {
-            try {
-                const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
-                const ref = doc(window.db, 'artifacts', window.appId, 'public', 'alerts_cache');
-                const snap = await getDoc(ref);
-                if (snap.exists()) {
-                    const raw = snap.data()?.data;
-                    if (raw) _alertsCache = JSON.parse(raw);
-                }
-            } catch(e) { console.log('警報快取讀取:', e.message); }
-            renderAlertsBar();
-        };
-
-        const renderAlertsBar = () => {
-            const bar = document.getElementById('alerts-bar');
-            if (!bar) return;
-            if (!_alertsCache) { bar.style.display = 'none'; return; }
-            const { delist = [], cash = [], updated_at = '' } = _alertsCache;
-            if (delist.length === 0 && cash.length === 0) { bar.style.display = 'none'; return; }
-
-            let html = `<div class="font-black text-sm mb-1" style="color:#7a0000;">⚠️ 系統警報（更新：${updated_at}）</div>`;
-            if (delist.length > 0) {
-                const hold = delist.filter(d => d.type === 'DELIST_HOLD');
-                const watch = delist.filter(d => d.type === 'DELIST_WATCH');
-                if (hold.length > 0) {
-                    html += `<div class="text-[12px] font-black" style="color:#cc0000;">❌ 持股下市警報：${hold.map(d=>d.code).join('、')}</div>`;
-                }
-                if (watch.length > 0) {
-                    html += `<div class="text-[12px] font-black" style="color:#cc6600;">⚠️ 觀察下市預警：${watch.map(d=>d.code).join('、')}</div>`;
-                }
-            }
-            if (cash.length > 0) {
-                html += `<div class="text-[12px] font-black" style="color:#996600;">🔔 全額交割股：${cash.map(c=>c.code).join('、')}</div>`;
-            }
-            bar.innerHTML = html;
-            bar.style.display = 'block';
-        };
 
         const loadTwPrescreened = async () => {
             try {
