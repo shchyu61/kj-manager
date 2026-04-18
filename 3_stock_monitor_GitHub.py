@@ -784,8 +784,17 @@ def check_buy_eleader(df_w, df_d=None, df_5m=None, name=None):
                 else:
                     return None
             
-            # 若沒有 5分K (單純預篩階段)，直接回傳日/週K的數值
-            return ('BUY', c.iloc[-1], bb20.iloc[-1], rsi.iloc[-1])
+            # 基金模式（df_5m=None）：第三道改用日K RSI↑ AND MACD柱↑（方案Q）
+            # 使用當根 vs 前1根，與股票策略一致
+            try:
+                _rsi_daily_ok  = float(rsi.iloc[-1]) > float(rsi.iloc[-2])
+                _macd_daily_ok = float(df['macd_hist'].iloc[-1]) > float(df['macd_hist'].iloc[-2])
+                if _rsi_daily_ok and _macd_daily_ok:
+                    return ('BUY', c.iloc[-1], float(rsi.iloc[-2]), float(rsi.iloc[-1]))
+                else:
+                    return None  # 日K第三道未通過
+            except Exception:
+                return None
         return None
 
     except Exception as e:
@@ -1196,32 +1205,24 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
     global buy_signals, sell_signals
     try:
         print(f"\n🚀 正在啟動合成追蹤：{fund_name}...")
-        # 1. 週K (位階門檻)
+        # 1. 週K（第一道：位階門檻）
         s_w = yf.download("SPY", period='2y', interval='1wk', progress=False)
         q_w = yf.download("QQQ", period='2y', interval='1wk', progress=False)
         h_w = yf.download("HYG", period='2y', interval='1wk', progress=False)
         df_w = calc_indicators(build_fund_proxy_df(s_w, q_w, h_w))
-        if df_w is None or not check_buy_precondition(df_w):
+        if df_w is None or not check_buy_precondition(df_w, is_weekly=True):
             print(f"ℹ️ {fund_name}:週K位階尚未符合觸發買進條件")
             return
 
-        # 2. 日K (趨勢判斷)
+        # 2. 日K（第二道：eLeader 25條件）
         s_d = yf.download("SPY", period='1y', interval='1d', progress=False)
         q_d = yf.download("QQQ", period='1y', interval='1d', progress=False)
         h_d = yf.download("HYG", period='1y', interval='1d', progress=False)
         df_d = calc_indicators(build_fund_proxy_df(s_d, q_d, h_d))
 
-        # 3. 5分K (時機偵測 - 確保 RSI 與股票邏輯一致)
-        s_5m = yf.download("SPY", period='5d', interval='5m', progress=False)
-        q_5m = yf.download("QQQ", period='5d', interval='5m', progress=False)
-        h_5m = yf.download("HYG", period='5d', interval='5m', progress=False)
-        df_5m = build_fund_proxy_df(s_5m, q_5m, h_5m)
-        if df_5m is not None:
-            # 強制使用 pandas_ta 計算 RSI 以確保與股票對齊
-            df_5m['rsi14'] = ta.rsi(df_5m['Close'].squeeze(), length=14)
-
-        # ✅ 核心呼叫：傳入 4 個參數，觸發多維判定
-        result = check_buy_eleader(df_w, df_d, df_5m, fund_name)
+        # ❌ 基金不需要5分K（每日公布一次淨值，5分K無意義）
+        # ✅ 第三道改用日K RSI↑ AND MACD柱↑（方案Q）
+        result = check_buy_eleader(df_w, df_d, None, fund_name)  # df_5m=None → 跳過5分K
         
         if result and result[0] == 'BUY':
             # --- [修正 BUG：補足 7 個變數並存入清單以對齊第 14 章節的 unpack 需求, 由第 14 章彙整發信] ---
@@ -1549,6 +1550,17 @@ def main_task():
         # 🔥 正確位置：美股「所有股票」掃描完後，才執行「一次」基金追蹤
         # 確保此行與 for 垂直對齊（不縮排進去）
         scan_synthetic_fund("SPY / QQQ / HYG三合一追蹤【安聯月配息基金】(合成代標)")
+
+        # ── 債券基金（EMB/AGG）獨立掃描（各自走台股/美股相同流程）──
+        for _bond_ticker in ['EMB', 'AGG']:
+            _bond_name = {'EMB': '新興市場債券ETF（參考FR02）', 'AGG': '全球綜合債券ETF（參考FR04）'}.get(_bond_ticker, _bond_ticker)
+            _r_bond = scan_stock(_bond_ticker, is_holding=False)
+            if _r_bond and _r_bond[0] == 'BUY':
+                buy_signals.append(('債券基金', _bond_ticker, *_r_bond[1:], '長期投資' if SCAN_MODE=='weekly' else '中期投資'))
+                print(f'⭐ 債券基金 {_bond_ticker}（{_bond_name}）觸發買進訊號')
+            elif _r_bond and _r_bond[0] == 'SELL':
+                sell_signals.append(('債券基金', _bond_ticker, *_r_bond[1:]))
+                print(f'🔔 債券基金 {_bond_ticker}（{_bond_name}）觸發賣出訊號')
 
     # ── 虛擬幣掃描 ────────────────────────────────
     if TEST_MODE == '5mk':
