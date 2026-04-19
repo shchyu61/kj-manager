@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04191359</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04191408</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -2934,23 +2934,27 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 const name = stockNameMap[s.code] || '未定義資產';
                 const cached = getCached(s.code);
                 const catLabel = { tw:'台股', us:'美股', fund:'基金', crypto:'虛擬幣', fx:'外匯' }[s.cat||'tw'] || '';
-                const rsiHtml = cached ? (() => {
+                // RSI 資訊（有快取才顯示，無快取顯示灰色提示）
+                const rsiRow = cached ? (() => {
                     const arrow  = cached.rsi_trend === 'rising' ? '↑' : '↓';
                     const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
                     const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
                     const bollClr = { near_upper:'text-amber-600', mid_zone:'text-slate-500', near_lower:'text-emerald-600' };
-                    return `<div class="flex-1 flex flex-col items-center gap-1 text-[13px] font-black px-1">
-                        <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
-                        <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
+                    return `<div class="flex gap-4 mt-1">
+                        <span class="${rsiClr} text-[12px] font-black">RSI ${cached.rsi} ${arrow}</span>
+                        <span class="${bollClr[cached.boll_position] || 'text-slate-400'} text-[12px] font-black">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
-                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點全部診斷查看</div>`;
-                return `<div class="flex items-center gap-2 p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
-                    <div class="flex items-center gap-3 shrink-0">
-                        <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
-                        <div><div class="font-black text-xl tracking-tight">${s.code}</div><div class="text-[12px] font-black text-slate-400 uppercase">${name}</div></div>
+                })() : `<div class="mt-1 text-[11px] text-slate-300 font-black">點「全部診斷」查看 RSI 狀態</div>`;
+                return `<div class="p-4 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner shrink-0">${s.code[0]}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-black text-base tracking-tight truncate">${s.code}</div>
+                            <div class="text-[11px] font-black text-slate-400 break-words leading-tight">${name}</div>
+                        </div>
+                        <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-1 shrink-0"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
                     </div>
-                    ${rsiHtml}
-                    <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2 shrink-0"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
+                    ${rsiRow}
                 </div>`;
             }).join('');
             lucide.createIcons();
