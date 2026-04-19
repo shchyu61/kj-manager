@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04191341</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04191359</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -233,7 +233,7 @@
                     <span class="text-[12px] font-black text-slate-400 block uppercase">觀察中</span>
                 </div>
             </div>
-            <div class="rounded-[2.5rem] p-4 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
+            <div class="rounded-[2rem] p-3 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
                 <div class="flex flex-col gap-3 mb-4">
                     <div class="flex gap-3">
                         <input type="text" id="new-watchlist-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)"
@@ -376,7 +376,7 @@
                     <span class="text-[12px] font-black text-slate-400 block uppercase">監控中</span>
                 </div>
             </div>
-            <div class="rounded-[2.5rem] p-4 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
+            <div class="rounded-[2rem] p-3 md:p-5 shadow-sm border-2" style="background:#faf4ea; border-color:#c4a878;">
                 <div class="flex flex-col gap-3 mb-4">
                     <div class="flex gap-3">
                         <input type="text" id="new-stock-input" placeholder="輸入代號 (如: BTC, NVDA, 2330)" 
@@ -447,7 +447,7 @@
                     <button onclick="filterStocks('gold')"   id="st-tab-gold"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
                     <button onclick="filterStocks('bond')"   id="st-tab-bond"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">債券基金</button>
                 </div>
-                <div id="stock-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[200px]"></div>
+                <div id="stock-list" class="grid grid-cols-1 gap-3 min-h-[200px]"></div>
             </div>
         </div>
 
@@ -457,7 +457,7 @@
                 <h3 class="text-2xl font-black italic tracking-tight uppercase">Intelligence Scan</h3>
                 <p class="text-slate-400 text-[12px] font-black uppercase tracking-[0.2em]">RSI/MACD 技術面自動診斷</p>
             </div>
-            <div class="bg-white border-2 border-slate-200 rounded-[2.5rem] p-8 relative overflow-hidden">
+            <div class="bg-white border-2 border-slate-200 rounded-[2.5rem] p-4 md:p-8 relative">
                 <div id="scan-visual" class="hide scan-line"></div>
                 <div class="flex items-center justify-between mb-8">
                     <div class="flex flex-col">
@@ -1179,20 +1179,20 @@
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
-                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點「智能診斷」<br>查看狀態</div>`;
+                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點智能診斷查看</div>`;
                 return `
-                <div class="flex items-center gap-2 p-2 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
-                    <div class="flex items-center gap-2 shrink-0">
-                        <div class="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-black text-blue-600 shadow-inner text-base">${s.code[0]}</div>
-                        <div>
-                            <div class="font-black text-base tracking-tight">${s.code}</div>
-                            <div class="text-[11px] font-black text-slate-400 uppercase">${name}</div>
+                <div class="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center gap-2">
+                        <div class="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-black text-blue-600 shadow-inner text-base shrink-0">${s.code[0]}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-black text-base tracking-tight truncate">${s.code}</div>
+                            <div class="text-[11px] font-black text-slate-400 break-words leading-tight">${name}</div>
                         </div>
+                        <button onclick="window.removeStock('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-1 shrink-0">
+                            <i data-lucide="x-circle" class="w-5 h-5"></i>
+                        </button>
                     </div>
-                    ${rsiHtml}
-                    <button onclick="window.removeStock('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-2 shrink-0">
-                        <i data-lucide="x-circle" class="w-5 h-5"></i>
-                    </button>
+                    <div class="mt-1">${rsiHtml}</div>
                 </div>`;
             }).join('');
             lucide.createIcons();
@@ -2943,7 +2943,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
-                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點「全部診斷」<br>查看狀態</div>`;
+                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點全部診斷查看</div>`;
                 return `<div class="flex items-center gap-2 p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-3 shrink-0">
                         <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
