@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, minimum-scale=0.5, maximum-scale=5.0">
     <title>科蓁智能理財管家 | 全能掃描系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04190925</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04191341</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -292,6 +292,10 @@
                             ⬆ 匯入還原 JSON
                             <input type="file" accept=".json" class="hidden" onchange="importData(event)">
                         </label>
+                    </div>
+                    <!-- 操作引導（手機友善）-->
+                    <div class="text-[12px] font-black text-amber-800 bg-amber-50 rounded-xl px-3 py-2 border border-amber-200 mb-2">
+                        💡 新增股票後，點下方「全部診斷」按鈕，即可查看 RSI／布林位階狀態
                     </div>
                     <button id="btn-watchlist-scan" onclick="startWatchlistScan()"
                             class="w-full py-3.5 bg-slate-800 text-white rounded-2xl font-black text-base hover:bg-amber-600 transition-all flex items-center justify-center gap-2">
@@ -1175,7 +1179,7 @@
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
-                })() : `<div class="flex-1"></div>`;
+                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點「智能診斷」<br>查看狀態</div>`;
                 return `
                 <div class="flex items-center gap-2 p-2 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-2 shrink-0">
@@ -1320,25 +1324,22 @@
             const noSignalText = isHolding ? '持續觀察，暫不賣出' : '持續觀察';
 
             return `<div class="border-2 rounded-[2rem] p-4 ${cardBg}">
-                <div class="flex items-center gap-2">
-                    <!-- 左：icon + 代碼 + 名稱 -->
-                    <div class="flex items-center gap-2 shrink-0 min-w-0">
-                        <div class="w-9 h-9 rounded-xl shrink-0 ${hasBuy ? 'bg-emerald-200 text-emerald-700' : (bgDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500')} flex items-center justify-center font-black text-base">${code[0]}</div>
-                        <div class="min-w-0">
-                            <div class="font-black text-base ${textMain} truncate">${code}</div>
-                            <div class="text-[11px] ${textSub} uppercase truncate">${name}</div>
-                        </div>
+                <!-- 第一行：icon + 代碼 + 名稱 + 狀態 -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div class="w-9 h-9 rounded-xl shrink-0 ${hasBuy ? 'bg-emerald-200 text-emerald-700' : (bgDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500')} flex items-center justify-center font-black text-base">${code[0]}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-black text-base ${textMain}">${code}</div>
+                        <div class="text-[11px] ${textSub} uppercase break-words">${name}</div>
                     </div>
-                    <!-- 中：RSI + 布林（固定寬度，防超框）-->
-                    <div class="flex-1 flex flex-col items-center justify-center gap-0.5 text-[12px] font-black px-1 min-w-[60px] max-w-[72px]">
-                        <span class="diag-rsi ${rsiClr} whitespace-nowrap">RSI ${result.rsi} ${arrow}</span>
-                        <span class="${bollClr[result.boll_position] || textSub} text-center leading-tight whitespace-nowrap">${bollMap[result.boll_position] || result.boll_position}</span>
-                    </div>
-                    <!-- 右：價格 + 狀態（flex-1自動撐開不截斷）-->
-                    <div class="text-right flex-1 min-w-0">
+                    <div class="text-right shrink-0">
                         <div class="font-black text-base ${textMain}">${result.price}</div>
-                        <div class="text-[11px] font-black leading-tight ${hasBuy ? 'text-emerald-400' : hasSell ? 'text-rose-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : hasSell ? '🔔 賣出訊號' : noSignalText}</div>
+                        <div class="text-[11px] font-black ${hasBuy ? 'text-emerald-400' : hasSell ? 'text-rose-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : hasSell ? '🔔 賣出訊號' : noSignalText}</div>
                     </div>
+                </div>
+                <!-- 第二行：RSI + 布林（獨立一行，完整顯示不截斷）-->
+                <div class="flex gap-4 mt-2 px-1">
+                    <span class="diag-rsi ${rsiClr} text-[12px] font-black">RSI ${result.rsi} ${arrow}</span>
+                    <span class="${bollClr[result.boll_position] || textSub} text-[12px] font-black">${bollMap[result.boll_position] || result.boll_position}</span>
                 </div>
                 ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[12px] font-black text-center">${condText}</div>` : ''}
             </div>`;
@@ -2942,7 +2943,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
-                })() : `<div class="flex-1"></div>`;
+                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點「全部診斷」<br>查看狀態</div>`;
                 return `<div class="flex items-center gap-2 p-5 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-3 shrink-0">
                         <div class="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner">${s.code[0]}</div>
