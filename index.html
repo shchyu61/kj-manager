@@ -213,7 +213,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04182321</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04190454</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -245,6 +245,7 @@
                             <option value="crypto">虛擬幣</option>
                             <option value="fx">外匯</option>
                             <option value="gold">黃金/貴金屬</option>
+                            <option value="bond">債券基金</option>
                         </select>
                         <button id="btn-add-watchlist" class="bg-amber-500 text-white px-6 py-4 rounded-2xl font-black text-base hover:bg-amber-600 transition-all">新增</button>
                     </div>
@@ -259,6 +260,14 @@
                         <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
                         <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
+                    </div>
+                    <!-- 債券基金提示 -->
+                    <div id="wl-bond-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f8ff; color:#1a3a6c; border:1px solid #4a7ab5;">
+                        💰 債券基金／投資型保單參考代碼：<br>
+                        <span style="color:#1a5a8a; font-weight:900;">EMB</span>（新興市場債券ETF，參考：富邦人壽FR02，高相關）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">AGG</span>（全球綜合債券ETF，參考：富邦人壽FR04，高相關）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">HYG</span>（高收益債ETF，參考：富邦人壽BAHY，<b>極高相關</b>）<br>
+                        <span style="color:#7a6a00; font-size:11px;">⚠️ 以上為追蹤相同標的的參考ETF，非保單基金本身，僅供進出場輔助判斷</span>
                     </div>
                     <!-- 虛擬幣提示 -->
                     <div id="wl-crypto-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
@@ -345,6 +354,7 @@
                     <button onclick="filterWatchlist('crypto')" id="wl-tab-crypto" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
                     <button onclick="filterWatchlist('fx')"   id="wl-tab-fx"   class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
                     <button onclick="filterWatchlist('gold')" id="wl-tab-gold" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
+                    <button onclick="filterWatchlist('bond')" id="wl-tab-bond" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">債券基金</button>
                 </div>
                 <div id="watchlist-list" class="grid grid-cols-1 gap-4 min-h-[200px]"></div>
             </div>
@@ -374,6 +384,7 @@
                             <option value="crypto">虛擬幣</option>
                             <option value="fx">外匯</option>
                             <option value="gold">黃金/貴金屬</option>
+                            <option value="bond">債券基金</option>
                         </select>
                         <button id="btn-add-stock" class="bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-base hover:bg-blue-600 transition-all">新增</button>
                     </div>
@@ -396,6 +407,14 @@
                         <span style="color:#b8860b; font-weight:900;">GC=F</span>（國際現貨黃金，最準確）<br>
                         <span style="color:#b8860b; font-weight:900;">GLD</span>（美股黃金ETF）　<span style="color:#b8860b; font-weight:900;">IAU</span>（iShares黃金ETF）<br>
                         <span style="color:#b8860b; font-weight:900;">SI=F</span>（白銀期貨，適合白銀存摺）
+                    </div>
+                    <!-- 持股清單：債券基金提示 -->
+                    <div id="st-bond-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f8ff; color:#1a3a6c; border:1px solid #4a7ab5;">
+                        💰 債券基金／投資型保單參考代碼：<br>
+                        <span style="color:#1a5a8a; font-weight:900;">EMB</span>（新興市場債券ETF，參考：富邦人壽FR02，高相關）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">AGG</span>（全球綜合債券ETF，參考：富邦人壽FR04，高相關）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">HYG</span>（高收益債ETF，參考：富邦人壽BAHY，<b>極高相關</b>）<br>
+                        <span style="color:#7a6a00; font-size:11px;">⚠️ 以上為追蹤相同標的的參考ETF，非保單基金本身，僅供進出場輔助判斷</span>
                     </div>
                     <!-- 持股清單：虛擬幣提示 -->
                     <div id="st-crypto-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
@@ -422,6 +441,7 @@
                     <button onclick="filterStocks('crypto')" id="st-tab-crypto" class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">虛擬幣</button>
                     <button onclick="filterStocks('fx')"     id="st-tab-fx"     class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">外匯</button>
                     <button onclick="filterStocks('gold')"   id="st-tab-gold"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
+                    <button onclick="filterStocks('bond')"   id="st-tab-bond"   class="st-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">債券基金</button>
                 </div>
                 <div id="stock-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[200px]"></div>
             </div>
@@ -738,7 +758,7 @@
             "AAPL": "Apple", "TSLA": "Tesla", "NVDA": "NVIDIA",
             "MSFT": "Microsoft", "GOOGL": "Google", "AMZN": "Amazon",
             "SPY": "標準普爾500指數ETF", "QQQ": "那斯達克100指數ETF",
-            "HYG": "高收益債ETF", "GLD": "黃金ETF",
+            "HYG": "高收益債ETF（參考:例如富邦人壽投資型保單的BAHY，極高相關）", "GLD": "黃金ETF",
             "KO": "可口可樂", "O": "Realty Income", "PFE": "輝瑞",
             "XOM": "艾克森美孚", "T": "AT&T",
             // 黃金/貴金屬
@@ -746,6 +766,9 @@
             "GLD": "黃金ETF", "IAU": "iShares黃金ETF",
             // 虛擬幣（與CRYPTO_LIST完全一致）
             "BTC-USD": "比特幣", "ETH-USD": "以太幣", "DOGE-USD": "狗狗幣",
+            // 債券基金ETF（投資型保單參考）
+            "EMB": "新興市場債券ETF（參考:例如富邦人壽投資型保單的FR02）",
+            "AGG": "全球綜合債券ETF（參考:例如富邦人壽投資型保單的FR04）",
             // 外匯（與FX_LIST完全一致）
             "EURUSD=X": "EUR/USD 歐元/美元", "JPY=X": "USD/JPY 美元/日圓",
             "CHFUSD=X": "CHF/USD 瑞郎/美元", "USDTWD=X": "USD/TWD 美元/台幣",
@@ -2777,7 +2800,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 'crypto': 'st-crypto-hint',
                 'fx':     'st-fx-hint',
             };
-            ['stock-fund-hint','st-gold-hint','st-crypto-hint','st-fx-hint'].forEach(id => {
+            ['stock-fund-hint','st-gold-hint','st-crypto-hint','st-fx-hint','st-bond-hint'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hide');
             });
@@ -2792,8 +2815,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         document.addEventListener('change', (e) => {
             if (e.target.id === 'new-watchlist-cat') {
                 const v = e.target.value;
-                const ids = ['fund-hint','wl-gold-hint','wl-crypto-hint','wl-fx-hint'];
-                const maps = { 'fund':'fund-hint', 'gold':'wl-gold-hint', 'crypto':'wl-crypto-hint', 'fx':'wl-fx-hint' };
+                const ids = ['fund-hint','wl-gold-hint','wl-crypto-hint','wl-fx-hint','wl-bond-hint'];
+                const maps = { 'fund':'fund-hint', 'gold':'wl-gold-hint', 'crypto':'wl-crypto-hint', 'fx':'wl-fx-hint', 'bond':'wl-bond-hint' };
                 ids.forEach(id => { const el=document.getElementById(id); if(el) el.classList.add('hide'); });
                 if (maps[v]) { const el=document.getElementById(maps[v]); if(el) el.classList.remove('hide'); }
             }
@@ -2803,7 +2826,9 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     'gold':   'st-gold-hint',
                     'crypto': 'st-crypto-hint',
                     'fx':     'st-fx-hint',
+                    'bond':   'st-bond-hint',
                 };
+                    'bond':   'st-bond-hint',
                 // 全部先隱藏
                 Object.values(_stHints).forEach(id => {
                     const el = document.getElementById(id);
