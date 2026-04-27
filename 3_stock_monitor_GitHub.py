@@ -2096,10 +2096,12 @@ if __name__ == "__main__":
     loops = 0
     market_name = ""
 
-    if 9 <= hour <= 13:
+    # 台股：開盤後5分(09:05) ~ 收盤前5分(13:25)
+    if (hour == 9 and minute >= 5) or (10 <= hour <= 12) or (hour == 13 and minute <= 25):
         loops = 9
         market_name = "台股"
-    elif hour >= 21 or hour <= 4:
+    # 美股：開盤後5分(22:35) ~ 收盤前5分(03:55)，夏冬令統一此區間
+    elif (hour == 22 and minute >= 35) or (hour == 23) or (0 <= hour <= 2) or (hour == 3 and minute <= 55):
         loops = 13
         market_name = "美股/虛擬幣"
     else:
