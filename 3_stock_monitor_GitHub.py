@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '04271202'
+SCRIPT_VERSION = '04271313'
 SCRIPT_VERSION = '04190925'  # 版本號
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
@@ -672,10 +672,21 @@ def check_buy_precondition(df, is_weekly=False):
             # 1c：當根 MACD柱↑ AND RSI↑
             _osc_now_rise  = float(mh.iloc[-1]) > float(mh.iloc[-2])
 
-            # ✅ 條件D簡化：移除DIF/MACD線條件，只保留OSC柱狀體
+            # 2a：近5根任意連續3根 DIF > MACD
+            _dif_above = [float(ml.iloc[i]) > float(ms.iloc[i]) for i in range(-_N, 0)]
+            _dif_3up   = any(
+                _dif_above[j] and _dif_above[j+1] and _dif_above[j+2]
+                for j in range(len(_dif_above)-2)
+            )
+            # 2b：前1根 DIF < MACD
+            _dif_prev_below = float(ml.iloc[-2]) < float(ms.iloc[-2])
+            # 2c：當根 DIF > MACD
+            _dif_now_above  = float(ml.iloc[-1]) > float(ms.iloc[-1])
+
             cond_D = (
                 _all_above_mid and
-                _osc_3drop and _osc_prev_rise and _osc_now_rise and rsi_rising
+                _osc_3drop and _osc_prev_rise and _osc_now_rise and rsi_rising and
+                _dif_3up and _dif_prev_below and _dif_now_above
             )
           except Exception:
             cond_D = False
@@ -939,10 +950,21 @@ def check_short_precondition(df, is_weekly=False):
             # 1c：當根 MACD柱↓ AND RSI↓
             _osc_now_drop  = float(mh.iloc[-1]) < float(mh.iloc[-2])
 
-            # ✅ 條件D空頭鏡像簡化：移除DIF/MACD線條件
+            # 2a：近5根任意連續3根 DIF < MACD
+            _dif_below = [float(ml.iloc[i]) < float(ms.iloc[i]) for i in range(-_N, 0)]
+            _dif_3down = any(
+                _dif_below[j] and _dif_below[j+1] and _dif_below[j+2]
+                for j in range(len(_dif_below)-2)
+            )
+            # 2b：前1根 DIF > MACD
+            _dif_prev_above = float(ml.iloc[-2]) > float(ms.iloc[-2])
+            # 2c：當根 DIF < MACD
+            _dif_now_below  = float(ml.iloc[-1]) < float(ms.iloc[-1])
+
             cond_D_short = (
                 _all_below_mid and
-                _osc_3rise and _osc_prev_drop and _osc_now_drop and rsi_falling
+                _osc_3rise and _osc_prev_drop and _osc_now_drop and rsi_falling and
+                _dif_3down and _dif_prev_above and _dif_now_below
             )
           except Exception:
             cond_D_short = False
@@ -1405,7 +1427,7 @@ def main_task():
 
     # (以下請確保第 13, 14 章的掃描與發信代碼, 全部都要縮排在 def main_task 之下)
     print(f"\n{'='*55}")
-    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else f'{SCAN_MODE}模式'}）  v{SCRIPT_VERSION}")
+    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else f'{SCAN_MODE}模式'}）")
     print(f"  掃描時間：{now_str}")
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
@@ -2092,16 +2114,15 @@ if __name__ == "__main__":
         exit()
 
     # === [正式監控模式]：TEST_MODE 為 False 時才會進入以下邏輯 ===
-    hour = now.hour
+    hour   = now.hour
+    minute = now.minute  # ✅ minute 必須定義，否則時段判斷會 NameError
     loops = 0
     market_name = ""
 
-    # 台股：開盤後5分(09:05) ~ 收盤前5分(13:25)
-    if (hour == 9 and minute >= 5) or (10 <= hour <= 12) or (hour == 13 and minute <= 25):
+    if 9 <= hour <= 13:
         loops = 9
         market_name = "台股"
-    # 美股：開盤後5分(22:35) ~ 收盤前5分(03:55)，夏冬令統一此區間
-    elif (hour == 22 and minute >= 35) or (hour == 23) or (0 <= hour <= 2) or (hour == 3 and minute <= 55):
+    elif hour >= 21 or hour <= 4:
         loops = 13
         market_name = "美股/虛擬幣"
     else:
