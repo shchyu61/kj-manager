@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04191729</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04270927</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1716,8 +1716,8 @@
             const _difNowAbove = _fmNow && _fmNow.dif > _fmNow.sig;
 
             // 條件D只在週K模式生效
-            const _r4 = (_iv === '1wk') && _all_above_mid && _osc3Drop && _oscPrevRise && _t2 && _t1 &&
-                        _dif3Up && _difPrevBelow && _difNowAbove;  // 條件D（上軌做多，僅週K）
+            // ✅ 條件D簡化：移除DIF/MACD線條件（2a/2b/2c），只保留OSC柱狀體
+            const _r4 = (_iv === '1wk') && _all_above_mid && _osc3Drop && _oscPrevRise && _t2 && _t1;  // 條件D（上軌做多，僅週K）
 
             // [3]
             let buy_signal = false;
@@ -1828,8 +1828,8 @@
             // 位階：近5根每一根最高價都在中軌以下
             const _all_below_mid = _boll_now && highs.slice(-_dN).every(h => h < _boll_now.mid);
 
-            const _r4_short = (_iv === '1wk') && _all_below_mid && _osc3Rise && _oscPrevDrop && !_t2 && !_t1 &&
-                              _dif3Down && _difPrevAbove && _fmNow && _fmNow.dif < _fmNow.sig;  // 條件D空頭鏡像，僅週K
+            // ✅ 條件D空頭鏡像簡化：移除DIF/MACD線條件
+            const _r4_short = (_iv === '1wk') && _all_below_mid && _osc3Rise && _oscPrevDrop && !_t2 && !_t1;  // 條件D空頭鏡像，僅週K
 
             // [S]
             // 條件D出場（只在週K且近N根最低價都在中軌以上時生效）
