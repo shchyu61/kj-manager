@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04271202</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v04281655</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -909,6 +909,7 @@
                 window.renderStocks();
                 window.renderWatchlist();
                 loadTwPrescreened().catch(()=>{}); // 非同步載入AI預篩清單
+                window._isAdmin = (currentUserEmail === 'shchyu61@gmail.com');
             } catch (e) {
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
@@ -1349,6 +1350,11 @@
                     <span class="${bollClr[result.boll_position] || textSub} text-[12px] font-black">${bollMap[result.boll_position] || result.boll_position}</span>
                 </div>
                 ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[12px] font-black text-center">${condText}</div>` : ''}
+                ${(window._isAdmin && result.debug_info) ? `<div class="mt-1 px-2 py-1 rounded-xl text-[11px] font-black" style="background:#1e293b;color:#94a3b8">
+                    <div>${result.debug_info.week_k||''}</div>
+                    <div>${result.debug_info.day_k||''}</div>
+                    <div>${result.debug_info.min5_k||''}</div>
+                </div>` : ''}
             </div>`;
         };
 
@@ -1784,7 +1790,12 @@
                 }
             } catch(e) { _3rd_pass = false; }
 
-            const _1st2nd_pass = (_r1 || _r2 || _r3 || _r4) && rsiNow > _p2 && _el2nd;
+            // ✅ 第二道條件式邏輯：
+            // 低位階（A/B/C）→ eLeader 必要
+            // 高位階（條件D）→ eLeader 可選
+            const _abc_pass = (_r1 || _r2 || _r3) && rsiNow > _p2;
+            const _d_pass   = _r4;  // 條件D（上軌，eLeader可選）
+            const _1st2nd_pass = (_abc_pass && _el2nd) || _d_pass;
 
             if (_iv === '1wk') {
                 // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
@@ -1846,13 +1857,20 @@
             const _condD_exitB = (_iv === '1wk') && _still_above &&
                                  _bm_cur && _lows_n_sell.some(l => l <= _bm_cur.mid);
 
-            const sell_signal = (boll_position === 'near_upper' && !_t1 && !_t2) ||
-                                _r4_short || _condD_exitA || _condD_exitB;
+            // ✅ 做空：A/B需eLeader空頭條件（截圖1/2），條件D空頭（截圖5鏡像）不需eLeader
+            const _sell_abc = boll_position === 'near_upper' && !_t1 && !_t2;  // A/B空頭
+            const sell_signal = (_sell_abc) || _r4_short || _condD_exitA || _condD_exitB;
 
+            const _debug = window._isAdmin ? {
+                week_k: `週K第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
+                day_k:  `第二道eLeader: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
+                min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`
+            } : null;
             const result = {
                 price: price.toFixed(2),
                 rsi: Math.round(rsiNow * 10) / 10,
-                rsi_trend, boll_position, buy_signal, sell_signal, conditions
+                rsi_trend, boll_position, buy_signal, sell_signal, conditions,
+                debug_info: _debug
             };
             setCache(_cacheKey, result);
             return result;
