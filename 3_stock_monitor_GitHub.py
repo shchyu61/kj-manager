@@ -1,5 +1,4 @@
-SCRIPT_VERSION = '04271313'
-SCRIPT_VERSION = '04190925'  # 版本號
+SCRIPT_VERSION = '04281615'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -12,7 +11,7 @@ SCRIPT_VERSION = '04190925'  # 版本號
 USE_CACHE = True
 WEEKLY_REFRESH_HOUR = 8   # 每天早上更新一次週K
 five_min_cache = {}  # ✅ 新增 5 分鐘 K 線快取容器
-DELISTING_CHECK_DAYS = 1  # 每1天重新查詢（3天兼顧效能與即時性，可改1~7）
+DELISTING_CHECK_DAYS = 1  # 每1天重新查詢（避免誤快取）（3天兼顧效能與即時性，可改1~7）
 DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 # ============================================================
 # 【１．設定區】
@@ -224,7 +223,8 @@ def get_delisting_risk(ticker):
 
     except Exception as e:
         _es = str(e)
-        if any(k in _es for k in ['Too Many Requests','Rate limit','429','HTTPError']):
+        if any(k in _es for k in ['Too Many Requests','Rate limit','429','HTTPError','ConnectionError']):
+            print(f'  ⏭️ {ticker} Yahoo速率限制，跳過下市檢查')
             return False, ''
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
@@ -672,26 +672,17 @@ def check_buy_precondition(df, is_weekly=False):
             # 1c：當根 MACD柱↑ AND RSI↑
             _osc_now_rise  = float(mh.iloc[-1]) > float(mh.iloc[-2])
 
-            # 2a：近5根任意連續3根 DIF > MACD
-            _dif_above = [float(ml.iloc[i]) > float(ms.iloc[i]) for i in range(-_N, 0)]
-            _dif_3up   = any(
-                _dif_above[j] and _dif_above[j+1] and _dif_above[j+2]
-                for j in range(len(_dif_above)-2)
-            )
-            # 2b：前1根 DIF < MACD
-            _dif_prev_below = float(ml.iloc[-2]) < float(ms.iloc[-2])
-            # 2c：當根 DIF > MACD
-            _dif_now_above  = float(ml.iloc[-1]) > float(ms.iloc[-1])
-
+            # ✅ 條件D簡化版：移除2a/2b/2c（DIF vs MACD線），只保留OSC柱狀體條件
+            # 原因：日K的DIF/MACD線不一定同步，條件過嚴會錯過進場機會
             cond_D = (
                 _all_above_mid and
-                _osc_3drop and _osc_prev_rise and _osc_now_rise and rsi_rising and
-                _dif_3up and _dif_prev_below and _dif_now_above
+                _osc_3drop and _osc_prev_rise and _osc_now_rise and rsi_rising
             )
           except Exception:
             cond_D = False
 
-        return cond_A or cond_B or cond_C or cond_D
+        _abc = cond_A or cond_B or cond_C
+        return _abc or cond_D, cond_D  # (整體通過, 是否由條件D觸發)
     except Exception as e:
         # print(f"Precondition Error: {e}") # 偵錯用
         return False
@@ -950,26 +941,16 @@ def check_short_precondition(df, is_weekly=False):
             # 1c：當根 MACD柱↓ AND RSI↓
             _osc_now_drop  = float(mh.iloc[-1]) < float(mh.iloc[-2])
 
-            # 2a：近5根任意連續3根 DIF < MACD
-            _dif_below = [float(ml.iloc[i]) < float(ms.iloc[i]) for i in range(-_N, 0)]
-            _dif_3down = any(
-                _dif_below[j] and _dif_below[j+1] and _dif_below[j+2]
-                for j in range(len(_dif_below)-2)
-            )
-            # 2b：前1根 DIF > MACD
-            _dif_prev_above = float(ml.iloc[-2]) > float(ms.iloc[-2])
-            # 2c：當根 DIF < MACD
-            _dif_now_below  = float(ml.iloc[-1]) < float(ms.iloc[-1])
-
+            # ✅ 條件D空頭鏡像簡化版：移除DIF vs MACD線條件，只保留OSC
             cond_D_short = (
                 _all_below_mid and
-                _osc_3rise and _osc_prev_drop and _osc_now_drop and rsi_falling and
-                _dif_3down and _dif_prev_above and _dif_now_below
+                _osc_3rise and _osc_prev_drop and _osc_now_drop and rsi_falling
             )
           except Exception:
             cond_D_short = False
 
-        return cond_A or cond_B or cond_D_short
+        _abc_s = cond_A or cond_B
+        return _abc_s or cond_D_short, cond_D_short  # (整體通過, 是否由條件D空頭觸發)
     except:
         return False
 
@@ -1108,16 +1089,23 @@ def scan_stock(ticker, is_holding=False):
                 _df1st = calc_indicators(_df1st)
                 if _df1st is None: return None
                 # BUY_LOOKBACK_BARS=3，不換算，直接跑
-                _is_long_ok  = check_buy_precondition(_df1st)
-                _is_short_ok = check_short_precondition(_df1st)
+                _is_long_ok, _condD_long   = check_buy_precondition(_df1st)
+                _is_short_ok, _condD_short = check_short_precondition(_df1st)
             else:
                 # 週K模式第一道：用週K 3根（原設計）
-                _is_long_ok  = check_buy_precondition(df_w, is_weekly=True)
-                _is_short_ok = check_short_precondition(df_w, is_weekly=True)
-            if not _is_long_ok and not _is_short_ok:
+                _is_long_ok, _condD_long   = check_buy_precondition(df_w, is_weekly=True)
+                _is_short_ok, _condD_short = check_short_precondition(df_w, is_weekly=True)
+            # ✅ 診斷輸出：第一道結果
+            _wk_label = '週K' if SCAN_MODE != 'daily' else '日K'
+            if _is_long_ok:
+                print(f'  ✅ {ticker} 第一道{_wk_label}通過（多頭 {"條件D" if _condD_long else "A/B/C"}）')
+            elif _is_short_ok:
+                print(f'  ✅ {ticker} 第一道{_wk_label}通過（空頭 {"條件D" if _condD_short else "A/B/C"}）')
+            else:
                 return None   # 多空都不過才跳過
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
+            _condD_long = False; _condD_short = False  # TEST_MODE 預設
 
         # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
         # 兩種模式統一：eLeader必過才繼續（確保不在高檔區追高）
@@ -1127,15 +1115,25 @@ def scan_stock(ticker, is_holding=False):
         if df_d is None: return None
 
         if _is_long_ok:
-            # 多頭：日K eLeader 25條件（買進）
             is_eleader_ok = check_buy_eleader(df_d) is not None
-            if not is_eleader_ok:
-                return None
+            if _condD_long:
+                # 條件D觸發（高位階上軌）→ eLeader 為可選，不強制
+                print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
+            else:
+                # A/B/C 觸發（低位階下軌/中軌）→ eLeader 為必要條件
+                print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過，跳過"}')
+                if not is_eleader_ok:
+                    return None
         else:
-            # 空頭：日K eLeader 25條件（做空）
             is_eleader_short_ok = check_short_eleader(df_d) is not None
-            if not is_eleader_short_ok:
-                return None
+            if _condD_short:
+                # 條件D空頭（高位階）→ eLeader 為可選
+                print(f'  {"✅" if is_eleader_short_ok else "⚠️"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過（條件D補位，繼續）"}')
+            else:
+                # A/B/C 空頭（低位階）→ eLeader 為必要條件
+                print(f'  {"✅" if is_eleader_short_ok else "❌"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過，跳過"}')
+                if not is_eleader_short_ok:
+                    return None
 
         # ── 第三道：5分K即時轉折（週K/日K模式共用）─────────────
         now_ts = time.time()
@@ -1284,7 +1282,7 @@ def write_tw_prescreened(codes_list):
             _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
             if os.path.exists(_cf):
                 with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
-        if not cred_json: print("  ⚠️ Firebase憑證未設定，跳過預篩寫入"); return False
+        if not cred_json: print("  ⚠️ Firebase憑證未設定"); return False
         import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
         _c = _sa.Credentials.from_service_account_info(json.loads(cred_json),
             scopes=['https://www.googleapis.com/auth/datastore'])
@@ -1427,7 +1425,7 @@ def main_task():
 
     # (以下請確保第 13, 14 章的掃描與發信代碼, 全部都要縮排在 def main_task 之下)
     print(f"\n{'='*55}")
-    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else f'{SCAN_MODE}模式'}）")
+    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else f'{SCAN_MODE}模式'}）  v{SCRIPT_VERSION}")
     print(f"  掃描時間：{now_str}")
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
@@ -2025,12 +2023,6 @@ def main_task():
 # =====================
 # 無訊號（只印Console，不發Gmail，避免通知疲乏）
 # =====================
-    try:
-        _tr = set(s[1] for s in buy_signals+sell_signals+delist_signals if len(s)>1)
-        _ct = [c for c in (get_cash_delivery_set() or set()) if c in _tr]
-        write_alerts_to_firebase(delist_signals, _ct)
-    except Exception as _ae: print(f'  ⚠️ 警報快取異常: {_ae}')
-
     if not buy_signals and not sell_signals and not delist_signals:
         print(f"📊 [{now_str}] 本次掃描無符合條件的股票，不發送通知。")
 
@@ -2119,10 +2111,12 @@ if __name__ == "__main__":
     loops = 0
     market_name = ""
 
-    if 9 <= hour <= 13:
+    # 台股：開盤後5分(09:05) ~ 收盤前5分(13:25)
+    if (hour == 9 and minute >= 5) or (10 <= hour <= 12) or (hour == 13 and minute <= 25):
         loops = 9
         market_name = "台股"
-    elif hour >= 21 or hour <= 4:
+    # 美股：開盤後5分(22:35) ~ 收盤前5分(03:55)，夏冬令統一此區間
+    elif (hour == 22 and minute >= 35) or (hour == 23) or (0 <= hour <= 2) or (hour == 3 and minute <= 55):
         loops = 13
         market_name = "美股/虛擬幣"
     else:
