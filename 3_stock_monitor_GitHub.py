@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '04281615'
+SCRIPT_VERSION = '04300451'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1536,14 +1536,17 @@ def main_task():
                     result = scan_stock(ticker, is_holding)
                     _mlabel = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             
+                code = ticker.split('.')[0]
+                # ✅ 第一道通過（result非None）→ 加入預篩快取
+                # 修正前：只有BUY/SELL才加入，導致預篩永遠空
+                # 修正後：只要第一道通過就加入，下次掃描可縮短至幾分鐘
+                if result is not None:
+                    if code not in _tw_prescreened: _tw_prescreened.append(code)
                 if result:
-                    code = ticker.split('.')[0] 
                     if result[0] == 'BUY':
                         buy_signals.append(('台股', code, *result[1:], _mlabel if _mlabel else ''))
-                        if code not in _tw_prescreened: _tw_prescreened.append(code)
                     elif result[0] == 'SELL':
                         sell_signals.append(('台股', code, *result[1:]))
-                        if code not in _tw_prescreened: _tw_prescreened.append(code)
                     elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
                         delist_signals.append(('台股', code, result[0], result[1]))
             except Exception as e:
