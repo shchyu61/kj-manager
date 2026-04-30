@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '04300451'
+SCRIPT_VERSION = '05010243'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1023,6 +1023,66 @@ def check_short_eleader(df_d):
 # ============================================================
 # 【１１．主掃描函數：scan_stock（引用第2章策略參數）】
 # ============================================================
+
+def analyse_market_index(ticker, label):
+    """
+    大盤指數全條件分析（週K+日K，A/B/C/D多空）
+    回傳 dict：
+      'bull_abc': bool  → 多頭A/B/C（下軌/中軌V轉）
+      'bull_d'  : bool  → 多頭條件D（上軌做多）
+      'bear_abc': bool  → 空頭A/B/C（上軌/中軌M轉）
+      'bear_d'  : bool  → 空頭條件D（下軌做空）
+      'warn'    : bool  → 無法判定（下彎警告）
+      'rsi_w'   : float → 週K RSI
+      'rsi_d'   : float → 日K RSI
+    """
+    result = {'bull_abc':False,'bull_d':False,'bear_abc':False,'bear_d':False,'warn':False,'rsi_w':0,'rsi_d':0}
+    try:
+        # 週K
+        df_w = yf.download(ticker, period='2y', interval='1wk', progress=False)
+        if df_w is None or len(df_w) < 30: return result
+        df_w = calc_indicators(df_w)
+        ok_w, condD_bull_w = check_buy_precondition(df_w, is_weekly=True)
+        ok_ws, condD_bear_w = check_short_precondition(df_w, is_weekly=True)
+        last_w = df_w.iloc[-1]; prev_w = df_w.iloc[-2]
+        result['rsi_w'] = float(last_w['rsi14'])
+
+        # 日K
+        df_d = yf.download(ticker, period='1y', interval='1d', progress=False)
+        if df_d is not None and len(df_d) >= 30:
+            df_d = calc_indicators(df_d)
+            ok_d, condD_bull_d = check_buy_precondition(df_d, is_weekly=False)
+            ok_ds, condD_bear_d = check_short_precondition(df_d, is_weekly=False)
+            result['rsi_d'] = float(df_d.iloc[-1]['rsi14'])
+        else:
+            ok_d = ok_ds = condD_bull_d = condD_bear_d = False
+
+        # 多頭A/B/C：週K或日K通過（非條件D）
+        result['bull_abc'] = (ok_w and not condD_bull_w) or (ok_d and not condD_bull_d)
+        # 多頭條件D：週K條件D通過（條件D只適用週K）
+        result['bull_d']   = condD_bull_w
+        # 空頭A/B/C：週K或日K空頭通過（非條件D）
+        result['bear_abc'] = (ok_ws and not condD_bear_w) or (ok_ds and not condD_bear_d)
+        # 空頭條件D：週K空頭條件D
+        result['bear_d']   = condD_bear_w
+        # 下彎警告：RSI↓ AND MACD柱↓（兩個都下彎才警告）
+        rsi_down  = float(last_w['rsi14']) < float(prev_w['rsi14'])
+        macd_down = float(last_w['macd_hist']) < float(prev_w['macd_hist'])
+        result['warn'] = rsi_down and macd_down and not ok_w and not ok_ws
+
+        # 輸出診斷
+        flags = []
+        if result['bull_d']:   flags.append('條件D多頭✅')
+        if result['bull_abc']: flags.append('A/B/C多頭✅')
+        if result['bear_d']:   flags.append('條件D空頭✅')
+        if result['bear_abc']: flags.append('A/B/C空頭✅')
+        if result['warn']:     flags.append('⚠️下彎警告')
+        if not flags:          flags.append('中性觀望')
+        print(f"  {label}大盤判定：{' / '.join(flags)}（週K RSI:{result['rsi_w']:.1f} 日K RSI:{result['rsi_d']:.1f}）")
+    except Exception as e:
+        print(f"  ⚠️ {label}大盤分析失敗: {e}")
+    return result
+
 def scan_stock(ticker, is_holding=False):
     global weekly_cache, daily_cache
     
@@ -1446,32 +1506,14 @@ def main_task():
     elif 'TW' not in active_markets:
         print('\n📊 台股：非交易時段，跳過')
     else:
-        # 🟢 大盤週K守門員（引用第2-5章ENABLE_INDEX_FILTER）
-        if ENABLE_INDEX_FILTER:
-            print('\n🔍 正在檢查台股大盤位階 (^TWII)...')
-        try:
-            tse_w = yf.download('^TWII', period='2y', interval='1wk', progress=False)
-            if tse_w is not None and len(tse_w) >= 30:
-                tse_w = calc_indicators(tse_w)
-                last_w = tse_w.iloc[-1]
-                prev_w = tse_w.iloc[-2]
-
-                # 判定轉折點 (對應截圖箭頭下彎)
-                tse_rsi_down = last_w['rsi14'] < prev_w['rsi14']
-                tse_macd_down = last_w['macd_hist'] < prev_w['macd_hist']
-                
-                if tse_rsi_down and tse_macd_down:
-                    print(f"⚠️ 警告：台灣加權指數(大盤)第一道出現轉折下彎 (RSI:{last_w['rsi14']:.1f})，謹慎觀望，不建議進場")
-                else:
-                    print(f"✅ 台灣加權指數(大盤)第一道趨勢尚穩 (RSI:{last_w['rsi14']:.1f})，持續觀察等個股訊號觸發後，再決定進場")
-# 大盤✅尚穩 → 繼續等個股的3層條件（第一道+日K+5分K）全部觸發
-#                       ↓ 才發Gmail通知您
-#                       ↓ 您再決定是否進場
-
-# 大盤⚠️下彎 → 即使個股觸發訊號，也要提高警覺，
-#               不建議大量進場，等大盤回穩再說
-        except Exception as e:
-            print(f"⚠️ 大盤分析失敗: {e}")
+        # 🟢 台股大盤守門員（A/B/C/D多空全條件）
+        print('\n🔍 正在檢查台股大盤位階 (^TWII)...')
+        _tse_mkt = analyse_market_index('^TWII', '台股')
+        _tw_market_bull_abc = _tse_mkt['bull_abc']
+        _tw_market_bull_d   = _tse_mkt['bull_d']
+        _tw_market_bear_abc = _tse_mkt['bear_abc']
+        _tw_market_bear_d   = _tse_mkt['bear_d']
+        _tw_market_warn     = _tse_mkt['warn']
 
         # --- 台股清單抓取與上市櫃區分邏輯 ---
         try:
@@ -1544,9 +1586,26 @@ def main_task():
                     if code not in _tw_prescreened: _tw_prescreened.append(code)
                 if result:
                     if result[0] == 'BUY':
-                        buy_signals.append(('台股', code, *result[1:], _mlabel if _mlabel else ''))
+                        # ✅ 大盤條件匹配：個股BUY路線需和大盤一致才發通知
+                        _stock_is_d = getattr(result, '_condD', False)  # 個股是否條件D
+                        _mkt_match = (
+                            (_tw_market_bull_d   and _stock_is_d) or
+                            (_tw_market_bull_abc and not _stock_is_d)
+                        ) if '_tw_market_bull_abc' in dir() else True
+                        if _mkt_match:
+                            buy_signals.append(('台股', code, *result[1:], _mlabel if _mlabel else ''))
+                        else:
+                            print(f'  ⚠️ {code} 個股觸發但大盤條件不符，不發通知')
                     elif result[0] == 'SELL':
-                        sell_signals.append(('台股', code, *result[1:]))
+                        _stock_is_d_s = getattr(result, '_condD_short', False)
+                        _mkt_match_s = (
+                            (_tw_market_bear_d   and _stock_is_d_s) or
+                            (_tw_market_bear_abc and not _stock_is_d_s)
+                        ) if '_tw_market_bear_abc' in dir() else True
+                        if _mkt_match_s:
+                            sell_signals.append(('台股', code, *result[1:]))
+                        else:
+                            print(f'  ⚠️ {code} 個股空頭觸發但大盤條件不符，不發通知')
                     elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
                         delist_signals.append(('台股', code, result[0], result[1]))
             except Exception as e:
@@ -1567,32 +1626,14 @@ def main_task():
     elif 'US' not in active_markets:
         print('\n📊 美股：非交易時段，跳過')
     else:
-        # 🔵 美股大盤守門員（引用第2-5章ENABLE_INDEX_FILTER）
-        if ENABLE_INDEX_FILTER:
-            print('\n🔍 正在檢查道瓊指數位階 (^DJI)...')
-        try:
-            dji_w = yf.download('^DJI', period='2y', interval='1wk', progress=False)
-            if dji_w is not None and len(dji_w) >= 30:
-                dji_w = calc_indicators(dji_w)
-                last_dj = dji_w.iloc[-1]
-                prev_dj = dji_w.iloc[-2]
-
-                # 判定轉折點 (對應截圖中的指標下彎)
-                dji_rsi_down = last_dj['rsi14'] < prev_dj['rsi14']
-                dji_macd_down = last_dj['macd_hist'] < prev_dj['macd_hist']
-
-                if dji_rsi_down or dji_macd_down:
-                    print(f"⚠️ 警告：道瓊第一道出現轉折下彎 (RSI:{last_dj['rsi14']:.1f})，謹慎觀望，不建議進場")
-                else:
-                    print(f"✅ 道瓊第一道趨勢尚穩 (RSI:{last_dj['rsi14']:.1f})，持續觀察等個股訊號觸發後，再決定進場")
-# 道瓊✅尚穩 → 繼續等個股的3層條件（第一道+日K+5分K）全部觸發
-#                       ↓ 才發Gmail通知您
-#                       ↓ 您再決定是否進場
-
-# 道瓊⚠️下彎 → 即使個股觸發訊號，也要提高警覺，
-#               不建議進場，等大盤回穩再說
-        except Exception as e:
-            print(f"⚠️ 美股大盤分析失敗: {e}")
+        # 🔵 美股大盤守門員（A/B/C/D多空全條件）
+        print('\n🔍 正在檢查道瓊指數位階 (^DJI)...')
+        _dji_mkt = analyse_market_index('^DJI', '道瓊')
+        _us_market_bull_abc = _dji_mkt['bull_abc']
+        _us_market_bull_d   = _dji_mkt['bull_d']
+        _us_market_bear_abc = _dji_mkt['bear_abc']
+        _us_market_bear_d   = _dji_mkt['bear_d']
+        _us_market_warn     = _dji_mkt['warn']
 
         print(f'\n📊 美股掃描：共{len(US_STOCKS)}支')
         for ticker in US_STOCKS:
@@ -1608,9 +1649,25 @@ def main_task():
             # ✅ 正確：result 取得後立刻判斷
             if result:
                 if result[0] == 'BUY':
-                    buy_signals.append(('美股', ticker, *result[1:], _mlabel if _mlabel else ''))
+                    _stock_is_d_us = getattr(result, '_condD', False)
+                    _mkt_match_us = (
+                        (_us_market_bull_d   and _stock_is_d_us) or
+                        (_us_market_bull_abc and not _stock_is_d_us)
+                    ) if '_us_market_bull_abc' in dir() else True
+                    if _mkt_match_us:
+                        buy_signals.append(('美股', ticker, *result[1:], _mlabel if _mlabel else ''))
+                    else:
+                        print(f'  ⚠️ {ticker} 美股個股觸發但大盤條件不符，不發通知')
                 elif result[0] == 'SELL':
-                    sell_signals.append(('美股', ticker, *result[1:]))
+                    _stock_is_d_us_s = getattr(result, '_condD_short', False)
+                    _mkt_match_us_s = (
+                        (_us_market_bear_d   and _stock_is_d_us_s) or
+                        (_us_market_bear_abc and not _stock_is_d_us_s)
+                    ) if '_us_market_bear_abc' in dir() else True
+                    if _mkt_match_us_s:
+                        sell_signals.append(('美股', ticker, *result[1:]))
+                    else:
+                        print(f'  ⚠️ {ticker} 美股個股空頭觸發但大盤條件不符，不發通知')
                 elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
                     delist_signals.append(('美股', ticker, result[0], result[1]))
             time.sleep(0.1)
