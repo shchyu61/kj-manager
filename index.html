@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05010311</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05010323</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1798,8 +1798,10 @@
             const _1st2nd_pass = (_abc_pass && _el2nd) || _d_pass;
             // ✅ 大盤條件匹配（個股路線必須和大盤一致）
             const _isTW = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            const _mkt  = _isTW ? window._twMkt : window._usMkt;
-            // ✅ 大盤尚未分析（全部false）時不套用限制，避免封鎖所有訊號
+            // ✅ null-safety：window._twMkt/_usMkt 可能尚未初始化，預設空物件
+            const _mktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+            const _mkt  = (_isTW ? window._twMkt : window._usMkt) || _mktDef;
+            // 大盤尚未分析（全部false）時不套用限制，避免封鎖所有訊號
             const _mkt_analysed = _mkt.bull_abc || _mkt.bull_d || _mkt.bear_abc || _mkt.bear_d || _mkt.warn;
             const _mkt_bull_ok = !_mkt_analysed || (_d_pass && _mkt.bull_d) || (_abc_pass && _el2nd && _mkt.bull_abc);
             const _mkt_bear_ok = !_mkt_analysed || (_r4_short && _mkt.bear_d) || (!_r4_short && _mkt.bear_abc);
