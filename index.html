@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05010323</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05010331</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1796,27 +1796,18 @@
             const _abc_pass = (_r1 || _r2 || _r3) && rsiNow > _p2;
             const _d_pass   = _r4;  // 條件D（上軌，eLeader可選）
             const _1st2nd_pass = (_abc_pass && _el2nd) || _d_pass;
-            // ✅ 大盤條件匹配（個股路線必須和大盤一致）
-            const _isTW = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            // ✅ null-safety：window._twMkt/_usMkt 可能尚未初始化，預設空物件
-            const _mktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-            const _mkt  = (_isTW ? window._twMkt : window._usMkt) || _mktDef;
-            // 大盤尚未分析（全部false）時不套用限制，避免封鎖所有訊號
-            const _mkt_analysed = _mkt.bull_abc || _mkt.bull_d || _mkt.bear_abc || _mkt.bear_d || _mkt.warn;
-            const _mkt_bull_ok = !_mkt_analysed || (_d_pass && _mkt.bull_d) || (_abc_pass && _el2nd && _mkt.bull_abc);
-            const _mkt_bear_ok = !_mkt_analysed || (_r4_short && _mkt.bear_d) || (!_r4_short && _mkt.bear_abc);
 
             if (_iv === '1wk') {
                 // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
-                buy_signal = _1st2nd_pass && _3rd_pass && _mkt_bull_ok;
+                buy_signal = _1st2nd_pass && _3rd_pass;
 
             } else if (_iv === '1d') {
                 // 中期投資：第一道日K + 第二道eLeader + 第三道5分K（三道缺一不可）
-                buy_signal = _1st2nd_pass && _3rd_pass && _mkt_bull_ok;
+                buy_signal = _1st2nd_pass && _3rd_pass;
 
             } else {
                 // 其他週期：同樣需要三道
-                buy_signal = _1st2nd_pass && _3rd_pass && _mkt_bull_ok;
+                buy_signal = _1st2nd_pass && _3rd_pass;
             }
 
             if (buy_signal) {
@@ -1868,10 +1859,9 @@
 
             // ✅ 做空：A/B需eLeader空頭條件（截圖1/2），條件D空頭（截圖5鏡像）不需eLeader
             const _sell_abc = boll_position === 'near_upper' && !_t1 && !_t2;  // A/B空頭
-            const sell_signal = ((_sell_abc || _r4_short) && _mkt_bear_ok) || _condD_exitA || _condD_exitB;
+            const sell_signal = (_sell_abc) || _r4_short || _condD_exitA || _condD_exitB;
 
             const _debug = window._isAdmin ? {
-                mkt_k:  `大盤: 台股[${_isTW?(_mkt.bull_d?'條件D多頭✅':_mkt.bull_abc?'A/B/C多頭✅':_mkt.warn?'⚠️下彎':'中性'):'-'}] 道瓊[${!_isTW?(_mkt.bull_d?'條件D多頭✅':_mkt.bull_abc?'A/B/C多頭✅':_mkt.warn?'⚠️下彎':'中性'):'-'}]`,
                 week_k: `週K第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
                 day_k:  `第二道eLeader: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
                 min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`
@@ -2571,53 +2561,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             }
         };
 
-
-        // ══ 大盤守門員：A/B/C/D多空全條件分析 ══
-        const analyseMarketIndex = async (ticker, label) => {
-            const r = {bull_abc:false, bull_d:false, bear_abc:false, bear_d:false, warn:false, rsi_w:0, rsi_d:0};
-            try {
-                // 週K分析
-                const _wResult = await analyzeStock(ticker, '1wk', '2y');
-                if (_wResult) {
-                    r.rsi_w = parseFloat(_wResult.rsi) || 0;
-                    const _condD_w = _wResult.debug_info ? _wResult.debug_info.week_k.includes('✅D') : false;
-                    if (_wResult.buy_signal)  { _condD_w ? r.bull_d = true   : r.bull_abc = true; }
-                    if (_wResult.sell_signal) { _condD_w ? r.bear_d = true   : r.bear_abc = true; }
-                    if (!_wResult.buy_signal && !_wResult.sell_signal &&
-                        _wResult.rsi_trend === 'falling') r.warn = true;
-                }
-                // 日K分析
-                const _dResult = await analyzeStock(ticker, '1d', '1y');
-                if (_dResult) {
-                    r.rsi_d = parseFloat(_dResult.rsi) || 0;
-                    if (_dResult.buy_signal  && !r.bull_abc && !r.bull_d) r.bull_abc = true;
-                    if (_dResult.sell_signal && !r.bear_abc && !r.bear_d) r.bear_abc = true;
-                }
-                const flags = [];
-                if (r.bull_d)   flags.push('條件D多頭✅');
-                if (r.bull_abc) flags.push('A/B/C多頭✅');
-                if (r.bear_d)   flags.push('條件D空頭✅');
-                if (r.bear_abc) flags.push('A/B/C空頭✅');
-                if (r.warn && !r.bull_abc && !r.bull_d) flags.push('⚠️下彎警告');
-                if (!flags.length) flags.push('中性觀望');
-                console.log(`[大盤] ${label}：${flags.join(' / ')}（週K RSI:${r.rsi_w.toFixed(1)} 日K RSI:${r.rsi_d.toFixed(1)}）`);
-            } catch(e) { console.warn(`大盤分析失敗 ${label}:`, e); }
-            return r;
-        };
-
-        // 大盤狀態（全域）
-        window._twMkt = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-        window._usMkt = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-
         window.startWatchlistScan = async () => {
             if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
             // ✅ 立刻鎖住按鈕，避免使用者以為沒反應連按多次
             const btn = document.getElementById('btn-watchlist-scan');
-            // ✅ 大盤守門員：掃描個股前先判斷大盤條件
-            console.log('[大盤] 正在分析台股大盤...');
-            window._twMkt = await analyseMarketIndex('^TWII', '台股');
-            console.log('[大盤] 正在分析美股大盤(道瓊)...');
-            window._usMkt = await analyseMarketIndex('^DJI', '道瓊');
             const txt = document.getElementById('watchlist-scan-text');
             btn.disabled = true;
             txt.innerText = '準備中...';
