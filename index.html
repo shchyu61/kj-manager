@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05021847</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05021915</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1912,8 +1912,11 @@
                                  _bm_cur && _lows_n_sell.some(l => l <= _bm_cur.mid);
 
             // ✅ 做空：A/B需eLeader空頭條件（截圖1/2），條件D空頭（截圖5鏡像）不需eLeader
-            const _sell_abc = boll_position === 'near_upper' && !_t1 && !_t2;  // A/B空頭
-            const sell_signal = (_sell_abc) || _r4_short || _condD_exitA || _condD_exitB;
+            // ✅ 做空進場必須通過三道關卡（和做多進場一樣嚴格）
+            // _sell_abc 舊版：只看布林上軌位置，不需三道關卡 → 造成誤報
+            // 新版：空頭路線也需要 _1st2nd_pass_short（第一道+第二道）+ 第三道RSI↓MACD↓
+            const _sell_abc = _1st2nd_pass && !_t1 && !_t2;  // 空頭三道關卡（RSI↓MACD↓）
+            const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass) || _condD_exitA || _condD_exitB;
 
             const _debug = window._isAdmin ? {
                 week_k: `週K第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
