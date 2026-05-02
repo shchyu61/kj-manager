@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05021657</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05021825</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -308,7 +308,7 @@
                     <div class="rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                         <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                         <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                            ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
+                            ✅ 每天 <b>09:05</b> 和 <b>13:00</b> 自動掃描全部股票，符合條件寄 Gmail<br>
                             ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                             <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
                         </div>
@@ -585,13 +585,13 @@
                 <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                     <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                     <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                        ✅ 每天 <b>09:00</b> 和 <b>13:30</b> 自動掃描全部股票，符合條件寄 Gmail<br>
+                        ✅ 每天 <b>09:05</b> 和 <b>13:00</b> 自動掃描全部股票，符合條件寄 Gmail<br>
                         ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                         <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
                     </div>
                 </div>
                 <!-- ✅ AI預篩清單資訊卡（每天14:00由雲端自動更新）-->
-                <div id="tw-prescreen-card" class="mt-3 rounded-2xl p-3" style="background:#e8f5e9; border:1.5px solid #43a047; display:none;">
+                <div id="tw-prescreen-card" class="mt-3 rounded-2xl p-3" style="background:#e8f5e9; border:1.5px solid #43a047; display:block;">
                     <div class="text-sm font-black mb-1" style="color:#1b5e20;">🔍 台股 AI 預篩清單</div>
                     <div id="tw-prescreen-info" class="text-[12px] leading-relaxed" style="color:#2e7d32;">讀取中...</div>
                     <button onclick="startPrescreenScan()"
@@ -599,6 +599,10 @@
                         style="background:#2e7d32;">
                         ⚡ 一鍵深度分析 AI 預篩股
                     </button>
+                    <div id="prescreen-eta-wrap" class="hide mt-1 text-[11px]" style="color:#388e3c;">
+                        掃描中，預計剩餘 <span id="prescreen-eta-txt">--</span> 分鐘 |
+                        <button onclick="window.stopPrescreenScan()" class="underline font-black" style="color:#e53935;">中斷掃描</button>
+                    </div>
                 </div>
 
                 <!-- ✅ 自動掃描控制面板（需開著瀏覽器）-->
@@ -1188,6 +1192,7 @@
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
                 })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點智能診斷查看</div>`;
+                const _dir = s.direction || 'long';
                 return `
                 <div class="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-2">
@@ -1201,6 +1206,10 @@
                         </button>
                     </div>
                     <div class="mt-1">${rsiHtml}</div>
+                    <div class="flex gap-1 mt-1.5">
+                        <button onclick="window.toggleDirection('${s.code}', 'long')" class="flex-1 py-0.5 rounded-lg text-[11px] font-black transition-all ${_dir==='long' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}">▲ 做多</button>
+                        <button onclick="window.toggleDirection('${s.code}', 'short')" class="flex-1 py-0.5 rounded-lg text-[11px] font-black transition-all ${_dir==='short' ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-400'}">▼ 做空</button>
+                    </div>
                 </div>`;
             }).join('');
             lucide.createIcons();
@@ -1211,13 +1220,18 @@
             const val = input.value.trim().toUpperCase();
             const cat = document.getElementById('new-stock-cat')?.value || 'tw';
             if (val && !stocks.some(s => s.code === val)) {
-                stocks.push({ code: val, cat });
+                stocks.push({ code: val, cat, direction: 'long' });  // 預設做多
                 fetchStockName(val); // 自動抓取名稱
                 input.value = '';
                 window.renderStocks();
                 await saveToCloud();
             }
         });
+
+        window.toggleDirection = (code, dir) => {
+            const s = stocks.find(x => x.code === code);
+            if (s) { s.direction = dir; saveToCloud(); window.renderStocks(); }
+        };
 
         window.removeStock = async (code) => {
             stocks = stocks.filter(s => s.code !== code);
@@ -1322,11 +1336,22 @@
                                near_lower: bgDark ? 'text-emerald-400' : 'text-emerald-600' };
             const condText = hasBuy && result.conditions && result.conditions.length
                              ? '觸發：' + result.conditions.join('、') : '';
-            // hasSell必須在cardBg之前宣告
-            const hasSell = isHolding && result.sell_signal;
-            const cardBg   = bgDark
-                ? (hasBuy ? 'border-emerald-500 bg-emerald-950' : hasSell ? 'border-rose-600 bg-rose-950' : 'border-slate-700 bg-slate-900')
-                : (hasBuy ? 'border-emerald-300 bg-emerald-50'  : hasSell ? 'border-rose-300 bg-rose-50'  : 'border-slate-200 bg-white');
+            // 四色訊號判斷（依持倉方向）
+            const _stockDir = (() => { const _s = stocks.find(x=>x.code===code); return _s ? (_s.direction||'long') : 'long'; })();
+            // 待買觀察：buy→做多進場(綠), sell→做空進場(紫)
+            // 持股清單做多：sell→做多出場(橘), buy無特別訊號
+            // 持股清單做空：buy→做空出場(藍), sell無特別訊號
+            const hasSell = result.sell_signal;
+            const _sigType = !isHolding
+                ? (hasBuy ? 'bull_enter' : hasSell ? 'bear_enter' : 'none')
+                : (_stockDir==='long' ? (hasSell ? 'bull_exit' : 'none') : (hasBuy ? 'bear_exit' : 'none'));
+            const cardBg = bgDark
+                ? ({bull_enter:'border-emerald-500 bg-emerald-950', bear_enter:'border-purple-600 bg-purple-950',
+                    bull_exit:'border-orange-500 bg-orange-950', bear_exit:'border-blue-500 bg-blue-950',
+                    none:'border-slate-700 bg-slate-900'}[_sigType])
+                : ({bull_enter:'border-emerald-300 bg-emerald-50', bear_enter:'border-purple-300 bg-purple-50',
+                    bull_exit:'border-orange-300 bg-orange-50', bear_exit:'border-blue-300 bg-blue-50',
+                    none:'border-slate-200 bg-white'}[_sigType]);
             const textMain = bgDark ? 'text-white'     : 'text-slate-800';
             const textSub  = bgDark ? 'text-slate-400' : 'text-slate-400';
             const noSignalText = isHolding ? '持續觀察，暫不賣出' : '持續觀察';
@@ -1341,7 +1366,15 @@
                     </div>
                     <div class="text-right shrink-0">
                         <div class="font-black text-base ${textMain}">${result.price}</div>
-                        <div class="text-[11px] font-black ${hasBuy ? 'text-emerald-400' : hasSell ? 'text-rose-400' : (isHolding ? 'text-amber-300' : textSub)}">${hasBuy ? '⭐ 買進訊號' : hasSell ? '🔔 賣出訊號' : noSignalText}</div>
+                        <div class="text-[11px] font-black ${
+                            _sigType==='bull_enter' ? 'text-emerald-400' :
+                            _sigType==='bear_enter' ? 'text-purple-400' :
+                            _sigType==='bull_exit'  ? 'text-orange-400' :
+                            _sigType==='bear_exit'  ? 'text-blue-400' : (isHolding ? 'text-slate-400' : textSub)}">${
+                            _sigType==='bull_enter' ? '⭐ 做多進場' :
+                            _sigType==='bear_enter' ? '▼ 做空進場' :
+                            _sigType==='bull_exit'  ? '🔔 做多出場' :
+                            _sigType==='bear_exit'  ? '▲ 做空出場' : noSignalText}</div>
                     </div>
                 </div>
                 <!-- 第二行：RSI + 布林（獨立一行，完整顯示不截斷）-->
@@ -1752,8 +1785,8 @@
             const _minTW = _nowTW.getMinutes();
             const _isTradingHour = (
                 _dayTW >= 1 && _dayTW <= 5 &&
-                ((_hrTW === 9) || (_hrTW >= 10 && _hrTW <= 12) ||
-                 (_hrTW === 13 && _minTW <= 30))
+                ((_hrTW === 9 && _minTW >= 5) || (_hrTW >= 10 && _hrTW <= 12) ||
+                 (_hrTW === 13 && _minTW === 0))
             );
 
             let _3rd_pass = false;
@@ -2753,6 +2786,12 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
         // ── 智能診斷：持股＋觀察兩清單（工作池版）─────────────
         // ── 一鍵深度分析 AI 預篩股（從Firebase取得預篩清單，只跑第二道+第三道）────
+        let _psStop = false;
+        window.stopPrescreenScan = () => {
+            _psStop = true;
+            document.getElementById('prescreen-eta-wrap').classList.add('hide');
+            document.getElementById('tw-prescreen-info').textContent = '掃描已中斷';
+        };
         window.startPrescreenScan = async () => {
             if (!_twPrescreenedCache || _twPrescreenedCache.count === 0) {
                 await loadTwPrescreened();
@@ -2773,8 +2812,17 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             const buySignals = [], sellSignals = [];
             await fetchCashDeliveryStocks().catch(() => {});
 
-            for (let idx = 0; idx < codes.length; idx++) {
+            _psStop = false;
+            document.getElementById('prescreen-eta-wrap').classList.remove('hide');
+            const _psTot = codes.length, _psT0 = Date.now();
+            for (let idx = 0; idx < _psTot; idx++) {
+                if (_psStop) break;
                 const code = codes[idx];
+                if (idx > 0) {
+                    const _eta = Math.round(((Date.now()-_psT0)/1000/idx)*(_psTot-idx)/60);
+                    const _el = document.getElementById('prescreen-eta-txt');
+                    if (_el) _el.textContent = _eta;
+                }
                 try {
                     let result, _mxLabel = null;
                     if (_mixedMode) {
@@ -2805,6 +2853,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             if (sellSignals.length > 0) sendSellNotify(sellSignals);
 
             const total = buySignals.length + sellSignals.length;
+            document.getElementById('prescreen-eta-wrap').classList.add('hide');
             window.showAlert(total > 0
                 ? `✅ 深度分析完成！發現 ${buySignals.length} 支買進 / ${sellSignals.length} 支賣出訊號`
                 : `✅ 深度分析完成，本次無符合條件的訊號`);
