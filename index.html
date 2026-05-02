@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05030344</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05030503</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1319,6 +1319,8 @@
         const _g=(a,sh=0)=>{const i=a.length-1-sh;return i>=0?a[i]:null;};
         const calcElInd=(op,hi,lo,cl,vo)=>{if(cl.length<30)return null;const mc2=_rm(cl,2),mc20=_rm(cl,20),mo2=_rm(op,2),mh2=_rm(hi,2),ml2=_rm(lo,2),mv5=_rm(vo,5),s20=_rs(cl,20),s2=_rs(cl,2);const bt20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m+2*s20[i]:null),bb20=mc20.map((m,i)=>m!==null&&s20[i]!==null?m-2*s20[i]:null),bt2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m+2*s2[i]:null),bb2=mc2.map((m,i)=>m!==null&&s2[i]!==null?m-2*s2[i]:null);const rsi=_ra(cl,14),ersi=_ea(rsi,9),{ml:macd,sgl:msig,hl:mosc}=_ma(cl,12,26,9),emacd=_ea(macd,9),{ml:macd_o}=_ma(op,12,26,9);return{op,hi,lo,cl,vo,mc2,mc20,mo2,mh2,ml2,mv5,bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o};};
         const checkElBuy=(d)=>{if(!d)return false;const{op:o,hi:h,lo:l,cl:c,mc2,mc20,mo2,mh2,ml2,mv5,bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o}=d,g=_g;if(g(c,3)===null||g(bb20,3)===null||g(rsi,3)===null)return false;if(!(g(rsi,1)<78&&g(c)>g(ml2)&&g(h)>g(o)&&g(c)>g(l)))return false;const C01=g(h,1)>g(bb20,1)&&g(bt2,1)<g(bt20,1)&&g(bb2)>g(bb20),C02=g(mosc)>g(mosc,1),C03=(g(mc20)>g(mc20,1)&&g(bt20)>g(bt20,1)&&g(rsi)>g(rsi,1))||(g(mc20,1)<g(mc20,2)&&(g(bb20,1)<g(bb20,2)||(g(mo2,1)<g(mo2,2)&&g(o)>g(mo2)))&&g(rsi,2)<g(rsi,3)&&g(rsi,1)>g(rsi,2)&&g(rsi)>g(rsi,1)&&g(ersi,1)>g(ersi,2)),C04=(g(c,1)>g(mc2,1)||g(c,1)>g(mc20,1))&&g(o)<g(mc20,1),gA=C01&&C02&&C03&&C04;const C11=g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2),C12=g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi,1)<g(ersi,1)&&g(rsi)>g(ersi)&&g(emacd,1)<g(emacd,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(c)>g(mo2),C21=g(mc20,1)<g(mc20,2)&&g(bt20)<g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(bb20)<g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1),C22=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(ersi,1)>g(rsi,1)&&g(emacd)>g(macd)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(o,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(ml2),C23=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)<g(msig,1)&&g(macd)>g(macd,1),C24=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(mo2)<g(bb20)&&g(rsi,1)>g(rsi,2)&&g(mosc)>g(mosc,1)&&g(mo2)<g(mo2,1)&&g(o,1)<g(mo2,1)&&g(o)>g(mo2),C25=g(mc20,1)<g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bt20)>g(bt20,1)&&g(bb20,1)<g(bb20,2)&&g(c,1)<g(bb20,1)&&g(o)<g(bb20,1)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(c)>g(mo2),C26=g(mc20,1)<g(mc20,2)&&g(h,1)<g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(ersi,1)&&g(ersi,1)>g(ersi,2)&&g(macd,1)>g(macd,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o),C27=g(mc20,1)<g(mc20,2)&&g(o,1)<g(bb20,1)&&g(macd_o)<0&&g(rsi,1)<g(rsi,2)&&g(ersi,2)<35&&g(mo2,1)<g(bb20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(l,1),C28=g(mc20,1)<g(mc20,2)&&g(o,1)<g(mc20,1)&&g(c,1)>g(mc20,1)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(rsi,1)>g(rsi,2)&&g(ersi,1)>g(ersi,2)&&g(mo2,1)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(l);const C41=g(mc20,1)>g(mc20,2)&&g(bb20)>g(bb20,1)&&g(bt20)<g(bt20,1)&&g(ersi,1)>g(rsi,1)&&g(emacd,1)>g(macd,1)&&g(o,1)<g(mc20,1)&&g(h,1)>g(mc20,1)&&g(mo2,1)<g(mc20,1)&&g(mo2)<g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2)&&g(l)>=g(l,1),C42=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(o)<g(bb20,1)&&g(o,1)>g(mc20,1)&&g(mo2,1)>g(l,2)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2),C43=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20)>g(bt20,1)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(mosc,1)<g(mosc,2)&&g(mosc)>g(mosc,1)&&g(mo2,1)<g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(o),C44=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(emacd,2)&&g(o)<g(mc20,1)&&g(mo2)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(h)<g(mo2)&&g(ml2,1)>=g(ml2,2)&&g(l)<g(ml2)&&g(c)>g(ml2),C45=g(mc20,1)>g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(emacd,1)>g(macd,1)&&g(ersi,1)>g(rsi,1)&&g(o,1)<g(mo2,1)&&g(rsi,1)>g(rsi,2)&&g(o)>g(mo2)&&g(c,1)>g(mo2,1)&&g(mo2)<g(mo2,1)&&g(ml2,1)<g(bb20,1)&&g(c)>g(o),C46=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(h,1)>g(bt20,1)&&g(c)>g(bt20)&&g(c,1)>g(mo2,1)&&g(mo2)>g(mo2,1)&&g(o)<g(mo2),C47=g(mc20,1)>g(mc20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(macd,1)>g(msig,1)&&g(macd,1)<g(macd,2)&&g(macd)>g(macd,1)&&g(mo2,1)>g(mc20,1)&&g(mo2)<g(mo2,1)&&g(c)>g(mo2,1),C48=g(mc20,1)>g(mc20,2)&&g(bt20,2)<g(bt20,3)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(rsi)>g(rsi,1)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)>g(mo2,2)&&g(mo2)>g(mo2,1)&&g(c)>g(mo2)&&g(c)>g(o,1),C49=g(mc20,1)>g(mc20,2)&&g(h,2)<g(bt20,2)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)>g(bb20,2)&&g(ersi)>g(ersi,1)&&g(macd,1)>g(macd,2)&&g(o,1)>g(mo2,1)&&g(o)<g(mo2)&&g(c)>g(mo2),C50=g(mc20,2)>g(mc20,3)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(rsi)<g(ersi)&&g(emacd,1)<g(macd,1)&&g(bt20,2)>g(bt20,3)&&g(bb20,2)>g(bb20,3)&&g(mo2,1)<g(mo2,2)&&g(o,1)<g(mo2,1)&&g(c)>g(mo2);const C61=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,2)<g(o,2)&&g(c,1)>g(o,1)&&g(bb20,1)>g(bb20,2)&&g(bt2,1)>g(bt2,2)&&g(bb2,1)<g(bb2,2)&&g(mo2,1)<g(mc20,2)&&g(mo2,1)<g(mo2,2)&&g(mv5)>g(mv5,1)&&g(d.vo[d.vo.length-1])>g(mv5)&&g(h)>g(o),C62=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(mo2)>g(mo2,1)&&g(c,1)<g(o,1)&&g(o,1)>g(mc20,1)&&g(bb20,1)<g(bb20,2)&&g(mh2,1)>g(mh2,2)&&g(ml2,1)>g(ml2,2)&&g(c,1)>=g(mc2,1)&&g(l)<g(o)&&g(c)>g(o),C63=g(mc20)>g(mc20,1)&&g(bb20)>g(bb20,1)&&g(rsi)>g(rsi,1)&&g(ersi,1)<g(ersi,2)&&g(ersi)>g(ersi,1)&&g(c)>g(mo2,1),C66=g(c,1)>g(o,1)&&g(mc20,2)>g(mc20,3)&&g(mc20,1)>g(mc20,2)&&g(l,1)>g(mc20,1)&&g(bt20,1)>g(bt20,2)&&g(bt2,1)>g(bt20,1)&&g(bb20)<g(bb20,1)&&g(o,1)<g(bt20,1)&&g(o)<g(bt20)&&g(macd)>g(msig)&&g(o,1)<g(mo2,1)&&g(c,1)>g(mo2,1)&&g(c,1)>=g(ml2,1)&&g(ml2)>g(ml2,1)&&g(c)>g(o),C71=g(c,1)>g(o,1)&&g(c,2)<g(o,2)&&g(bb2,2)>g(bb20,2)&&g(ml2,2)>g(bb20,2)&&g(bb20)>g(bb20,1)&&g(o,1)<g(mc20,1)&&((g(mo2)>g(mo2,1)&&g(h,1)<g(mh2,1)&&g(c)>g(mc2))||(g(mo2)<g(mo2,1)&&g(l)<g(mo2)&&g(c)>g(mo2)))&&g(o)>g(mo2)&&g(ml2)>=g(ml2,1)&&g(c,1)>=g(mc2,1);const gB=C11||C12||C21||C22||C23||C24||C25||C26||C27||C28||C41||C42||C43||C44||C45||C46||C47||C48||C49||C50||C61||C62||C63||C66||C71;return gA||gB;};
+        // ✅ 05030434新增：checkElSell（eLeader 25條件完全鏡像空方版，對應Python check_short_eleader）
+        const checkElSell=(d)=>{if(!d)return false;const{op:o,hi:h,lo:l,cl:c,mc2,mc20,mo2,mh2,ml2,mv5,bt20,bb20,bt2,bb2,rsi,ersi,macd,msig,mosc,emacd,macd_o}=d,g=_g;if(g(c,3)===null||g(bb20,3)===null||g(rsi,3)===null)return false;if(!(g(rsi,1)>22&&g(c)<g(mh2)&&g(l)<g(o)&&g(c)<g(h)))return false;const SC01=g(l,1)<g(bb20,1)&&g(bb2,1)>g(bb20,1)&&g(bt2)<g(bt20),SC02=g(mosc)<g(mosc,1),SC03=(g(mc20)<g(mc20,1)&&g(bb20)<g(bb20,1)&&g(rsi)<g(rsi,1))||(g(mc20)>g(mc20,1)&&(g(bt20)>g(bt20,1)||(g(mo2)>g(mo2,1)&&g(o)<g(mo2)))&&g(rsi,2)>g(rsi,3)&&g(rsi,1)<g(rsi,2)&&g(rsi)<g(rsi,1)&&g(ersi,1)<g(ersi,2)),SC04=(g(c,1)<g(mc2,1)||g(c,1)<g(mc20,1))&&g(o)>g(mc20,1),gAs=SC01&&SC02&&SC03&&SC04;const SC11=g(bb20,1)>g(bb20,2)&&g(bt20,1)<g(bt20,2)&&g(rsi,1)>g(ersi,1)&&g(rsi)<g(ersi)&&g(emacd,1)<g(emacd,2)&&g(mo2,1)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(mo2)<g(mo2,1)&&g(o,1)<g(mo2,1)&&g(h)>g(mo2)&&g(c)<g(mo2),SC12=g(bb20,1)<g(bb20,2)&&g(bt20,1)<g(bt20,2)&&g(rsi,1)>g(ersi,1)&&g(rsi)<g(ersi)&&g(emacd,1)>g(emacd,2)&&g(mo2,1)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(mo2)<g(mo2,1)&&g(o,1)<g(mo2,1)&&g(c)<g(mo2),SC21=g(mc20,1)>g(mc20,2)&&g(bb20)>g(bb20,1)&&g(bt20,1)>g(bt20,2)&&g(bt20)>g(bt20,1)&&g(rsi,1)<g(rsi,2)&&g(mosc)<g(mosc,1)&&g(mo2,1)>g(mo2,2)&&g(o,1)<g(mo2,1),SC22=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20,1)>g(bt20,2)&&g(ersi,1)<g(rsi,1)&&g(emacd)<g(macd)&&g(mo2,1)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(o,1)<g(mo2,1)&&g(mo2)<g(mo2,1)&&g(mh2)<g(mh2,1)&&g(c)<g(mh2),SC23=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(bb20)<g(bb20,1)&&g(macd,1)>g(msig,1)&&g(macd)<g(macd,1),SC24=g(mc20,1)>g(mc20,2)&&g(bb20,1)<g(bb20,2)&&g(bt20,1)>g(bt20,2)&&g(mo2)>g(bt20)&&g(rsi,1)<g(rsi,2)&&g(mosc)<g(mosc,1)&&g(mo2)>g(mo2,1)&&g(o,1)>g(mo2,1)&&g(o)<g(mo2),SC25=g(mc20,1)>g(mc20,2)&&g(bb20,1)<g(bb20,2)&&g(bb20)<g(bb20,1)&&g(bt20,1)>g(bt20,2)&&g(c,1)>g(bt20,1)&&g(o)>g(bt20,1)&&g(mosc,1)>g(mosc,2)&&g(mosc)<g(mosc,1)&&g(c)<g(mo2),SC26=g(mc20,1)>g(mc20,2)&&g(l,1)<g(bb20,1)&&g(bb20,1)>g(bb20,2)&&g(bt20)<g(bt20,1)&&g(rsi,1)<g(ersi,1)&&g(ersi,1)<g(ersi,2)&&g(macd,1)<g(macd,2)&&g(mo2)<g(mo2,1)&&g(c)<g(mo2)&&g(c)<g(o),SC27=g(mc20,1)>g(mc20,2)&&g(o,1)>g(bt20,1)&&g(macd_o)>0&&g(rsi,1)>g(rsi,2)&&g(ersi,2)>65&&g(mo2,1)>g(bt20,1)&&g(mo2)>g(mo2,1)&&g(c)<g(h,1),SC28=g(mc20,1)>g(mc20,2)&&g(o,1)>g(mc20,1)&&g(c,1)<g(mc20,1)&&g(bb20,1)>g(bb20,2)&&g(bt20,1)<g(bt20,2)&&g(bt20)<g(bt20,1)&&g(rsi,1)<g(rsi,2)&&g(ersi,1)<g(ersi,2)&&g(mo2,1)>g(mc20,1)&&g(mo2,1)>g(mo2,2)&&g(mo2)<g(mo2,1)&&g(o,1)>g(mo2,1)&&g(c)<g(mo2)&&g(c)<g(h);const SC41=g(mc20,1)<g(mc20,2)&&g(bt20)<g(bt20,1)&&g(bb20)>g(bb20,1)&&g(ersi,1)<g(rsi,1)&&g(emacd,1)<g(macd,1)&&g(o,1)>g(mc20,1)&&g(l,1)<g(mc20,1)&&g(mo2,1)>g(mc20,1)&&g(mo2)>g(mo2,1)&&g(o)>g(mo2)&&g(c)<g(mo2)&&g(h)<=g(h,1),SC42=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(o)>g(bt20,1)&&g(o,1)<g(mc20,1)&&g(mo2,1)<g(h,2)&&g(mo2)>g(mo2,1)&&g(c)<g(mo2),SC43=g(mc20,1)<g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20)<g(bb20,1)&&g(macd,1)<g(msig,1)&&g(macd,1)>g(macd,2)&&g(mosc,1)>g(mosc,2)&&g(mosc)<g(mosc,1)&&g(mo2,1)>g(mo2,2)&&g(mo2)<g(mo2,1)&&g(c)<g(o),SC44=g(mc20,1)<g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20,1)<g(bt20,2)&&g(emacd,1)<g(emacd,2)&&g(o)>g(mc20,1)&&g(mo2)<g(mc20,1)&&g(mo2,1)<g(mo2,2)&&g(h)>g(mo2)&&g(mh2,1)<=g(mh2,2)&&g(h)>g(mh2)&&g(c)<g(mh2),SC45=g(mc20,1)<g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(bt20,1)<g(bt20,2)&&g(emacd,1)<g(macd,1)&&g(ersi,1)<g(rsi,1)&&g(o,1)>g(mo2,1)&&g(rsi,1)<g(rsi,2)&&g(o)<g(mo2)&&g(c,1)<g(mo2,1)&&g(mo2)>g(mo2,1)&&g(mh2,1)>g(bt20,1)&&g(c)<g(o),SC46=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(l,1)<g(bb20,1)&&g(c)<g(bb20)&&g(c,1)<g(mo2,1)&&g(mo2)<g(mo2,1)&&g(o)>g(mo2),SC47=g(mc20,1)<g(mc20,2)&&g(bt20,1)<g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(macd,1)<g(msig,1)&&g(macd,1)>g(macd,2)&&g(macd)<g(macd,1)&&g(mo2,1)<g(mc20,1)&&g(mo2)>g(mo2,1)&&g(c)<g(mo2,1),SC48=g(mc20,1)<g(mc20,2)&&g(bt20,2)>g(bt20,3)&&g(bt20,1)>g(bt20,2)&&g(bb20,1)<g(bb20,2)&&g(rsi)<g(rsi,1)&&g(emacd,1)<g(emacd,2)&&g(mo2,1)<g(mo2,2)&&g(mo2)<g(mo2,1)&&g(c)<g(mo2)&&g(c)<g(o,1),SC49=g(mc20,1)<g(mc20,2)&&g(l,2)>g(bb20,2)&&g(bb20,1)<g(bb20,2)&&g(bt20,1)<g(bt20,2)&&g(ersi)<g(ersi,1)&&g(macd,1)<g(macd,2)&&g(o,1)<g(mo2,1)&&g(o)>g(mo2)&&g(c)<g(mo2),SC50=g(mc20,2)<g(mc20,3)&&g(rsi)<g(rsi,1)&&g(ersi,1)>g(ersi,2)&&g(rsi)>g(ersi)&&g(emacd,1)>g(macd,1)&&g(bt20,2)<g(bt20,3)&&g(bb20,2)<g(bb20,3)&&g(mo2,1)>g(mo2,2)&&g(o,1)>g(mo2,1)&&g(c)<g(mo2);const SC61=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(mo2)<g(mo2,1)&&g(c,2)>g(o,2)&&g(c,1)<g(o,1)&&g(bt20,1)<g(bt20,2)&&g(bb2,1)<g(bb2,2)&&g(bt2,1)>g(bt2,2)&&g(mo2,1)>g(mc20,2)&&g(mo2,1)>g(mo2,2)&&g(mv5)>g(mv5,1)&&g(d.vo[d.vo.length-1])>g(mv5)&&g(l)<g(o),SC62=g(mc20,1)>g(mc20,2)&&g(bb20,1)>g(bb20,2)&&g(mo2)<g(mo2,1)&&g(c,1)>g(o,1)&&g(o,1)<g(mc20,1)&&g(bt20,1)>g(bt20,2)&&g(ml2,1)<g(ml2,2)&&g(mh2,1)<g(mh2,2)&&g(c,1)<=g(mc2,1)&&g(h)>g(o)&&g(c)<g(o),SC63=g(mc20)<g(mc20,1)&&g(bt20)<g(bt20,1)&&g(rsi)<g(rsi,1)&&g(ersi,1)>g(ersi,2)&&g(ersi)<g(ersi,1)&&g(c)<g(mo2,1),SC66=g(c,1)<g(o,1)&&g(mc20,2)<g(mc20,3)&&g(mc20,1)<g(mc20,2)&&g(h,1)<g(mc20,1)&&g(bb20,1)<g(bb20,2)&&g(bb2,1)<g(bb20,1)&&g(bt20)>g(bt20,1)&&g(o,1)>g(bb20,1)&&g(o)>g(bb20)&&g(macd)<g(msig)&&g(o,1)>g(mo2,1)&&g(c,1)<g(mo2,1)&&g(c,1)<=g(mh2,1)&&g(mh2)<g(mh2,1)&&g(c)<g(o),SC71=g(c,1)<g(o,1)&&g(c,2)>g(o,2)&&g(bt2,2)<g(bt20,2)&&g(mh2,2)<g(bt20,2)&&g(bt20)<g(bt20,1)&&g(o,1)>g(mc20,1)&&((g(mo2)<g(mo2,1)&&g(l,1)>g(ml2,1)&&g(c)<g(mc2))||(g(mo2)>g(mo2,1)&&g(h)>g(mo2)&&g(c)<g(mo2)))&&g(o)<g(mo2)&&g(mh2)<=g(mh2,1)&&g(c,1)<=g(mc2,1);const gBs=SC11||SC12||SC21||SC22||SC23||SC24||SC25||SC26||SC27||SC28||SC41||SC42||SC43||SC44||SC45||SC46||SC47||SC48||SC49||SC50||SC61||SC62||SC63||SC66||SC71;return gAs||gBs;};
 
         // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
 
@@ -1387,6 +1389,8 @@
                     <div>${result.debug_info.week_k||''}</div>
                     <div>${result.debug_info.day_k||''}</div>
                     <div>${result.debug_info.min5_k||''}</div>
+                    <div>${result.debug_info.week_k_s||''}</div>
+                    <div>${result.debug_info.day_k_s||''}</div>
                 </div>` : ''}
             </div>`;
         };
@@ -1764,6 +1768,7 @@
 
             // ── 第二道：eLeader 25條件（安全獨立，不影響既有資料）──────
             let _el2nd = false;
+            let _el2nd_short = false;  // ✅ 05030434新增：eLeader空方條件
             try {
                 const _quo2 = yResult.indicators.quote[0];
                 const _rc2  = (_quo2.close  || []);
@@ -1774,7 +1779,8 @@
                 const _elL  = _vi2.map(i=>{const v=(_quo2.low   ||[])[i];return(v!=null&&!isNaN(v))?v:_rc2[i];});
                 const _elV  = _vi2.map(i=>{const v=(_quo2.volume||[])[i];return(v!=null&&!isNaN(v))?Number(v):0;});
                 _el2nd = checkElBuy(calcElInd(_elO, _elH, _elL, _elC, _elV));
-            } catch(_e2) { _el2nd = false; }
+                _el2nd_short = checkElSell(calcElInd(_elO, _elH, _elL, _elC, _elV));  // ✅ 05030434新增
+            } catch(_e2) { _el2nd = false; _el2nd_short = false; }
 
             // ── 【三道關卡共用5分K邏輯】週K和日K都需要通過第三道5分K ──
             // 第三道：5分K（RSI↑ AND MACD↑）AND（5分K近3根條件A or B）
@@ -1901,6 +1907,38 @@
             // ✅ 條件D空頭鏡像簡化：移除DIF/MACD線條件
             const _r4_short = (_iv === '1wk') && _all_below_mid && _osc3Rise && _oscPrevDrop && !_t2 && !_t1;  // 條件D空頭鏡像，僅週K
 
+            // ✅ 05030434新增：空方第一道 A/B/C（多方鏡像）
+            const _x1s = _highs_n.some((h2, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && h2 >= _b.upper * _p4;
+            });
+            const _r1s = _x1s && !_t1 && !_t2;
+            const _x2s = _highs_n.every((h2, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && h2 > _b.mid;
+            });
+            const _x3s = _lows_n.every((l2, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && l2 > _b.lower;
+            });
+            const _x4s = closes.length >= _n + 1 ? (() => {
+                let _ok = true;
+                for (let _j = 0; _j < _n - 1; _j++) {
+                    const _m1 = calcMACDHist(closes.slice(0, closes.length - _n + _j));
+                    const _m2 = calcMACDHist(closes.slice(0, closes.length - _n + _j + 1));
+                    if (!_m1 || !_m2 || _m2.now >= _m1.now) { _ok = false; break; }
+                }
+                return _ok;
+            })() : false;
+            const _r2s = _x2s && _x3s && _x4s && !_t2;
+            const _x5s = _highs_n.some((h2, i) => {
+                const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
+                return _b && h2 >= _b.mid;
+            });
+            const _r3s = _x5s && !_t1 && !_t2;
+            const _abc_pass_short = (_r1s || _r2s || _r3s) && rsiNow < (100 - _p2);
+            const _1st2nd_pass_short = (_abc_pass_short && _el2nd_short) || _r4_short;
+
             // [S]
             // 條件D出場（只在週K且近N根最低價都在中軌以上時生效）
             const _macdNow  = calcMACDHist(closes);
@@ -1920,14 +1958,17 @@
             // ✅ 做空進場必須通過三道關卡（和做多進場一樣嚴格）
             // _sell_abc 舊版：只看布林上軌位置，不需三道關卡 → 造成誤報
             // 新版：空頭路線也需要 _1st2nd_pass_short（第一道+第二道）+ 第三道RSI↓MACD↓
-            const _sell_abc = false;  // ✅ 暫停做空A/B/C進場訊號，避免誤報
-            // ✅ 05030344修正：_r4_short 改用 _3rd_pass_short（5m RSI↓MACD↓），不再誤用多頭的_3rd_pass
-            const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass_short) || _condD_exitA || _condD_exitB;
+            // ✅ 05030434修正：_sell_abc 使用正確空方第一道+第二道+第三道（完全鏡像多方）
+            const _sell_abc = _abc_pass_short && _el2nd_short && _3rd_pass_short;
+            const sell_signal = _sell_abc || (_r4_short && _3rd_pass_short) || _condD_exitA || _condD_exitB;
 
+            // ✅ 05030503新增：_debug同時顯示多方與空方路線診斷
             const _debug = window._isAdmin ? {
-                week_k: `${_iv==='1wk'?'長期投資':'中期投資'}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
-                day_k:  `第二道eLeader: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
-                min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`
+                week_k: `${_iv==='1wk'?'長期投資':'中期投資'}第一道[多]: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
+                day_k:  `第二道eLeader[多]: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
+                min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`,
+                week_k_s: `第一道[空]: ${_r1s?'✅A':''} ${_r2s?'✅B':''} ${_r3s?'✅C':''} ${_r4_short?'✅D(下軌)':''}${(!_r1s&&!_r2s&&!_r3s&&!_r4_short)?'❌未通過':''}`,
+                day_k_s:  `第二道eLeader[空]: ${_el2nd_short?'✅通過':(_r4_short?'⚠️未通過(條件D補位)':'❌未通過')}`
             } : null;
             const result = {
                 price: price.toFixed(2),
