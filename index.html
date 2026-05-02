@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022344</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05030344</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1790,6 +1790,7 @@
             );
 
             let _3rd_pass = false;
+            let _3rd_pass_short = false;  // ✅ 05030344新增：做空專用第三道（5m RSI↓ MACD↓）
             try {
                 const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
                 const _5mData = await fetchWithFallback(
@@ -1820,8 +1821,12 @@
                     // 非開盤時間：寬鬆（只需RSI↑ AND MACD↑）
                     _3rd_pass = (_5mRsiOk && _5mMacdOk);
                 }
+                // ✅ 05030344新增：做空第三道（5m RSI↓ MACD↓，開盤/非開盤時間均適用）
+                const _5mRsiShortOk  = _5mRsiNow < _5mRsiPrv;
+                const _5mMacdShortOk = _5mMacd && _5mMacd.now < _5mMacd.prev;
+                _3rd_pass_short = _5mRsiShortOk && _5mMacdShortOk;
                 }
-            } catch(e) { _3rd_pass = false; }
+            } catch(e) { _3rd_pass = false; _3rd_pass_short = false; }
 
             // ✅ 第二道條件式邏輯：
             // 低位階（A/B/C）→ eLeader 必要
@@ -1916,7 +1921,8 @@
             // _sell_abc 舊版：只看布林上軌位置，不需三道關卡 → 造成誤報
             // 新版：空頭路線也需要 _1st2nd_pass_short（第一道+第二道）+ 第三道RSI↓MACD↓
             const _sell_abc = false;  // ✅ 暫停做空A/B/C進場訊號，避免誤報
-            const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass) || _condD_exitA || _condD_exitB;
+            // ✅ 05030344修正：_r4_short 改用 _3rd_pass_short（5m RSI↓MACD↓），不再誤用多頭的_3rd_pass
+            const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass_short) || _condD_exitA || _condD_exitB;
 
             const _debug = window._isAdmin ? {
                 week_k: `${_iv==='1wk'?'長期投資':'中期投資'}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
