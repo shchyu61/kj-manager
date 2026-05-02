@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022320</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022008</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1915,11 +1915,11 @@
             // ✅ 做空進場必須通過三道關卡（和做多進場一樣嚴格）
             // _sell_abc 舊版：只看布林上軌位置，不需三道關卡 → 造成誤報
             // 新版：空頭路線也需要 _1st2nd_pass_short（第一道+第二道）+ 第三道RSI↓MACD↓
-            const _sell_abc = false;  // ✅ 暫停做空進場訊號，避免誤報（待下次改版重新設計）
+            const _sell_abc = _1st2nd_pass && !_t1 && !_t2;  // 空頭三道關卡（RSI↓MACD↓）
             const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass) || _condD_exitA || _condD_exitB;
 
             const _debug = window._isAdmin ? {
-                week_k: `${result?._kLabel||(_iv==='1wk'?'長期投資':'中期投資')}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
+                week_k: `${_iv==='1wk'?'週K':'日K'}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
                 day_k:  `第二道eLeader: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
                 min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`
             } : null;
@@ -2122,25 +2122,21 @@
 
         // ── 混合模式分析函數：同一標的跑兩次，回傳有訊號的結果 ──
         const analyzeMixed = async (code) => {
-            // ✅ 週K和日K並行，速度快且不互相干擾
+            // ✅ 修正競態：不修改全域 SCAN_INTERVAL，改用參數直接傳入 analyzeStock
+            // 並行執行週K和日K，速度更快且不互相干擾
+            const results = [];
             const [r1, r2] = await Promise.allSettled([
                 analyzeStock(code, '1wk', '2y'),
                 analyzeStock(code, '1d',  '1y'),
             ]);
             const wk = r1.status === 'fulfilled' ? r1.value : null;
             const dk = r2.status === 'fulfilled' ? r2.value : null;
-            // 週K/日K第一道是否通過（有任何資料就代表第一道通過）
-            const _wkPass1st = wk !== null;
-            const _dkPass1st = dk !== null;
-            // 有買進訊號：優先回傳長期（週K），其次中期（日K）
-            if (wk && wk.buy_signal) return { result: wk, mode: '長期投資', kLabel: '長期投資' };
-            if (dk && dk.buy_signal) {
-                const _lbl = _wkPass1st ? '長期+中期投資' : '中期投資';
-                return { result: dk, mode: '中期投資', kLabel: _lbl };
-            }
-            // 無訊號：標籤說明通過的投資週期
-            const _noSigLabel = _wkPass1st && _dkPass1st ? '長期+中期投資' : _wkPass1st ? '長期投資' : _dkPass1st ? '中期投資' : '－';
-            return { result: wk || dk, mode: null, kLabel: _noSigLabel };
+            if (wk && wk.buy_signal)  results.push({ result: wk, mode: '長期投資' });
+            if (dk && dk.buy_signal)  results.push({ result: dk, mode: '中期投資' });
+            // 有訊號：優先回傳長期，其次中期
+            if (results.length > 0) return results[0];
+            // 無訊號：回傳週K結果供UI顯示RSI/布林
+            return { result: wk, mode: null };
         };
 
         // ── AI預篩清單：從Firebase讀取（每天14:00由雲端自動更新）────────
@@ -2808,10 +2804,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
                         if (!result) throw new Error('mixed no data');
-                        if (result && _mr) {
-                    result._mixedLabel = _mr.mode;
-                    result._kLabel = _mr.kLabel || '日K';
-                }
+                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
                     } else {
                         result = cached || await analyzeStock(code);
                     }
@@ -2919,10 +2912,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         const _mr = await analyzeMixed(code);
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
-                        if (result && _mr) {
-                    result._mixedLabel = _mr.mode;
-                    result._kLabel = _mr.kLabel || '日K';
-                }
+                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
                     } else {
                         result = await analyzeStock(code);
                     }
@@ -2988,10 +2978,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
                         if (!result) throw new Error('mixed no data');
-                        if (result && _mr) {
-                    result._mixedLabel = _mr.mode;
-                    result._kLabel = _mr.kLabel || '日K';
-                }
+                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
                     } else {
                         result = await analyzeStock(code); // 有快取自動跳過抓取
                     }
