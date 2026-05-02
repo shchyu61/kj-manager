@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022008</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05021915</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1919,7 +1919,7 @@
             const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass) || _condD_exitA || _condD_exitB;
 
             const _debug = window._isAdmin ? {
-                week_k: `${_iv==='1wk'?'週K':'日K'}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
+                week_k: `週K第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
                 day_k:  `第二道eLeader: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
                 min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`
             } : null;
