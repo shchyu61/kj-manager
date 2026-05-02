@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022320</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022344</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1915,11 +1915,11 @@
             // ✅ 做空進場必須通過三道關卡（和做多進場一樣嚴格）
             // _sell_abc 舊版：只看布林上軌位置，不需三道關卡 → 造成誤報
             // 新版：空頭路線也需要 _1st2nd_pass_short（第一道+第二道）+ 第三道RSI↓MACD↓
-            const _sell_abc = false;  // ✅ 暫停做空進場訊號，避免誤報（待下次改版重新設計）
+            const _sell_abc = false;  // ✅ 暫停做空A/B/C進場訊號，避免誤報
             const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass) || _condD_exitA || _condD_exitB;
 
             const _debug = window._isAdmin ? {
-                week_k: `${result?._kLabel||(_iv==='1wk'?'長期投資':'中期投資')}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
+                week_k: `${_iv==='1wk'?'長期投資':'中期投資'}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
                 day_k:  `第二道eLeader: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
                 min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`
             } : null;
