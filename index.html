@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05021825</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05021847</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1834,31 +1834,34 @@
                 // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
                 // ✅ 美股大盤條件匹配（台股暫不加入，避免影響台股取得資料）
             const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            const _usMktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-            const _usMktNow = (window._usMkt) || _usMktDef;
-            const _usMktAny = _usMktNow.bull_abc || _usMktNow.bull_d || _usMktNow.bear_abc || _usMktNow.bear_d || _usMktNow.warn;
-            const _us_bull_ok = _isTW2 || !_usMktAny || ((_d_pass && _usMktNow.bull_d) || (_abc_pass && _el2nd && _usMktNow.bull_abc));
-            buy_signal = _1st2nd_pass && _3rd_pass && _us_bull_ok;
+            const _mktDef2 = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+            // 台股用_twMkt，美股/其他用_usMkt，大盤未分析時放行
+            const _mktNow2 = (_isTW2 ? (window._twMkt||_mktDef2) : (window._usMkt||_mktDef2));
+            const _mktAny2 = _mktNow2.bull_abc||_mktNow2.bull_d||_mktNow2.bear_abc||_mktNow2.bear_d||_mktNow2.warn;
+            const _mkt_bull_ok2 = !_mktAny2 || ((_d_pass && _mktNow2.bull_d) || (_abc_pass && _el2nd && _mktNow2.bull_abc));
+            buy_signal = _1st2nd_pass && _3rd_pass && _mkt_bull_ok2;
 
             } else if (_iv === '1d') {
                 // 中期投資：第一道日K + 第二道eLeader + 第三道5分K（三道缺一不可）
                 // ✅ 美股大盤條件匹配（台股暫不加入，避免影響台股取得資料）
             const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            const _usMktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-            const _usMktNow = (window._usMkt) || _usMktDef;
-            const _usMktAny = _usMktNow.bull_abc || _usMktNow.bull_d || _usMktNow.bear_abc || _usMktNow.bear_d || _usMktNow.warn;
-            const _us_bull_ok = _isTW2 || !_usMktAny || ((_d_pass && _usMktNow.bull_d) || (_abc_pass && _el2nd && _usMktNow.bull_abc));
-            buy_signal = _1st2nd_pass && _3rd_pass && _us_bull_ok;
+            const _mktDef2 = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+            // 台股用_twMkt，美股/其他用_usMkt，大盤未分析時放行
+            const _mktNow2 = (_isTW2 ? (window._twMkt||_mktDef2) : (window._usMkt||_mktDef2));
+            const _mktAny2 = _mktNow2.bull_abc||_mktNow2.bull_d||_mktNow2.bear_abc||_mktNow2.bear_d||_mktNow2.warn;
+            const _mkt_bull_ok2 = !_mktAny2 || ((_d_pass && _mktNow2.bull_d) || (_abc_pass && _el2nd && _mktNow2.bull_abc));
+            buy_signal = _1st2nd_pass && _3rd_pass && _mkt_bull_ok2;
 
             } else {
                 // 其他週期：同樣需要三道
                 // ✅ 美股大盤條件匹配（台股暫不加入，避免影響台股取得資料）
             const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            const _usMktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-            const _usMktNow = (window._usMkt) || _usMktDef;
-            const _usMktAny = _usMktNow.bull_abc || _usMktNow.bull_d || _usMktNow.bear_abc || _usMktNow.bear_d || _usMktNow.warn;
-            const _us_bull_ok = _isTW2 || !_usMktAny || ((_d_pass && _usMktNow.bull_d) || (_abc_pass && _el2nd && _usMktNow.bull_abc));
-            buy_signal = _1st2nd_pass && _3rd_pass && _us_bull_ok;
+            const _mktDef2 = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+            // 台股用_twMkt，美股/其他用_usMkt，大盤未分析時放行
+            const _mktNow2 = (_isTW2 ? (window._twMkt||_mktDef2) : (window._usMkt||_mktDef2));
+            const _mktAny2 = _mktNow2.bull_abc||_mktNow2.bull_d||_mktNow2.bear_abc||_mktNow2.bear_d||_mktNow2.warn;
+            const _mkt_bull_ok2 = !_mktAny2 || ((_d_pass && _mktNow2.bull_d) || (_abc_pass && _el2nd && _mktNow2.bull_abc));
+            buy_signal = _1st2nd_pass && _3rd_pass && _mkt_bull_ok2;
             }
 
             if (buy_signal) {
@@ -2622,6 +2625,80 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
 
         // ══ 美股大盤（^DJI）守門員：直接抓Yahoo Proxy週K，不走analyzeStock ══
+
+        // ══ 台股大盤（^TWII）守門員：直接抓Yahoo Proxy週K，不走analyzeStock ══
+        const analyseTWII = async () => {
+            const _r = {bull_abc:false, bull_d:false, bear_abc:false, bear_d:false, warn:false};
+            try {
+                const _url = `https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=1wk&range=2y`;
+                const _proxy = `${window._WORKER_URL}/${encodeURIComponent(_url)}`;
+                const _resp = await fetch(_proxy, {signal: AbortSignal.timeout(10000)});
+                if (!_resp.ok) return _r;
+                const _data = await _resp.json();
+                const _res = _data?.chart?.result?.[0];
+                if (!_res) return _r;
+                const _closes = _res.indicators.quote[0].close.filter(v => v != null);
+                const _lows   = _res.indicators.quote[0].low.filter(v => v != null);
+                const _N = _closes.length;
+                if (_N < 30) return _r;
+
+                // RSI(14)
+                const calcRSI14 = (arr) => {
+                    let g=0, l=0;
+                    for(let i=arr.length-14; i<arr.length; i++) {
+                        const d=arr[i]-arr[i-1]; if(d>0) g+=d; else l-=d;
+                    }
+                    return 100-100/(1+(g/14)/(l/14||0.001));
+                };
+                const _rsiNow  = calcRSI14(_closes);
+                const _rsiPrv  = calcRSI14(_closes.slice(0,-1));
+                const _rsiRise = _rsiNow > _rsiPrv;
+
+                // MACD OSC
+                const calcEMA = (arr, n) => {
+                    const k=2/(n+1); let e=arr[0];
+                    for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k);
+                    return e;
+                };
+                const _macdNow  = calcEMA(_closes,12)-calcEMA(_closes,26);
+                const _macdPrv  = calcEMA(_closes.slice(0,-1),12)-calcEMA(_closes.slice(0,-1),26);
+                const _oscRise  = _macdNow > _macdPrv;
+
+                // 布林中軌（MA20）
+                const _ma20 = _closes.slice(-20).reduce((a,b)=>a+b,0)/20;
+
+                // 條件D多頭：近5根低價均>MA20 AND OSC↑ AND RSI↑
+                const _allAboveMid = _lows.slice(-5).every(l => l > _ma20);
+                const _condD_bull  = _allAboveMid && _oscRise && _rsiRise;
+
+                // A/B/C多頭：非上軌，RSI↑ AND OSC↑
+                const _condABC_bull = !_allAboveMid && _rsiRise && _oscRise;
+
+                // 空頭鏡像
+                const _allBelowMid = _lows.slice(-5).every(l => l < _ma20);
+                const _condD_bear  = _allBelowMid && !_oscRise && !_rsiRise;
+                const _condABC_bear = !_allBelowMid && !_rsiRise && !_oscRise;
+
+                _r.bull_d   = _condD_bull;
+                _r.bull_abc = _condABC_bull;
+                _r.bear_d   = _condD_bear;
+                _r.bear_abc = _condABC_bear;
+                _r.warn     = !_condD_bull && !_condABC_bull && !_rsiRise;
+
+                const flags = [];
+                if(_r.bull_d)   flags.push('條件D多頭✅');
+                if(_r.bull_abc) flags.push('A/B/C多頭✅');
+                if(_r.bear_d)   flags.push('條件D空頭✅');
+                if(_r.bear_abc) flags.push('A/B/C空頭✅');
+                if(_r.warn && !_r.bull_abc && !_r.bull_d) flags.push('⚠️下彎');
+                if(!flags.length) flags.push('中性觀望');
+                console.log(`[大盤^TWII] ${flags.join(' / ')} RSI:${_rsiNow.toFixed(1)}`);
+            } catch(e) { console.warn('[大盤^TWII] 分析失敗:', e.message); }
+            return _r;
+        };
+
+        window._twMkt = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+
         const analyseDJI = async () => {
             const _r = {bull_abc:false, bull_d:false, bear_abc:false, bear_d:false, warn:false};
             try {
@@ -2698,7 +2775,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
             // ✅ 立刻鎖住按鈕，避免使用者以為沒反應連按多次
             const btn = document.getElementById('btn-watchlist-scan');
-            // ✅ 美股大盤（^DJI）守門員分析（直接呼叫Yahoo Proxy，不走analyzeStock）
+            // ✅ 台股大盤（^TWII）守門員分析
+            console.log('[大盤] 正在分析台股大盤...');
+            window._twMkt = await analyseTWII();
+            // ✅ 美股大盤（^DJI）守門員分析
             console.log('[大盤] 正在分析美股大盤...');
             window._usMkt = await analyseDJI();
             const txt = document.getElementById('watchlist-scan-text');

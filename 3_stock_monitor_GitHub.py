@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05021657'
+SCRIPT_VERSION = '05021857'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -2041,7 +2041,7 @@ def main_task():
                 market, code, c, l, bb, r, rp = s[:7]
                 _ml = s[7] if len(s) > 7 and isinstance(s[7], str) and s[7] in ('長期投資','中期投資') else ('中期投資' if SCAN_MODE=='daily' else '長期投資')
                 body += (
-                    f"⭐【買進訊號】⭐\n"
+                    f"⭐【做多進場】⭐\n"
                     f"市場：{market}　代碼：{code}\n"
                     f"投資模式：{_ml}\n"
                     f"最低價：{l:.2f}　布林下緣：{bb:.2f}\n"
@@ -2051,7 +2051,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】⭐買進訊號 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】⭐做多進場 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 買進訊號 {len(buy_signals)-len(filtered)} 支已通知過")
@@ -2076,16 +2076,16 @@ def main_task():
             for s in filtered:
                 market, code, c, h, bt, r, rp = s
                 body += (
-                    f"🔔【賣出訊號】🔔\n"
+                    f"🔔【{"做多出場" if market in ("台股","基金") else "做空進場/做多出場"}】🔔\n"
                     f"市場：{market}　代碼：{code}\n"
                     f"最高價：{h:.2f}　布林上緣：{bt:.2f}\n"
                     f"收盤價：{c:.2f}\n"
                     f"RSI：{rp:.1f} → {r:.1f}（↓下降）\n"
-                    f"⚠️ 嚴禁用於當沖或隔日沖\n"
+                    f"⚠️ 台股→做多出場；外匯/期貨→請依持倉方向判斷\n"
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】🔔賣出訊號 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】🔔出場訊號 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
