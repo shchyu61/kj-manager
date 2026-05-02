@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05021915'
+SCRIPT_VERSION = '05021936'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1094,6 +1094,7 @@ def analyse_market_index(ticker, label):
     return result
 
 def scan_stock(ticker, is_holding=False):
+    global _tw_prescreened
     global weekly_cache, daily_cache
     
     # ✅ [新增: 5分K 專用短效快取, 避免 30 分鐘內重複抓取過多 API]
@@ -1173,6 +1174,10 @@ def scan_stock(ticker, is_holding=False):
                 print(f'  ✅ {ticker} 第一道{_wk_label}通過（空頭 {"條件D" if _condD_short else "A/B/C"}）')
             else:
                 return None   # 多空都不過才跳過
+            # ✅ 第一道通過 → 立刻加入全域預篩清單（不管後續道數是否通過）
+            _code_only = ticker.split('.')[0]
+            if _code_only not in _tw_prescreened:
+                _tw_prescreened.append(_code_only)
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
             _condD_long = False; _condD_short = False  # TEST_MODE 預設
