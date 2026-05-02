@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05020638'
+SCRIPT_VERSION = '05021657'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -341,6 +341,16 @@ def get_active_markets():
         # 台股：09:00～13:30
         if 9*60 <= time_val <= 13*60+30:
             active.append('TW')
+    # ✅ 週六補跑：強制加入台股（確保預篩快取能上傳）
+    elif weekday == 5:
+        import os, json
+        _sf = os.path.join(os.path.dirname(os.path.abspath(__file__)), '5_saturday_scan.json')
+        _td = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d')
+        try:
+            _sd = json.load(open(_sf, 'r', encoding='utf-8'))
+            if _sd.get('date') == _td:
+                active.append('TW')  # 週六補跑旗標存在，允許台股掃描
+        except: pass
 
     is_us_time = False
     # 週一～週五 晚上
