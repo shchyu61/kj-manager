@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022225</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05022146</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1190,12 +1190,9 @@
                     return `<div class="flex-1 flex flex-col items-center gap-1 text-[13px] font-black px-1">
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
-                    <div class="flex gap-1 mt-1.5">
-                        <button onclick="window.toggleDirection('${s.code}', 'long')" class="flex-1 py-0.5 rounded-lg text-[11px] font-black transition-all ${(s.direction||'long')==='long' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}">▲ 做多</button>
-                        <button onclick="window.toggleDirection('${s.code}', 'short')" class="flex-1 py-0.5 rounded-lg text-[11px] font-black transition-all ${(s.direction||'long')==='short' ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-400'}">▼ 做空</button>
-                    </div>
                     </div>`;
                 })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點智能診斷查看</div>`;
+                const _dir = s.direction || 'long';
                 return `
                 <div class="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-2">
@@ -1209,6 +1206,10 @@
                         </button>
                     </div>
                     <div class="mt-1">${rsiHtml}</div>
+                    <div class="flex gap-1 mt-1.5">
+                        <button onclick="window.toggleDirection('${s.code}', 'long')" class="flex-1 py-0.5 rounded-lg text-[11px] font-black transition-all ${_dir==='long' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}">▲ 做多</button>
+                        <button onclick="window.toggleDirection('${s.code}', 'short')" class="flex-1 py-0.5 rounded-lg text-[11px] font-black transition-all ${_dir==='short' ? 'bg-purple-500 text-white' : 'bg-slate-100 text-slate-400'}">▼ 做空</button>
+                    </div>
                 </div>`;
             }).join('');
             lucide.createIcons();
@@ -1219,7 +1220,7 @@
             const val = input.value.trim().toUpperCase();
             const cat = document.getElementById('new-stock-cat')?.value || 'tw';
             if (val && !stocks.some(s => s.code === val)) {
-                stocks.push({ code: val, cat, direction: 'long' });
+                stocks.push({ code: val, cat, direction: 'long' });  // 預設做多
                 fetchStockName(val); // 自動抓取名稱
                 input.value = '';
                 window.renderStocks();
@@ -1335,7 +1336,11 @@
                                near_lower: bgDark ? 'text-emerald-400' : 'text-emerald-600' };
             const condText = hasBuy && result.conditions && result.conditions.length
                              ? '觸發：' + result.conditions.join('、') : '';
+            // 四色訊號判斷（依持倉方向）
             const _stockDir = (() => { const _s = stocks.find(x=>x.code===code); return _s ? (_s.direction||'long') : 'long'; })();
+            // 待買觀察：buy→做多進場(綠), sell→做空進場(紫)
+            // 持股清單做多：sell→做多出場(橘), buy無特別訊號
+            // 持股清單做空：buy→做空出場(藍), sell無特別訊號
             const hasSell = result.sell_signal;
             const _sigType = !isHolding
                 ? (hasBuy ? 'bull_enter' : hasSell ? 'bear_enter' : 'none')
@@ -1829,12 +1834,8 @@
                 // 長期投資：第一道週K + 第二道eLeader + 第三道5分K（三道缺一不可）
                 // ✅ 美股大盤條件匹配（台股暫不加入，避免影響台股取得資料）
             const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            const _usMktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-            const _usMktNow = (window._usMkt) || _usMktDef;
-            const _usMktAny = _usMktNow.bull_abc || _usMktNow.bull_d || _usMktNow.bear_abc || _usMktNow.bear_d || _usMktNow.warn;
-            const _us_bull_ok = _isTW2 || !_usMktAny || ((_d_pass && _usMktNow.bull_d) || (_abc_pass && _el2nd && _usMktNow.bull_abc));
-            const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
             const _mktDef2 = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+            // 台股用_twMkt，美股/其他用_usMkt，大盤未分析時放行
             const _mktNow2 = (_isTW2 ? (window._twMkt||_mktDef2) : (window._usMkt||_mktDef2));
             const _mktAny2 = _mktNow2.bull_abc||_mktNow2.bull_d||_mktNow2.bear_abc||_mktNow2.bear_d||_mktNow2.warn;
             const _mkt_bull_ok2 = !_mktAny2 || ((_d_pass && _mktNow2.bull_d) || (_abc_pass && _el2nd && _mktNow2.bull_abc));
@@ -1844,12 +1845,8 @@
                 // 中期投資：第一道日K + 第二道eLeader + 第三道5分K（三道缺一不可）
                 // ✅ 美股大盤條件匹配（台股暫不加入，避免影響台股取得資料）
             const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            const _usMktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-            const _usMktNow = (window._usMkt) || _usMktDef;
-            const _usMktAny = _usMktNow.bull_abc || _usMktNow.bull_d || _usMktNow.bear_abc || _usMktNow.bear_d || _usMktNow.warn;
-            const _us_bull_ok = _isTW2 || !_usMktAny || ((_d_pass && _usMktNow.bull_d) || (_abc_pass && _el2nd && _usMktNow.bull_abc));
-            const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
             const _mktDef2 = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+            // 台股用_twMkt，美股/其他用_usMkt，大盤未分析時放行
             const _mktNow2 = (_isTW2 ? (window._twMkt||_mktDef2) : (window._usMkt||_mktDef2));
             const _mktAny2 = _mktNow2.bull_abc||_mktNow2.bull_d||_mktNow2.bear_abc||_mktNow2.bear_d||_mktNow2.warn;
             const _mkt_bull_ok2 = !_mktAny2 || ((_d_pass && _mktNow2.bull_d) || (_abc_pass && _el2nd && _mktNow2.bull_abc));
@@ -1859,12 +1856,8 @@
                 // 其他週期：同樣需要三道
                 // ✅ 美股大盤條件匹配（台股暫不加入，避免影響台股取得資料）
             const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
-            const _usMktDef = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-            const _usMktNow = (window._usMkt) || _usMktDef;
-            const _usMktAny = _usMktNow.bull_abc || _usMktNow.bull_d || _usMktNow.bear_abc || _usMktNow.bear_d || _usMktNow.warn;
-            const _us_bull_ok = _isTW2 || !_usMktAny || ((_d_pass && _usMktNow.bull_d) || (_abc_pass && _el2nd && _usMktNow.bull_abc));
-            const _isTW2 = !code.includes('-') && !code.includes('=') && !['SPY','QQQ','GLD','SLV','GC=F','SI=F','HYG','EMB','AGG','ILF'].includes(code);
             const _mktDef2 = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
+            // 台股用_twMkt，美股/其他用_usMkt，大盤未分析時放行
             const _mktNow2 = (_isTW2 ? (window._twMkt||_mktDef2) : (window._usMkt||_mktDef2));
             const _mktAny2 = _mktNow2.bull_abc||_mktNow2.bull_d||_mktNow2.bear_abc||_mktNow2.bear_d||_mktNow2.warn;
             const _mkt_bull_ok2 = !_mktAny2 || ((_d_pass && _mktNow2.bull_d) || (_abc_pass && _el2nd && _mktNow2.bull_abc));
@@ -1919,11 +1912,14 @@
                                  _bm_cur && _lows_n_sell.some(l => l <= _bm_cur.mid);
 
             // ✅ 做空：A/B需eLeader空頭條件（截圖1/2），條件D空頭（截圖5鏡像）不需eLeader
+            // ✅ 做空進場必須通過三道關卡（和做多進場一樣嚴格）
+            // _sell_abc 舊版：只看布林上軌位置，不需三道關卡 → 造成誤報
+            // 新版：空頭路線也需要 _1st2nd_pass_short（第一道+第二道）+ 第三道RSI↓MACD↓
             const _sell_abc = _1st2nd_pass && !_t1 && !_t2;  // 空頭三道關卡（RSI↓MACD↓）
             const sell_signal = (_sell_abc) || (_r4_short && _3rd_pass) || _condD_exitA || _condD_exitB;
 
             const _debug = window._isAdmin ? {
-                week_k: `週K第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
+                week_k: `${result?._kLabel||(_iv==='1wk'?'長期投資':'中期投資')}第一道: ${_r1?'✅A':''} ${_r2?'✅B':''} ${_r3?'✅C':''} ${_r4?'✅D(上軌)':''}${(!_r1&&!_r2&&!_r3&&!_r4)?'❌未通過':''}`,
                 day_k:  `第二道eLeader: ${_el2nd?'✅通過':(_r4?'⚠️未通過(條件D補位)':'❌未通過')}`,
                 min5_k: `第三道: RSI${rsiNow.toFixed(1)}${rsiNow>rsiPrv?'↑':'↓'} MACD${_t2?'↑':'↓'}`
             } : null;
@@ -2126,21 +2122,25 @@
 
         // ── 混合模式分析函數：同一標的跑兩次，回傳有訊號的結果 ──
         const analyzeMixed = async (code) => {
-            // ✅ 修正競態：不修改全域 SCAN_INTERVAL，改用參數直接傳入 analyzeStock
-            // 並行執行週K和日K，速度更快且不互相干擾
-            const results = [];
+            // ✅ 週K和日K並行，速度快且不互相干擾
             const [r1, r2] = await Promise.allSettled([
                 analyzeStock(code, '1wk', '2y'),
                 analyzeStock(code, '1d',  '1y'),
             ]);
             const wk = r1.status === 'fulfilled' ? r1.value : null;
             const dk = r2.status === 'fulfilled' ? r2.value : null;
-            if (wk && wk.buy_signal)  results.push({ result: wk, mode: '長期投資' });
-            if (dk && dk.buy_signal)  results.push({ result: dk, mode: '中期投資' });
-            // 有訊號：優先回傳長期，其次中期
-            if (results.length > 0) return results[0];
-            // 無訊號：回傳週K結果供UI顯示RSI/布林
-            return { result: wk, mode: null };
+            // 週K/日K第一道是否通過（有任何資料就代表第一道通過）
+            const _wkPass1st = wk !== null;
+            const _dkPass1st = dk !== null;
+            // 有買進訊號：優先回傳長期（週K），其次中期（日K）
+            if (wk && wk.buy_signal) return { result: wk, mode: '長期投資', kLabel: '長期投資' };
+            if (dk && dk.buy_signal) {
+                const _lbl = _wkPass1st ? '長期+中期投資' : '中期投資';
+                return { result: dk, mode: '中期投資', kLabel: _lbl };
+            }
+            // 無訊號：標籤說明通過的投資週期
+            const _noSigLabel = _wkPass1st && _dkPass1st ? '長期+中期投資' : _wkPass1st ? '長期投資' : _dkPass1st ? '中期投資' : '－';
+            return { result: wk || dk, mode: null, kLabel: _noSigLabel };
         };
 
         // ── AI預篩清單：從Firebase讀取（每天14:00由雲端自動更新）────────
@@ -2632,6 +2632,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
 
         // ══ 美股大盤（^DJI）守門員：直接抓Yahoo Proxy週K，不走analyzeStock ══
+
         // ══ 台股大盤（^TWII）守門員：直接抓Yahoo Proxy週K，不走analyzeStock ══
         const analyseTWII = async () => {
             const _r = {bull_abc:false, bull_d:false, bear_abc:false, bear_d:false, warn:false};
@@ -2777,83 +2778,14 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
         window._usMkt = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
 
-        const analyseDJI = async () => {
-            const _r = {bull_abc:false, bull_d:false, bear_abc:false, bear_d:false, warn:false};
-            try {
-                const _url = `https://query1.finance.yahoo.com/v8/finance/chart/%5EDJI?interval=1wk&range=2y`;
-                const _proxy = `${window._WORKER_URL}/${encodeURIComponent(_url)}`;
-                const _resp = await fetch(_proxy, {signal: AbortSignal.timeout(10000)});
-                if (!_resp.ok) return _r;
-                const _data = await _resp.json();
-                const _res = _data?.chart?.result?.[0];
-                if (!_res) return _r;
-                const _closes = _res.indicators.quote[0].close.filter(v => v != null);
-                const _N = _closes.length;
-                if (_N < 30) return _r;
-
-                // 計算RSI(14)
-                const calcRSI14 = (arr) => {
-                    let gains=0, losses=0;
-                    for(let i=arr.length-14; i<arr.length; i++) {
-                        const d = arr[i] - arr[i-1];
-                        if(d>0) gains+=d; else losses-=d;
-                    }
-                    const rs = gains/14 / (losses/14 || 0.001);
-                    return 100 - 100/(1+rs);
-                };
-                const _rsiNow  = calcRSI14(_closes);
-                const _rsiPrev = calcRSI14(_closes.slice(0,-1));
-                const _rsiRise = _rsiNow > _rsiPrev;
-
-                // 計算MACD柱狀體（12/26/9）
-                const calcEMA = (arr, n) => {
-                    const k = 2/(n+1); let ema = arr[0];
-                    for(let i=1;i<arr.length;i++) ema = arr[i]*k + ema*(1-k);
-                    return ema;
-                };
-                const _macdNow  = calcEMA(_closes, 12) - calcEMA(_closes, 26);
-                const _macdPrev = calcEMA(_closes.slice(0,-1), 12) - calcEMA(_closes.slice(0,-1), 26);
-                const _oscRise  = _macdNow > _macdPrev;
-
-                // 條件D（上軌做多）：近5根最低價均在MA20以上 AND OSC轉升 AND RSI↑
-                const _lows   = _res.indicators.quote[0].low.filter(v=>v!=null);
-                const _ma20   = _closes.slice(-20).reduce((a,b)=>a+b,0)/20;
-                const _allAboveMid = _lows.slice(-5).every(l => l > _ma20);
-                const _condD_bull  = _allAboveMid && _oscRise && _rsiRise;
-
-                // A/B/C路線（下軌/中軌V轉）：RSI↑ AND OSC↑（簡化版）
-                const _condABC_bull = !_allAboveMid && _rsiRise && _oscRise;
-
-                // 空頭鏡像
-                const _allBelowMid = _lows.slice(-5).every(l => l < _ma20);
-                const _condD_bear  = _allBelowMid && !_oscRise && !_rsiRise;
-                const _condABC_bear = !_allBelowMid && !_rsiRise && !_oscRise;
-
-                _r.bull_d   = _condD_bull;
-                _r.bull_abc = _condABC_bull;
-                _r.bear_d   = _condD_bear;
-                _r.bear_abc = _condABC_bear;
-                _r.warn     = !_condD_bull && !_condABC_bull && !_condD_bear && !_condABC_bear && !_rsiRise;
-
-                const flags = [];
-                if(_r.bull_d)   flags.push('條件D多頭✅');
-                if(_r.bull_abc) flags.push('A/B/C多頭✅');
-                if(_r.bear_d)   flags.push('條件D空頭✅');
-                if(_r.bear_abc) flags.push('A/B/C空頭✅');
-                if(_r.warn)     flags.push('⚠️下彎');
-                if(!flags.length) flags.push('中性觀望');
-                console.log(`[大盤^DJI] ${flags.join(' / ')} RSI:${_rsiNow.toFixed(1)}`);
-            } catch(e) { console.warn('[大盤^DJI] 分析失敗:', e.message); }
-            return _r;
-        };
-
-        window._usMkt = {bull_abc:false,bull_d:false,bear_abc:false,bear_d:false,warn:false};
-
         window.startWatchlistScan = async () => {
             if (watchlist.length === 0) { window.showAlert('請先新增觀察股票。'); return; }
             // ✅ 立刻鎖住按鈕，避免使用者以為沒反應連按多次
             const btn = document.getElementById('btn-watchlist-scan');
-            // ✅ 美股大盤（^DJI）守門員分析（直接呼叫Yahoo Proxy，不走analyzeStock）
+            // ✅ 台股大盤（^TWII）守門員分析
+            console.log('[大盤] 正在分析台股大盤...');
+            window._twMkt = await analyseTWII();
+            // ✅ 美股大盤（^DJI）守門員分析
             console.log('[大盤] 正在分析美股大盤...');
             window._usMkt = await analyseDJI();
             const txt = document.getElementById('watchlist-scan-text');
@@ -2876,7 +2808,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
                         if (!result) throw new Error('mixed no data');
-                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
+                        if (result && _mr) {
+                    result._mixedLabel = _mr.mode;
+                    result._kLabel = _mr.kLabel || '日K';
+                }
                     } else {
                         result = cached || await analyzeStock(code);
                     }
@@ -2984,7 +2919,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         const _mr = await analyzeMixed(code);
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
-                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
+                        if (result && _mr) {
+                    result._mixedLabel = _mr.mode;
+                    result._kLabel = _mr.kLabel || '日K';
+                }
                     } else {
                         result = await analyzeStock(code);
                     }
@@ -3050,7 +2988,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
                         if (!result) throw new Error('mixed no data');
-                        if (result && _mxLabel) result._mixedLabel = _mxLabel;
+                        if (result && _mr) {
+                    result._mixedLabel = _mr.mode;
+                    result._kLabel = _mr.kLabel || '日K';
+                }
                     } else {
                         result = await analyzeStock(code); // 有快取自動跳過抓取
                     }
