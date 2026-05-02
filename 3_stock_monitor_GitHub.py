@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05010243'
+SCRIPT_VERSION = '05020638'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -2179,6 +2179,29 @@ if __name__ == "__main__":
     elif (hour == 22 and minute >= 35) or (hour == 23) or (0 <= hour <= 2) or (hour == 3 and minute <= 55):
         loops = 13
         market_name = "美股/虛擬幣"
+    elif now.weekday() == 5:  # 週六：執行一次台股預篩快取，確保週五若失敗能補跑
+        # 確認今天是否已執行過（用 4_notified_today.json 記錄）
+        import json, os
+        _sat_flag_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '5_saturday_scan.json')
+        _today_str = now.strftime('%Y-%m-%d')
+        _sat_done = False
+        if os.path.exists(_sat_flag_file):
+            try:
+                _sat_data = json.load(open(_sat_flag_file, 'r', encoding='utf-8'))
+                if _sat_data.get('date') == _today_str:
+                    _sat_done = True
+            except: pass
+        if _sat_done:
+            print(f"[{now.strftime('%H:%M:%S')}] ✅ 週六預篩已執行過，今日不再重複")
+            time.sleep(10)
+            exit()
+        print(f"[{now.strftime('%H:%M:%S')}] 📅 週六補跑：執行一次台股預篩快取上傳")
+        loops = 1
+        market_name = '台股（週六補跑）'
+        # 執行完後記錄今天已執行
+        try:
+            json.dump({'date': _today_str}, open(_sat_flag_file, 'w', encoding='utf-8'), ensure_ascii=False)
+        except: pass
     else:
         print(f"[{now.strftime('%H:%M:%S')}] ❌ 非交易時段啟動，直接結束")
         time.sleep(10)
