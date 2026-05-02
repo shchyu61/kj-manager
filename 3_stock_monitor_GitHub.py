@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05022008'
+SCRIPT_VERSION = '05022146'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -99,6 +99,7 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # 'mixed'=混合模式(週K三道 OR 日K三道，任一通過即觸發)
 SCAN_MODE = 'mixed'   # 切換：'weekly' / 'daily' / 'mixed'
 _tw_prescreened = []   # 模組層級全域預篩清單（scan_stock 用 global 存取）
+_wk_passed_1st = False  # 週K第一道是否通過（供scan_stock_mixed判斷標籤用）
 BUY_RSI_MIN          = 35     # 買進RSI最低門檻（條件A，RSI需 > 此值才視為上升有效）
 BUY_BOLL_TOLERANCE   = 1.02   # 布林下緣容忍度（1.02=允許價格在下緣上方2%內仍觸發）
 
@@ -1095,7 +1096,7 @@ def analyse_market_index(ticker, label):
     return result
 
 def scan_stock(ticker, is_holding=False, _mode_label=None):
-    global _tw_prescreened
+    global _tw_prescreened, _wk_passed_1st
     global weekly_cache, daily_cache
     
     # ✅ [新增: 5分K 專用短效快取, 避免 30 分鐘內重複抓取過多 API]
@@ -1168,7 +1169,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 _is_long_ok, _condD_long   = check_buy_precondition(df_w, is_weekly=True)
                 _is_short_ok, _condD_short = check_short_precondition(df_w, is_weekly=True)
             # ✅ 診斷輸出：第一道結果（_mode_label由scan_stock_mixed傳入）
-            _wk_label = _mode_label if _mode_label else ('週K' if SCAN_MODE != 'daily' else '日K')
+            _wk_label = _mode_label if _mode_label else ('長期投資' if SCAN_MODE != 'daily' else '中期投資')
             if _is_long_ok:
                 print(f'  ✅ {ticker} 第一道{_wk_label}通過（多頭 {"條件D" if _condD_long else "A/B/C"}）')
             elif _is_short_ok:
@@ -1179,6 +1180,9 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             _code_only = ticker.split('.')[0]
             if _code_only not in _tw_prescreened:
                 _tw_prescreened.append(_code_only)
+            # ✅ 週K模式第一道通過 → 記錄旗標供 scan_stock_mixed 判斷標籤
+            if SCAN_MODE == 'weekly':
+                _wk_passed_1st = True
         else:
             print(f"🧪 {ticker} 正在進行【驗證篩選】測試中...")
             _condD_long = False; _condD_short = False  # TEST_MODE 預設
@@ -1460,15 +1464,16 @@ def read_tw_prescreened():
 def scan_stock_mixed(ticker, is_holding=False):
     """混合模式：週K三道 OR 日K三道，任一通過即觸發"""
     global SCAN_MODE
-    # ✅ 週K先跑，標籤顯示【週K】
+    global _wk_passed_1st
+    # ✅ 週K先跑（長期投資），先清旗標
+    _wk_passed_1st = False
     SCAN_MODE = 'weekly'
-    r_w = scan_stock(ticker, is_holding, _mode_label='週K')
+    r_w = scan_stock(ticker, is_holding, _mode_label='長期投資')
     SCAN_MODE = 'mixed'
     if r_w and r_w[0] in ('BUY', 'SHORT'):
         return r_w + ('長期投資',)
-    # ✅ 日K再跑，判斷週K是否已通過第一道
-    _wk_1st_passed = r_w is not None  # r_w非None代表週K至少通過第一道
-    _day_label = '週K日K' if _wk_1st_passed else '日K'
+    # ✅ 日K再跑（中期投資），用旗標判斷週K是否也通過第一道
+    _day_label = '長期+中期投資' if _wk_passed_1st else '中期投資'
     SCAN_MODE = 'daily'
     r_d = scan_stock(ticker, is_holding, _mode_label=_day_label)
     SCAN_MODE = 'mixed'
