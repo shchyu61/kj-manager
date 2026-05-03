@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05030503</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05032134</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1409,7 +1409,7 @@
 
         // ── 3分鐘快取（建議1：避免重複抓取）────────────────────
         const diagCache = new Map(); // key=code, value={result, ts}
-        const CACHE_TTL = 3 * 60 * 1000; // 3分鐘
+        const CACHE_TTL = 6 * 60 * 60 * 1000; // ✅ 05032134修正：6小時（配合自動掃描4次間隔，避免重複掃描浪費）
 
         const getCached = (code) => {
             const entry = diagCache.get(code);
@@ -1426,7 +1426,7 @@
         // ✅ FinMind API Token（全域）
         window._FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
         const _isWeekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
-        const _poolSize = () => _isWeekend() ? 1 : 5;
+        const _poolSize = () => _isWeekend() ? 1 : 4;  // ✅ 05032134修正：平日4支並行（避免Yahoo封鎖，原為5）
 
         const fetchWithFallback = async (yahooUrl, _retry = 2) => {
             const workerUrl = `${window._WORKER_URL}/${encodeURIComponent(yahooUrl)}`;
@@ -2949,17 +2949,13 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             const buySignals = [], sellSignals = [];
             await fetchCashDeliveryStocks().catch(() => {});
 
+            // ✅ 05032124修正：改用 runWithPool 並行掃描（原為for逐一循環，45分鐘→預計8~10分鐘）
             _psStop = false;
             document.getElementById('prescreen-eta-wrap').classList.remove('hide');
-            const _psTot = codes.length, _psT0 = Date.now();
-            for (let idx = 0; idx < _psTot; idx++) {
-                if (_psStop) break;
-                const code = codes[idx];
-                if (idx > 0) {
-                    const _eta = Math.round(((Date.now()-_psT0)/1000/idx)*(_psTot-idx)/60);
-                    const _el = document.getElementById('prescreen-eta-txt');
-                    if (_el) _el.textContent = _eta;
-                }
+            const _psT0 = Date.now();
+
+            const _psTasks = codes.map((code) => async () => {
+                if (_psStop) return;
                 try {
                     let result, _mxLabel = null;
                     if (_mixedMode) {
@@ -2967,15 +2963,14 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
                         if (result && _mr) {
-                    result._mixedLabel = _mr.mode;
-                    result._kLabel = _mr.kLabel || '日K';
-                }
+                            result._mixedLabel = _mr.mode;
+                            result._kLabel = _mr.kLabel || '日K';
+                        }
                     } else {
                         result = await analyzeStock(code);
                     }
-                    if (!result) continue;
+                    if (!result) return;
 
-                    // 顯示診斷卡
                     const cardHtml = makeDiagCard(code, result, true, false);
                     if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
 
@@ -2986,8 +2981,15 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         boll: { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[result.boll_position],
                         conditions: result.conditions.join('、') });
                 } catch(e) { console.error(`[預篩分析 ${code}]`, e.message); }
-                if (progress) progress.style.width = `${Math.round((idx+1)/codes.length*100)}%`;
-            }
+            });
+
+            await runWithPool(_psTasks, _isWeekend() ? 1 : 4, (done, total) => {  // ✅ 05032134：平日4、週末1
+                if (_psStop) return;
+                if (progress) progress.style.width = `${Math.round(done/total*100)}%`;
+                const _eta = done > 0 ? Math.round(((Date.now()-_psT0)/1000/done)*(total-done)/60) : '--';
+                const _el = document.getElementById('prescreen-eta-txt');
+                if (_el) _el.textContent = _eta;
+            });
 
             if (buySignals.length > 0)  sendBuyNotify(buySignals);
             if (sellSignals.length > 0) sendSellNotify(sellSignals);
