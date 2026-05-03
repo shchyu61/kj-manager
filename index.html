@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05032146</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05032201</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1457,9 +1457,14 @@
         // ✅ FinMind API Token（全域）
         window._FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
         const _isWeekend = () => { const d = new Date().getDay(); return d === 0 || d === 6; };
-        const _poolSize = () => _isWeekend() ? 1 : 4;  // ✅ 05032134修正：平日4支並行（避免Yahoo封鎖，原為5）
+        const _poolSize = () => _isWeekend() ? 1 : 2;  // ✅ 05032201修正：平日2支（4支反而觸發Yahoo封鎖，重試拖慢速度）
 
+        // ✅ 05032201：批次間延遲計數器（每N次請求後暫停，避免Yahoo封鎖）
+        let _fetchCount = 0;
         const fetchWithFallback = async (yahooUrl, _retry = 2) => {
+            // 每20次請求暫停800ms（讓Yahoo伺服器喘息）
+            _fetchCount++;
+            if (_fetchCount % 20 === 0) await new Promise(r => setTimeout(r, 800));
             const workerUrl = `${window._WORKER_URL}/${encodeURIComponent(yahooUrl)}`;
             try {
                 const resp = await fetch(workerUrl, { signal: AbortSignal.timeout(20000) });
@@ -3014,7 +3019,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 } catch(e) { console.error(`[預篩分析 ${code}]`, e.message); }
             });
 
-            await runWithPool(_psTasks, _isWeekend() ? 1 : 4, (done, total) => {  // ✅ 05032134：平日4、週末1
+            await runWithPool(_psTasks, _isWeekend() ? 1 : 2, (done, total) => {  // ✅ 05032201：平日2、週末1（4支會觸發Yahoo封鎖）
                 if (_psStop) return;
                 if (progress) progress.style.width = `${Math.round(done/total*100)}%`;
                 const _eta = done > 0 ? Math.round(((Date.now()-_psT0)/1000/done)*(total-done)/60) : '--';
