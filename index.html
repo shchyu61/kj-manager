@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05032134</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05032146</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1408,8 +1408,36 @@
         };
 
         // ── 3分鐘快取（建議1：避免重複抓取）────────────────────
-        const diagCache = new Map(); // key=code, value={result, ts}
-        const CACHE_TTL = 6 * 60 * 60 * 1000; // ✅ 05032134修正：6小時（配合自動掃描4次間隔，避免重複掃描浪費）
+        // ✅ 05032146：diagCache 改用 localStorage 持久化（重整/關頁不清空，6小時內直接命中）
+        const CACHE_TTL = 6 * 60 * 60 * 1000; // 6小時
+        const _LS_KEY = 'kj_diagCache_v1';
+        const diagCache = new Map(); // 記憶體鏡像（加速讀取）
+
+        // 啟動時從 localStorage 載入快取
+        try {
+            const _lsRaw = localStorage.getItem(_LS_KEY);
+            if (_lsRaw) {
+                const _lsObj = JSON.parse(_lsRaw);
+                const _now = Date.now();
+                Object.entries(_lsObj).forEach(([k, v]) => {
+                    if (_now - v.ts < CACHE_TTL) diagCache.set(k, v);
+                });
+                console.log('✅ 從localStorage載入 ' + diagCache.size + ' 筆快取');
+            }
+        } catch(e) { console.warn('快取載入失敗', e); }
+
+        // 批次寫入 localStorage（避免頻繁IO）
+        let _lsSaveTimer = null;
+        const _saveLSCache = () => {
+            clearTimeout(_lsSaveTimer);
+            _lsSaveTimer = setTimeout(() => {
+                try {
+                    const _obj = {};
+                    diagCache.forEach((v, k) => { _obj[k] = v; });
+                    localStorage.setItem(_LS_KEY, JSON.stringify(_obj));
+                } catch(e) { console.warn('快取儲存失敗', e); }
+            }, 500);
+        };
 
         const getCached = (code) => {
             const entry = diagCache.get(code);
@@ -1417,7 +1445,10 @@
             if (Date.now() - entry.ts > CACHE_TTL) { diagCache.delete(code); return null; }
             return entry.result;
         };
-        const setCache = (key, result) => diagCache.set(key, { result, ts: Date.now() });
+        const setCache = (key, result) => {
+            diagCache.set(key, { result, ts: Date.now() });
+            _saveLSCache();
+        };
 
         // ── 多 CORS Proxy 備援（建議2：解決2330等台股失敗）────
         // ✅ 自己的 Cloudflare Worker（最穩定，不會被Yahoo封鎖）
