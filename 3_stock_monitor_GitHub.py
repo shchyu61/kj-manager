@@ -2195,8 +2195,10 @@ if __name__ == "__main__":
                 main_task()
             except Exception as e:
                 print(f"掃描發生錯誤: {e}")
-            print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒（5分鐘）...")
-            time.sleep(FUTURES_5MK_INTERVAL)
+            # ✅ 05041632：無訊號時5秒後結束（工作排程器每5分鐘自動再觸發，不需在此等待）
+            print("⏱️ 本次無訊號，5秒後結束（工作排程器將於下次時間點自動再觸發）")
+            time.sleep(5)
+            break
         exit()
 
     # === [精準測試模式]：不受交易時間限制，發送兩封關鍵測試信後即結束 ===
@@ -2245,7 +2247,7 @@ if __name__ == "__main__":
             except: pass
         if _sat_done:
             print(f"[{now.strftime('%H:%M:%S')}] ✅ 週六預篩已執行過，今日不再重複")
-            time.sleep(10)
+            time.sleep(5)  # ✅ 05041632
             exit()
         print(f"[{now.strftime('%H:%M:%S')}] 📅 週六補跑：執行一次台股預篩快取上傳")
         loops = 1
@@ -2256,7 +2258,7 @@ if __name__ == "__main__":
         except: pass
     else:
         print(f"[{now.strftime('%H:%M:%S')}] ❌ 非交易時段啟動，直接結束")
-        time.sleep(10)
+        time.sleep(5)  # ✅ 05041632：改為5秒後關閉
         exit()
 
     print(f"🚀 {market_name} 監控模式啟動 (預計執行 {loops} 次)")
