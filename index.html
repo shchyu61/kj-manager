@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05041037</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05041108</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -300,7 +300,8 @@
                         💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
                         <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
                         <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）<br>
-                        <span style="color:#1a6a2a; font-weight:900;">GBPJPY=X</span>（英鎊/日圓）　
+                        <span style="color:#1a6a2a; font-weight:900;">USDJPY=X</span>（美元/日圓）　
+                        <span style="color:#1a6a2a; font-weight:900;">GBPJPY=X</span>（英鎊/日圓）<br>
                         <span style="color:#1a6a2a; font-weight:900;">USDCHF=X</span>（美元/瑞郎）
                     </div>
                     <!-- 待買觀察：匯出/匯入備份 -->
@@ -468,7 +469,8 @@
                         💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
                         <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
                         <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）<br>
-                        <span style="color:#1a6a2a; font-weight:900;">GBPJPY=X</span>（英鎊/日圓）　
+                        <span style="color:#1a6a2a; font-weight:900;">USDJPY=X</span>（美元/日圓）　
+                        <span style="color:#1a6a2a; font-weight:900;">GBPJPY=X</span>（英鎊/日圓）<br>
                         <span style="color:#1a6a2a; font-weight:900;">USDCHF=X</span>（美元/瑞郎）
                     </div>
                 </div>
@@ -817,7 +819,8 @@
             "ILF": "拉丁美洲40 ETF（參考:例如富邦人壽投資型保單的FRE3）",
             // 外匯（與FX_LIST完全一致）
             "EURUSD=X": "EUR/USD 歐元/美元", "USDTWD=X": "USD/TWD 美元/台幣",
-            "GBPJPY=X": "GBP/JPY 英鎊/日圓", "USDCHF=X": "USD/CHF 美元/瑞郎",
+            "USDJPY=X": "USD/JPY 美元/日圓", "GBPJPY=X": "GBP/JPY 英鎊/日圓",
+            "USDCHF=X": "USD/CHF 美元/瑞郎",
         };
 
         // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
@@ -3261,9 +3264,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     'crypto': 'st-crypto-hint',
                     'fx':     'st-fx-hint',
                     'bond':   'st-bond-hint',
+                    'us':     'st-us-hint',  // ✅ 05041037fix
                 };
-                // 全部先隱藏
-                Object.values(_stHints).forEach(id => {
+                // 全部先隱藏（含st-us-hint）
+                [...Object.values(_stHints), 'st-us-hint'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.classList.add('hide');
                 });
