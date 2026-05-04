@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05041108</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05041142</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -2047,10 +2047,27 @@
                 week_k_s: `第一道[空]: ${_r1s?'✅A':''} ${_r2s?'✅B':''} ${_r3s?'✅C':''} ${_r4_short?'✅D(下軌)':''}${(!_r1s&&!_r2s&&!_r3s&&!_r4_short)?'❌未通過':''}`,
                 day_k_s:  `第二道eLeader[空]: ${_el2nd_short?'✅通過':(_r4_short?'⚠️未通過(條件D補位)':'❌未通過')}`
             } : null;
+            // ✅ 05041142：外匯方向限制（隔夜利息考量，預設方向硬編碼）
+            // long=只做多、short=只做空、未設定=多空都允許
+            const _fxDirection = {
+                'EURUSD=X': 'short',  // 歐元/美元：做空（持有USD收息）
+                'GBPJPY=X': 'long',   // 英鎊/日圓：做多（持有GBP收息）
+                'USDCHF=X': 'long',   // 美元/瑞郎：做多（持有USD收息）
+                // USDJPY=X：不限制（多空都允許）
+                // USDTWD=X：不限制（多空都允許）
+            };
+            let _adjBuy = buy_signal, _adjSell = sell_signal;
+            const _fxDir = _fxDirection[ticker] || _fxDirection[ticker.split('.')[0]];
+            if (_fxDir === 'long')  _adjSell = false;  // 只做多：強制關閉做空訊號
+            if (_fxDir === 'short') _adjBuy  = false;  // 只做空：強制關閉做多訊號
+
             const result = {
                 price: price.toFixed(2),
                 rsi: Math.round(rsiNow * 10) / 10,
-                rsi_trend, boll_position, buy_signal, sell_signal, conditions,
+                rsi_trend, boll_position,
+                buy_signal:  _adjBuy,
+                sell_signal: _adjSell,
+                conditions,
                 debug_info: _debug
             };
             setCache(_cacheKey, result);
