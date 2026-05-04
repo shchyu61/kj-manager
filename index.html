@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05032201</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05041037</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -279,13 +279,29 @@
                         <span style="color:#c2a633; font-weight:900;">DOGE-USD</span>（狗狗幣）　
                         <span style="color:#2775ca; font-weight:900;">USDT-USD</span>（泰達幣）
                     </div>
+                    <!-- ✅ 05041037新增：待買觀察美股提示 -->
+                    <div id="wl-us-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#e8f0fe; color:#1a2a6c; border:1px solid #4a6adc;">
+                        💵 美股建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#1a3aaa; font-weight:900;">熱門美股：</span>
+                        <span style="color:#1a3aaa; font-weight:900;">NVDA</span>（輝達）　
+                        <span style="color:#1a3aaa; font-weight:900;">AAPL</span>（蘋果）　
+                        <span style="color:#1a3aaa; font-weight:900;">GOOG</span>（谷歌）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">具備股息再投入(DRIP)：</span>
+                        <span style="color:#1a5a8a; font-weight:900;">KO</span>（可口可樂）　
+                        <span style="color:#1a5a8a; font-weight:900;">O</span>（Realty Income）　
+                        <span style="color:#1a5a8a; font-weight:900;">D</span>（Dominion Energy）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">ABT</span>（雅培）　
+                        <span style="color:#1a5a8a; font-weight:900;">PG</span>（寶僑）　
+                        <span style="color:#1a5a8a; font-weight:900;">SPY</span>（標普500 ETF）<br>
+                        <span style="color:#7a3a00; font-size:11px;">⚠️ 未出現的美股代碼，可參考 Yahoo股市 的「熱門美股」頁面查詢</span>
+                    </div>
                     <!-- 外匯提示 -->
                     <div id="wl-fx-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
                         💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
                         <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
-                        <span style="color:#1a6a2a; font-weight:900;">JPY=X</span>（美元/日圓）<br>
-                        <span style="color:#1a6a2a; font-weight:900;">CHFUSD=X</span>（美元/瑞郎）　
-                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）
+                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）<br>
+                        <span style="color:#1a6a2a; font-weight:900;">GBPJPY=X</span>（英鎊/日圓）　
+                        <span style="color:#1a6a2a; font-weight:900;">USDCHF=X</span>（美元/瑞郎）
                     </div>
                     <!-- 待買觀察：匯出/匯入備份 -->
                     <div class="flex gap-2">
@@ -308,7 +324,8 @@
                     <div class="rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                         <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                         <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                            ✅ 每天 <b>09:05</b> 和 <b>13:00</b> 自動掃描全部股票，符合條件寄 Gmail<br>
+                            ✅ 台股：每天 <b>09:05</b>、<b>13:00</b> 自動掃描，符合條件寄 Gmail<br>
+                            ✅ 美股/外匯/黃金：每天 <b>22:35</b>、<b>03:55</b> 自動掃描，符合條件寄 Gmail<br>
                             ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                             <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
                         </div>
@@ -430,13 +447,29 @@
                         <span style="color:#627eea; font-weight:900;">ETH-USD</span>（以太幣）<br>
                         <span style="color:#c2a633; font-weight:900;">DOGE-USD</span>（狗狗幣）
                     </div>
+                    <!-- ✅ 05041037新增：持股清單美股提示 -->
+                    <div id="st-us-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#e8f0fe; color:#1a2a6c; border:1px solid #4a6adc;">
+                        💵 美股建議輸入代碼（Yahoo Finance格式）：<br>
+                        <span style="color:#1a3aaa; font-weight:900;">熱門美股：</span>
+                        <span style="color:#1a3aaa; font-weight:900;">NVDA</span>（輝達）　
+                        <span style="color:#1a3aaa; font-weight:900;">AAPL</span>（蘋果）　
+                        <span style="color:#1a3aaa; font-weight:900;">GOOG</span>（谷歌）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">具備股息再投入(DRIP)：</span>
+                        <span style="color:#1a5a8a; font-weight:900;">KO</span>（可口可樂）　
+                        <span style="color:#1a5a8a; font-weight:900;">O</span>（Realty Income）　
+                        <span style="color:#1a5a8a; font-weight:900;">D</span>（Dominion Energy）<br>
+                        <span style="color:#1a5a8a; font-weight:900;">ABT</span>（雅培）　
+                        <span style="color:#1a5a8a; font-weight:900;">PG</span>（寶僑）　
+                        <span style="color:#1a5a8a; font-weight:900;">SPY</span>（標普500 ETF）<br>
+                        <span style="color:#7a3a00; font-size:11px;">⚠️ 未出現的美股代碼，可參考 Yahoo股市 的「熱門美股」頁面查詢</span>
+                    </div>
                     <!-- 持股清單：外匯提示 -->
                     <div id="st-fx-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
                         💱 外匯建議輸入代碼（Yahoo Finance格式）：<br>
                         <span style="color:#1a6a2a; font-weight:900;">EURUSD=X</span>（歐元/美元）　
-                        <span style="color:#1a6a2a; font-weight:900;">JPY=X</span>（美元/日圓）<br>
-                        <span style="color:#1a6a2a; font-weight:900;">CHFUSD=X</span>（美元/瑞郎）　
-                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）
+                        <span style="color:#1a6a2a; font-weight:900;">USDTWD=X</span>（美元/台幣）<br>
+                        <span style="color:#1a6a2a; font-weight:900;">GBPJPY=X</span>（英鎊/日圓）　
+                        <span style="color:#1a6a2a; font-weight:900;">USDCHF=X</span>（美元/瑞郎）
                     </div>
                 </div>
                 <!-- 分類Tab -->
@@ -585,7 +618,8 @@
                 <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                     <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                     <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                        ✅ 每天 <b>09:05</b> 和 <b>13:00</b> 自動掃描全部股票，符合條件寄 Gmail<br>
+                        ✅ 台股：每天 <b>09:05</b>、<b>13:00</b> 自動掃描，符合條件寄 Gmail<br>
+                        ✅ 美股/外匯/黃金：每天 <b>22:35</b>、<b>03:55</b> 自動掃描，符合條件寄 Gmail<br>
                         ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                         <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
                     </div>
@@ -782,8 +816,8 @@
             "AGG": "全球綜合債券ETF（參考:例如富邦人壽投資型保單的FR04）",
             "ILF": "拉丁美洲40 ETF（參考:例如富邦人壽投資型保單的FRE3）",
             // 外匯（與FX_LIST完全一致）
-            "EURUSD=X": "EUR/USD 歐元/美元", "JPY=X": "USD/JPY 美元/日圓",
-            "CHFUSD=X": "CHF/USD 瑞郎/美元", "USDTWD=X": "USD/TWD 美元/台幣",
+            "EURUSD=X": "EUR/USD 歐元/美元", "USDTWD=X": "USD/TWD 美元/台幣",
+            "GBPJPY=X": "GBP/JPY 英鎊/日圓", "USDCHF=X": "USD/CHF 美元/瑞郎",
         };
 
         // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
@@ -1832,7 +1866,7 @@
             );
 
             let _3rd_pass = false;
-            let _3rd_pass_short = false;  // ✅ 05030344新增：做空專用第三道（5m RSI↓ MACD↓）
+            let _3rd_pass_short = false;  // ✅ 05030018新增：做空專用第三道（5m RSI↓ MACD↓）
             try {
                 const _5mSuffix = /^\d{4,6}$/.test(code) ? '.TW' : '';
                 const _5mData = await fetchWithFallback(
@@ -1863,7 +1897,7 @@
                     // 非開盤時間：寬鬆（只需RSI↑ AND MACD↑）
                     _3rd_pass = (_5mRsiOk && _5mMacdOk);
                 }
-                // ✅ 05030344新增：做空第三道（5m RSI↓ MACD↓，開盤/非開盤時間均適用）
+                // ✅ 05030018新增：做空第三道（5m RSI↓ MACD↓，開盤/非開盤時間均適用）
                 const _5mRsiShortOk  = _5mRsiNow < _5mRsiPrv;
                 const _5mMacdShortOk = _5mMacd && _5mMacd.now < _5mMacd.prev;
                 _3rd_pass_short = _5mRsiShortOk && _5mMacdShortOk;
@@ -1944,11 +1978,13 @@
             const _r4_short = (_iv === '1wk') && _all_below_mid && _osc3Rise && _oscPrevDrop && !_t2 && !_t1;  // 條件D空頭鏡像，僅週K
 
             // ✅ 05030434新增：空方第一道 A/B/C（多方鏡像）
+            // 空頭A：近N根任一最高價 >= 布林上緣 AND RSI↓ AND MACD↓
             const _x1s = _highs_n.some((h2, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && h2 >= _b.upper * _p4;
             });
             const _r1s = _x1s && !_t1 && !_t2;
+            // 空頭B：近N根最高價全>中軌 AND 最低價全>下軌 AND MACD連降 AND MACD↓
             const _x2s = _highs_n.every((h2, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && h2 > _b.mid;
@@ -1967,11 +2003,13 @@
                 return _ok;
             })() : false;
             const _r2s = _x2s && _x3s && _x4s && !_t2;
+            // 空頭C：近N根任一最高價 >= 布林中軌 AND RSI↓ AND MACD↓
             const _x5s = _highs_n.some((h2, i) => {
                 const _b = calcBoll(closes.slice(0, closes.length - _n + i + 1));
                 return _b && h2 >= _b.mid;
             });
             const _r3s = _x5s && !_t1 && !_t2;
+            // 空頭第一道+第二道（A/B/C需eLeader空方，條件D空頭eLeader可選）
             const _abc_pass_short = (_r1s || _r2s || _r3s) && rsiNow < (100 - _p2);
             const _1st2nd_pass_short = (_abc_pass_short && _el2nd_short) || _r4_short;
 
@@ -2236,10 +2274,14 @@
                 const snap = await getDoc(ref);
                 if (snap.exists()) {
                     const d = snap.data();
+                    // ✅ 05040000：同時讀取Python上傳的第二道指標
+                    let _parsedInd = {};
+                    try { if (d.indicators) _parsedInd = JSON.parse(d.indicators); } catch(_) {}
                     _twPrescreenedCache = {
                         codes:      (d.codes || []),
                         count:      parseInt(d.count || 0),
-                        updated_at: d.updated_at || '—'
+                        updated_at: d.updated_at || '—',
+                        indicators: _parsedInd   // ✅ 新增
                     };
                 }
             } catch(e) { console.log('預筌清單讀取:', e.message); }
@@ -2989,12 +3031,36 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             _psStop = false;
             document.getElementById('prescreen-eta-wrap').classList.remove('hide');
             const _psT0 = Date.now();
+            let _psDone = 0;
+
+            // ✅ 05040000：優先使用Firebase指標（跳過重抓Yahoo週K，只補5分K）
+            const _fbInd = (_twPrescreenedCache && _twPrescreenedCache.indicators) || {};
 
             const _psTasks = codes.map((code) => async () => {
                 if (_psStop) return;
                 try {
                     let result, _mxLabel = null;
-                    if (_mixedMode) {
+                    const _ind = _fbInd[code];  // 從Firebase讀取的指標
+                    if (_ind) {
+                        // ✅ Firebase有指標：直接做第三道（只抓5分K），跳過重抓週K/日K
+                        const _fbResult = await analyzeStock(code, '5m', '5d');  // 只抓5分K
+                        if (!_fbResult) return;
+                        // 用Firebase的指標覆蓋第一/二道結果
+                        result = {
+                            price: _fbResult.price,
+                            rsi: _ind.rsi,
+                            rsi_trend: _ind.rsi > _ind.rsi_prev ? 'up' : 'down',
+                            boll_position: _ind.boll_pos,
+                            buy_signal:  _ind.is_long  && _fbResult.buy_signal,
+                            sell_signal: _ind.is_short && _fbResult.sell_signal,
+                            conditions: _ind.condD_l ? ['條件D上軌'] : _ind.condD_s ? ['條件D下軌'] : ['A/B/C'],
+                            debug_info: _fbResult.debug_info,
+                            _mixedLabel: _ind.is_long ? '長期投資' : '中期投資',
+                            _kLabel: '長期投資',
+                            _fromFirebase: true  // 標記來源
+                        };
+                        _mxLabel = result._mixedLabel;
+                    } else if (_mixedMode) {
                         const _mr = await analyzeMixed(code);
                         result = _mr ? _mr.result : null;
                         _mxLabel = _mr ? _mr.mode : null;
@@ -3007,6 +3073,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     }
                     if (!result) return;
 
+                    // 顯示診斷卡
                     const cardHtml = makeDiagCard(code, result, true, false);
                     if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
 
@@ -3019,6 +3086,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 } catch(e) { console.error(`[預篩分析 ${code}]`, e.message); }
             });
 
+            // ✅ 工作池並行：平日5支、週末2支（避免Yahoo Finance封鎖）
             await runWithPool(_psTasks, _isWeekend() ? 1 : 2, (done, total) => {  // ✅ 05032201：平日2、週末1（4支會觸發Yahoo封鎖）
                 if (_psStop) return;
                 if (progress) progress.style.width = `${Math.round(done/total*100)}%`;
@@ -3138,6 +3206,12 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 active.style.background = cat === 'gold' ? '#b8860b' : '#8a4a18';
                 active.style.color = '#fff';
             }
+            // ✅ 05041037：Tab切換時同步顯示對應說明卡
+            const _wlHintMap = { 'fund':'fund-hint', 'gold':'wl-gold-hint', 'crypto':'wl-crypto-hint', 'fx':'wl-fx-hint', 'bond':'wl-bond-hint', 'us':'wl-us-hint' };
+            ['fund-hint','wl-gold-hint','wl-crypto-hint','wl-fx-hint','wl-bond-hint','wl-us-hint'].forEach(id => {
+                const el = document.getElementById(id); if (el) el.classList.add('hide');
+            });
+            if (_wlHintMap[cat]) { const el = document.getElementById(_wlHintMap[cat]); if (el) el.classList.remove('hide'); }
             window.renderWatchlist();
         };
 
@@ -3158,8 +3232,9 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 'gold':   'st-gold-hint',
                 'crypto': 'st-crypto-hint',
                 'fx':     'st-fx-hint',
+                'us':     'st-us-hint',  // ✅ 05041037
             };
-            ['stock-fund-hint','st-gold-hint','st-crypto-hint','st-fx-hint','st-bond-hint'].forEach(id => {
+            ['stock-fund-hint','st-gold-hint','st-crypto-hint','st-fx-hint','st-bond-hint','st-us-hint'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.add('hide');
             });
@@ -3174,8 +3249,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         document.addEventListener('change', (e) => {
             if (e.target.id === 'new-watchlist-cat') {
                 const v = e.target.value;
-                const ids = ['fund-hint','wl-gold-hint','wl-crypto-hint','wl-fx-hint','wl-bond-hint'];
-                const maps = { 'fund':'fund-hint', 'gold':'wl-gold-hint', 'crypto':'wl-crypto-hint', 'fx':'wl-fx-hint', 'bond':'wl-bond-hint' };
+                const ids = ['fund-hint','wl-gold-hint','wl-crypto-hint','wl-fx-hint','wl-bond-hint','wl-us-hint'];  // ✅ 05041037
+                const maps = { 'fund':'fund-hint', 'gold':'wl-gold-hint', 'crypto':'wl-crypto-hint', 'fx':'wl-fx-hint', 'bond':'wl-bond-hint', 'us':'wl-us-hint' };  // ✅ 05041037
                 ids.forEach(id => { const el=document.getElementById(id); if(el) el.classList.add('hide'); });
                 if (maps[v]) { const el=document.getElementById(maps[v]); if(el) el.classList.remove('hide'); }
             }
