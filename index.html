@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05050938</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05051039</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -613,6 +613,14 @@
                 <div class="space-y-6">
                     <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                         <div id="scan-progress" class="bg-blue-600 h-full w-0 progress-bar-fill"></div>
+                    </div>
+                    <div id="prescreen-summary-card" class="hide rounded-2xl p-4 mb-3" style="background:#1a1a2e;border:1.5px solid #4a6adc;">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-black" style="color:#a0c4ff;">📋 預篩訊號彙整</span>
+                            <span id="prescreen-summary-time" class="text-[11px]" style="color:#6a8aaa;"></span>
+                        </div>
+                        <div id="prescreen-summary-body" class="space-y-3"></div>
+                        <div id="prescreen-summary-none" class="hide text-sm text-center py-2" style="color:#6a8aaa;">本次預篩無符合條件的訊號</div>
                     </div>
                     <div id="scan-result-list" class="hide space-y-3"></div>
                 </div>
@@ -3125,9 +3133,39 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
             const total = buySignals.length + sellSignals.length;
             document.getElementById('prescreen-eta-wrap').classList.add('hide');
+            // 更新彙整卡
+            (function(){
+                var _sc=document.getElementById('prescreen-summary-card');
+                if(!_sc) return;
+                _sc.classList.remove('hide');
+                var _d=new Date();
+                var _t=document.getElementById('prescreen-summary-time');
+                if(_t) _t.textContent='更新：'+(_d.getMonth()+1)+'/'+_d.getDate()+' '+String(_d.getHours()).padStart(2,'0')+':'+String(_d.getMinutes()).padStart(2,'0');
+                function mkGrp(lbl,col,sigs){
+                    if(!sigs||!sigs.length) return '';
+                    var codes=sigs.map(function(x){return x.code;}).join('|');
+                    var disp=sigs.map(function(x){return x.code;}).join('\n');
+                    return '<div style="margin-bottom:8px;padding:10px;border-radius:10px;background:#0d1b2a;border:1px solid '+col+'44;">'
+                        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+                        +'<span style="color:'+col+';font-size:12px;font-weight:900;">'+lbl+'，共計'+sigs.length+'支：</span>'
+                        +'<button style="font-size:11px;padding:2px 8px;border-radius:6px;background:'+col+'22;color:'+col+';border:1px solid '+col+'55;cursor:pointer;"'
+                        +' onclick="(function(btn){var c=btn.getAttribute(\'data-c\').split(\'|\').join(\'\\n\');navigator.clipboard.writeText(c);btn.textContent=\'已複製\';setTimeout(function(){btn.textContent=\'複製代碼\';},2000);})(this);"'
+                        +' data-c="'+codes+'">複製代碼</button>'
+                        +'</div>'
+                        +'<pre style="color:#e8f4ff;font-size:13px;line-height:2;white-space:pre;">'+disp+'</pre>'
+                        +'</div>';
+                }
+                var html=mkGrp('▲ 做多進場','#4adc8a',buySignals)
+                    +mkGrp('◆ 做多出場','#dc4a4a',sellSignals.filter(function(x){return !x.isShort;}))
+                    +mkGrp('▼ 做空進場','#dc8a4a',sellSignals.filter(function(x){return x.isShort;}));
+                var _sb=document.getElementById('prescreen-summary-body');
+                var _sn=document.getElementById('prescreen-summary-none');
+                if(_sb) _sb.innerHTML=html;
+                if(_sn){if(html)_sn.classList.add('hide');else _sn.classList.remove('hide');}
+            })();
             window.showAlert(total > 0
-                ? `✅ 深度分析完成！發現 ${buySignals.length} 支買進 / ${sellSignals.length} 支賣出訊號`
-                : `✅ 深度分析完成，本次無符合條件的訊號`);
+                ? '✅ 深度分析完成！發現 '+buySignals.length+' 支買進 / '+sellSignals.length+' 支賣出訊號'
+                : '✅ 深度分析完成，本次無符合條件的訊號');
         };
 
         window.startManualScan = async () => {
