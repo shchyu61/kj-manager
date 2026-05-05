@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05050938'
+SCRIPT_VERSION = '05051000'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1617,9 +1617,9 @@ def main_task():
 
         total_tw = len(tw_list)
         print(f'📊 台股掃描：共{total_tw}支')
-        global _tw_prescreened
+        global _tw_prescreened, _prescreened_ind  # ✅ 05050938fix：加入global宣告才能寫入全域
         _tw_prescreened = []
-        _prescreened_ind = {}  # ✅ 05041037
+        _prescreened_ind = {}
 
         for i, ticker in enumerate(tw_list):
             if (i+1) % 50 == 0:
