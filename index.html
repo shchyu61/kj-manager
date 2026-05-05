@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05050938</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05051039</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -613,6 +613,15 @@
                 <div class="space-y-6">
                     <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                         <div id="scan-progress" class="bg-blue-600 h-full w-0 progress-bar-fill"></div>
+                    </div>
+                    <!-- ✅ 05051039：預篩結果彙整卡（永久保留，格式可複製貼上） -->
+                    <div id="prescreen-summary-card" class="hide rounded-2xl p-4 mb-3" style="background:#1a1a2e; border:1.5px solid #4a6adc;">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-black" style="color:#a0c4ff;">📋 預篩訊號彙整</span>
+                            <span id="prescreen-summary-time" class="text-[11px]" style="color:#6a8aaa;"></span>
+                        </div>
+                        <div id="prescreen-summary-body" class="space-y-3"></div>
+                        <div id="prescreen-summary-none" class="hide text-sm text-center py-2" style="color:#6a8aaa;">本次預篩無符合條件的訊號</div>
                     </div>
                     <div id="scan-result-list" class="hide space-y-3"></div>
                 </div>
@@ -3098,9 +3107,11 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     }
                     if (!result) return;
 
-                    // 顯示診斷卡
-                    const cardHtml = makeDiagCard(code, result, true, false);
-                    if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
+                    // ✅ 05051019：只顯示有訊號的股票（無訊號不佔版面）
+                    if (result.buy_signal || result.sell_signal) {
+                        const cardHtml = makeDiagCard(code, result, true, false);
+                        if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
+                    }
 
                     if (result.buy_signal)  buySignals.push({ code, price: result.price, rsi: result.rsi,
                         boll: { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[result.boll_position],
@@ -3125,9 +3136,46 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
             const total = buySignals.length + sellSignals.length;
             document.getElementById('prescreen-eta-wrap').classList.add('hide');
+            if (resultList) { resultList.innerHTML = ''; resultList.classList.add('hide'); }
+            if (progress) progress.parentElement.classList.add('hide');
+
+            // ✅ 05051039：更新預篩彙整卡（永久保留，格式可複製貼上）
+            const _sc = document.getElementById('prescreen-summary-card');
+            const _sb = document.getElementById('prescreen-summary-body');
+            const _sn = document.getElementById('prescreen-summary-none');
+            const _st = document.getElementById('prescreen-summary-time');
+            if (_sc) {
+                _sc.classList.remove('hide');
+                const _now = new Date();
+                if (_st) _st.textContent = `更新：${_now.getMonth()+1}/${_now.getDate()} ${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`;
+                const _grp = (label, color, sigs) => {
+                    if (!sigs.length) return '';
+                    const _codes = sigs.map(s => s.code).join('
+');
+                    const _bid = 'cp' + Math.random().toString(36).slice(2);
+                    return `<div class="rounded-xl p-3 mb-2" style="background:#0d1b2a;border:1px solid ${color}44;">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-black" style="color:${color};">${label}，共計 ${sigs.length} 支：</span>
+                            <button id="${_bid}" onclick="navigator.clipboard.writeText(this.dataset.codes);this.textContent='✅ 已複製';setTimeout(()=>this.textContent='複製代碼',2000);"
+                                data-codes="${sigs.map(s=>s.code).join('
+')}"
+                                class="text-[11px] px-2 py-0.5 rounded" style="background:${color}22;color:${color};border:1px solid ${color}55;">複製代碼</button>
+                        </div>
+                        <pre class="text-sm font-black" style="color:#e8f4ff;line-height:2;white-space:pre;">${sigs.map(s=>s.code).join('
+')}</pre>
+                    </div>`;
+                };
+                const _html = [
+                    _grp('▲ 做多進場', '#4adc8a', buySignals),
+                    _grp('◆ 做多出場', '#dc4a4a', sellSignals.filter(s => !s.isShort)),
+                    _grp('▼ 做空進場', '#dc8a4a', sellSignals.filter(s =>  s.isShort)),
+                ].join('');
+                if (_sb) _sb.innerHTML = _html;
+                if (_sn) { if (_html) _sn.classList.add('hide'); else _sn.classList.remove('hide'); }
+            }
             window.showAlert(total > 0
                 ? `✅ 深度分析完成！發現 ${buySignals.length} 支買進 / ${sellSignals.length} 支賣出訊號`
-                : `✅ 深度分析完成，本次無符合條件的訊號`);
+                : '✅ 深度分析完成，本次無符合條件的訊號');
         };
 
         window.startManualScan = async () => {

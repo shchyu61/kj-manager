@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05051000'
+SCRIPT_VERSION = '05051039'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -2018,6 +2018,30 @@ def main_task():
     print(f"\n{'='*55}")
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
+
+    # ✅ 05051039：訊號彙整總清單（格式可直接複製到eLeader/Excel）
+    if buy_signals or sell_signals:
+        print(f"\n📋 本次進場/出場訊號彙整：")
+        # buy_signals[0]=市場, [1]=代碼/名稱
+        _buy_long  = [s for s in buy_signals  if s[0] != '外匯做空']
+        _short_sig = [s for s in sell_signals if s[0] == '外匯做空']
+        _sell_exit = [s for s in sell_signals if s[0] != '外匯做空']
+        if _buy_long:
+            print(f"▲ 做多進場，共計 {len(_buy_long)} 支：")
+            for s in _buy_long:
+                _c = s[1].split('.')[0] if '.' in str(s[1]) else str(s[1])
+                print(f"  {_c}")
+        if _short_sig:
+            print(f"▼ 做空進場，共計 {len(_short_sig)} 支：")
+            for s in _short_sig:
+                _c = s[1].split('.')[0] if '.' in str(s[1]) else str(s[1])
+                print(f"  {_c}")
+        if _sell_exit:
+            print(f"◆ 做多出場，共計 {len(_sell_exit)} 支：")
+            for s in _sell_exit:
+                _c = s[1].split('.')[0] if '.' in str(s[1]) else str(s[1])
+                print(f"  {_c}")
+        print()
 
 # =====================
 # ❌❌ 下市警報通知（最高優先級，最先發送）
