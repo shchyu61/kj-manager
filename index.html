@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05051039</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05051530</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -3106,9 +3106,11 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     }
                     if (!result) return;
 
-                    // 顯示診斷卡
-                    const cardHtml = makeDiagCard(code, result, true, false);
-                    if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
+                    // ✅ 05051530：只顯示有訊號的卡片（無訊號不佔版面）
+                    if (result.buy_signal || result.sell_signal) {
+                        const cardHtml = makeDiagCard(code, result, true, false);
+                        if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
+                    }
 
                     if (result.buy_signal)  buySignals.push({ code, price: result.price, rsi: result.rsi,
                         boll: { near_upper:'近上軌⚠️', mid_zone:'中軌區間', near_lower:'近下軌✅' }[result.boll_position],
@@ -3133,6 +3135,9 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
             const total = buySignals.length + sellSignals.length;
             document.getElementById('prescreen-eta-wrap').classList.add('hide');
+            // ✅ 05051530：掃描完成後清空並隱藏暫時卡片容器（彙整卡獨立顯示）
+            if (resultList) { resultList.innerHTML = ''; resultList.classList.add('hide'); }
+
             // 更新彙整卡
             (function(){
                 var _sc=document.getElementById('prescreen-summary-card');
