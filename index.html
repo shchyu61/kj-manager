@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05052236</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05052313</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -507,10 +507,11 @@
                                 目前診斷：<span id="last-diagnostic-time" class="italic">尚未執行</span>
                                 &nbsp;｜&nbsp;模式：<span id="scan-mode-label" class="font-black text-purple-600">混合模式</span>
                             </span>
-                            <!-- ✅ 05052236：提醒手動與自動掃描無關 -->
+                            <!-- ✅ 05052313：提醒手動診斷與自動掃描無關 -->
                             <span class="text-[10px] leading-relaxed mt-1 block" style="color:#94a3b8;">
-                                ⚙️ 以下開關與「啟動AI診斷」僅影響手動掃描<br>
-                                每天 09:05／13:00／22:35／03:55 雲端自動掃描獨立運作，不受影響
+                                ⚙️ 以下各開關與下欄綠色框🔍台股AI預篩清單下方的藍色「啟動AI診斷」，<br>
+                                與每天 09:05／13:00／22:35／03:55 雲端自動掃描<b style="color:#e53935;">無關</b>，<br>
+                                藍色「啟動AI診斷」只針對【持股清單】的已持有股票有效
                             </span>
                         </div>
                     </div>
@@ -2369,9 +2370,9 @@
                     SCAN_INTERVAL = saved === 'daily' ? '1d' : '1wk';
                     SCAN_RANGE    = saved === 'daily' ? '1y' : '2y';
                     _updateScanModeUI(saved);
-                    // 更新模式標籤
+                    // 更新模式標籤（考慮混合模式已開啟）
                     const _lbl = document.getElementById('scan-mode-label');
-                    if (_lbl) _lbl.textContent = saved === 'daily' ? '中期投資' : '長期投資';
+                    if (_lbl) _lbl.textContent = _mixedMode ? '混合模式' : (saved === 'daily' ? '中期投資' : '長期投資');
                 }
             } catch(e) {}
         };
