@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05051039'
+SCRIPT_VERSION = '05052224'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1189,29 +1189,34 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             _condD_long = False; _condD_short = False  # TEST_MODE 預設
 
         # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
-        # ✅ 05050938：先執行eLeader判斷，儲存完整指標（含第二道結果）後再決定是否return None
+        # 兩種模式統一：eLeader必過才繼續（確保不在高檔區追高）
         df_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
         if df_d is None or len(df_d) < 50: return None
         df_d = calc_indicators(df_d)
         if df_d is None: return None
 
-        # 第二道：eLeader判斷
-        is_eleader_ok       = False
-        is_eleader_short_ok = False
         if _is_long_ok:
             is_eleader_ok = check_buy_eleader(df_d) is not None
             if _condD_long:
+                # 條件D觸發（高位階上軌）→ eLeader 為可選，不強制
                 print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
             else:
+                # A/B/C 觸發（低位階下軌/中軌）→ eLeader 為必要條件
                 print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過，跳過"}')
+                if not is_eleader_ok:
+                    return None
         else:
             is_eleader_short_ok = check_short_eleader(df_d) is not None
             if _condD_short:
+                # 條件D空頭（高位階）→ eLeader 為可選
                 print(f'  {"✅" if is_eleader_short_ok else "⚠️"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過（條件D補位，繼續）"}')
             else:
+                # A/B/C 空頭（低位階）→ eLeader 為必要條件
                 print(f'  {"✅" if is_eleader_short_ok else "❌"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過，跳過"}')
+                if not is_eleader_short_ok:
+                    return None
 
-        # ✅ 05050938：第一道通過即存指標（含eLeader結果），網頁版快速路徑才準確
+        # ✅ 05041037新增：第一+第二道通過後，儲存指標供Firebase快取
         _code_only2 = ticker.split('.')[0]
         try:
             _ref_df = df_w if (SCAN_MODE == 'weekly') else df_d
@@ -1228,21 +1233,10 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 _bp2 = 'mid_zone'
             _prescreened_ind[_code_only2] = {
                 'rsi': round(_rsi_now2, 1), 'rsi_prev': round(_rsi_prv2, 1),
-                'boll_pos': _bp2,
-                'is_long':  bool(_is_long_ok),
-                'is_short': bool(_is_short_ok),
-                'el_long':  bool(is_eleader_ok),        # ✅ 新增：第二道多頭eLeader結果
-                'el_short': bool(is_eleader_short_ok),  # ✅ 新增：第二道空頭eLeader結果
-                'condD_l':  bool(_condD_long),
-                'condD_s':  bool(_condD_short),
+                'boll_pos': _bp2, 'is_long': bool(_is_long_ok), 'is_short': bool(_is_short_ok),
+                'condD_l': bool(_condD_long), 'condD_s': bool(_condD_short),
             }
         except Exception: pass
-
-        # 第二道未通過且非條件D → return None
-        if _is_long_ok and not _condD_long and not is_eleader_ok:
-            return None
-        if _is_short_ok and not _condD_short and not is_eleader_short_ok:
-            return None
 
         # ── 第三道：5分K即時轉折（週K/日K模式共用）─────────────
         now_ts = time.time()
@@ -1382,7 +1376,9 @@ if today not in notified:
 # 本機版優先使用此快取，避免每次都掃1800支
 # ============================================================
 def write_tw_prescreened(codes_list, indicators_dict=None):
-    """將預篩台股（代碼清單+第二道指標）寫入Firebase  # ✅ 05041037"""
+    """將預篩台股（代碼清單+第二道指標）寫入Firebase
+    ✅ 05052224：平日採合併模式（只增不減），週六採覆蓋模式（完整重建）
+    """
     try:
         import json, os, requests as _req
         from datetime import datetime; import pytz
@@ -1399,16 +1395,45 @@ def write_tw_prescreened(codes_list, indicators_dict=None):
         _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
         _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
                 f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened")
+        _tz = pytz.timezone('Asia/Taipei')
+        _today_wd = datetime.now(_tz).weekday()  # 0=週一 ... 5=週六 6=週日
+        _is_saturday = (_today_wd == 5)
+
+        # ── 週六：完整覆蓋重建 ──────────────────────────────────
+        if _is_saturday:
+            _merged = list(codes_list)
+            _merged_ind = dict(indicators_dict) if indicators_dict else {}
+            print(f"  📅 週六模式：完整覆蓋重建 {len(_merged)} 支")
+        else:
+            # ── 平日：先讀取舊清單，合併今日通過的（只增不減）──
+            _existing = []
+            _existing_ind = {}
+            _resp = _req.get(_url, headers={"Authorization": f"Bearer {_c.token}"}, timeout=10)
+            if _resp.status_code == 200:
+                _fields = _resp.json().get('fields', {})
+                _codes_raw = _fields.get('codes', {}).get('arrayValue', {}).get('values', [])
+                _existing = [v.get('stringValue','') for v in _codes_raw if v.get('stringValue')]
+                try:
+                    _ind_str = _fields.get('indicators', {}).get('stringValue', '{}')
+                    _existing_ind = json.loads(_ind_str)
+                except Exception: _existing_ind = {}
+            # 合併：取聯集，今日指標覆蓋同代碼的舊指標
+            _merged_set = set(_existing) | set(codes_list)
+            _merged = list(_merged_set)
+            _merged_ind = {**_existing_ind, **(indicators_dict or {})}
+            _added = len(_merged_set) - len(set(_existing))
+            print(f"  📅 平日模式：舊清單 {len(_existing)} 支 + 今日新增 {_added} 支 = 合併 {len(_merged)} 支")
+
         _r = _req.patch(_url, timeout=15,
             headers={"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"},
             json={"fields": {
-                "codes": {"arrayValue": {"values": [{"stringValue": c} for c in codes_list]}},
-                "count": {"integerValue": str(len(codes_list))},
+                "codes": {"arrayValue": {"values": [{"stringValue": c} for c in _merged]}},
+                "count": {"integerValue": str(len(_merged))},
                 "updated_at": {"stringValue": _now},
-                **({"indicators": {"stringValue": json.dumps(indicators_dict, ensure_ascii=False)}} if indicators_dict else {})}})
+                **({"indicators": {"stringValue": json.dumps(_merged_ind, ensure_ascii=False)}} if _merged_ind else {})}})
         if _r.status_code in (200,201):
-            _ind_cnt = len(indicators_dict) if indicators_dict else 0
-            print(f"  ✅ Firebase 預篩清單+指標已更新：{len(codes_list)} 支，指標 {_ind_cnt} 支 ({_now})"); return True
+            _ind_cnt = len(_merged_ind)
+            print(f"  ✅ Firebase 預篩清單+指標已更新：{len(_merged)} 支，指標 {_ind_cnt} 支 ({_now})"); return True
         print(f"  ❌ 預篩寫入失敗：{_r.status_code}"); return False
     except Exception as e: print(f"  ⚠️ 預篩寫入異常：{e}"); return False
 
@@ -1617,9 +1642,9 @@ def main_task():
 
         total_tw = len(tw_list)
         print(f'📊 台股掃描：共{total_tw}支')
-        global _tw_prescreened, _prescreened_ind  # ✅ 05050938fix：加入global宣告才能寫入全域
+        global _tw_prescreened
         _tw_prescreened = []
-        _prescreened_ind = {}
+        _prescreened_ind = {}  # ✅ 05041037
 
         for i, ticker in enumerate(tw_list):
             if (i+1) % 50 == 0:
@@ -2019,30 +2044,6 @@ def main_task():
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
 
-    # ✅ 05051039：訊號彙整總清單（格式可直接複製到eLeader/Excel）
-    if buy_signals or sell_signals:
-        print(f"\n📋 本次進場/出場訊號彙整：")
-        # buy_signals[0]=市場, [1]=代碼/名稱
-        _buy_long  = [s for s in buy_signals  if s[0] != '外匯做空']
-        _short_sig = [s for s in sell_signals if s[0] == '外匯做空']
-        _sell_exit = [s for s in sell_signals if s[0] != '外匯做空']
-        if _buy_long:
-            print(f"▲ 做多進場，共計 {len(_buy_long)} 支：")
-            for s in _buy_long:
-                _c = s[1].split('.')[0] if '.' in str(s[1]) else str(s[1])
-                print(f"  {_c}")
-        if _short_sig:
-            print(f"▼ 做空進場，共計 {len(_short_sig)} 支：")
-            for s in _short_sig:
-                _c = s[1].split('.')[0] if '.' in str(s[1]) else str(s[1])
-                print(f"  {_c}")
-        if _sell_exit:
-            print(f"◆ 做多出場，共計 {len(_sell_exit)} 支：")
-            for s in _sell_exit:
-                _c = s[1].split('.')[0] if '.' in str(s[1]) else str(s[1])
-                print(f"  {_c}")
-        print()
-
 # =====================
 # ❌❌ 下市警報通知（最高優先級，最先發送）
 # =====================
@@ -2225,10 +2226,8 @@ if __name__ == "__main__":
                 main_task()
             except Exception as e:
                 print(f"掃描發生錯誤: {e}")
-            # ✅ 05041632：無訊號時5秒後結束（工作排程器每5分鐘自動再觸發，不需在此等待）
-            print("⏱️ 本次無訊號，5秒後結束（工作排程器將於下次時間點自動再觸發）")
-            time.sleep(5)
-            break
+            print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒（5分鐘）...")
+            time.sleep(FUTURES_5MK_INTERVAL)
         exit()
 
     # === [精準測試模式]：不受交易時間限制，發送兩封關鍵測試信後即結束 ===
@@ -2277,7 +2276,7 @@ if __name__ == "__main__":
             except: pass
         if _sat_done:
             print(f"[{now.strftime('%H:%M:%S')}] ✅ 週六預篩已執行過，今日不再重複")
-            time.sleep(5)  # ✅ 05041632
+            time.sleep(10)
             exit()
         print(f"[{now.strftime('%H:%M:%S')}] 📅 週六補跑：執行一次台股預篩快取上傳")
         loops = 1
@@ -2288,7 +2287,7 @@ if __name__ == "__main__":
         except: pass
     else:
         print(f"[{now.strftime('%H:%M:%S')}] ❌ 非交易時段啟動，直接結束")
-        time.sleep(5)  # ✅ 05041632：改為5秒後關閉
+        time.sleep(10)
         exit()
 
     print(f"🚀 {market_name} 監控模式啟動 (預計執行 {loops} 次)")
