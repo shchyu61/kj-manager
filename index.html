@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05051643</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05051621</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -509,6 +509,31 @@
                             </span>
                         </div>
                     </div>
+                    <!-- 下排：預篩卡 + 啟動AI診斷 並排（強制不換行） -->
+                    <div class="flex items-stretch gap-3 flex-nowrap">
+                        <!-- 台股AI預篩清單（左側，彈性寬度） -->
+                        <div id="tw-prescreen-card" class="flex-1 min-w-0 rounded-2xl p-3" style="background:#e8f5e9; border:1.5px solid #43a047;">
+                            <div class="text-sm font-black mb-1" style="color:#1b5e20;">🔍 台股 AI 預篩清單</div>
+                            <div id="tw-prescreen-info" class="text-[11px] leading-relaxed" style="color:#2e7d32;">讀取中...</div>
+                            <div class="text-[10px] mt-1 mb-1 leading-relaxed" style="color:#1b5e20;">
+                                📌 分析台股 1800+ 支股票，找出買進／賣出／做空訊號<br>
+                                <span style="color:#b71c1c;">⚠️ 分析持有股票請改按右側「啟動 AI 診斷」</span>
+                            </div>
+                            <button onclick="startPrescreenScan()"
+                                class="mt-1 w-full py-1.5 rounded-xl font-black text-xs text-white"
+                                style="background:#2e7d32;">
+                                ⚡ 一鍵深度分析 AI 預篩股
+                            </button>
+                            <div id="prescreen-eta-wrap" class="hide mt-1 text-[10px]" style="color:#388e3c;">
+                                剩餘 <span id="prescreen-eta-txt">--</span> 分鐘 |
+                                <button onclick="window.stopPrescreenScan()" class="underline font-black" style="color:#e53935;">中斷</button>
+                            </div>
+                        </div>
+                        <!-- 啟動AI診斷（右側，固定寬度不換行） -->
+                        <div class="flex flex-col items-center justify-center flex-shrink-0" style="width:72px;">
+                            <button onclick="startManualScan()" class="w-full py-3 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all shadow-md text-center leading-tight">啟動<br>AI診斷</button>
+                        </div>
+                    </div>
                 </div>
                     <!-- 週K/日K 切換開關：所有帳號可見 -->
                     <div id="scan-mode-wrap" class="flex flex-col items-center gap-1.5">
@@ -542,7 +567,7 @@
                         </div>
                     </div>
                         <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-black text-slate-500">長期中期混合模式</span>
+                            <span class="text-[12px] font-black text-slate-500">混合模式</span>
                             <button id="btn-scan-mixed" onclick="toggleMixedMode()"
                                 role="switch" aria-checked="true"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner"
@@ -627,28 +652,6 @@
                         <div id="prescreen-summary-none" class="hide text-sm text-center py-2" style="color:#6a8aaa;">本次預篩無符合條件的訊號</div>
                     </div>
                     <div id="scan-result-list" class="hide space-y-3"></div>
-                </div>
-                <!-- 3. 台股AI預篩清單 + 啟動AI診斷（設定完後才執行） -->
-                <div id="tw-prescreen-card" class="mt-4 rounded-2xl p-3" style="background:#e8f5e9; border:1.5px solid #43a047;">
-                    <div class="text-sm font-black mb-1" style="color:#1b5e20;">🔍 台股 AI 預篩清單</div>
-                    <div id="tw-prescreen-info" class="text-[11px] leading-relaxed" style="color:#2e7d32;">讀取中...</div>
-                    <div class="text-[10px] mt-1 mb-1 leading-relaxed" style="color:#1b5e20;">
-                        📌 此功能分析台股 1800+ 支股票，找出符合條件的買進／賣出／做空訊號<br>
-                        <span style="color:#b71c1c;">⚠️ 若要分析您已持有的股票，請改按下方「啟動 AI 診斷」</span>
-                    </div>
-                    <button onclick="startPrescreenScan()"
-                        class="mt-1 w-full py-1.5 rounded-xl font-black text-xs text-white"
-                        style="background:#2e7d32;">
-                        ⚡ 一鍵深度分析 AI 預篩股
-                    </button>
-                    <div id="prescreen-eta-wrap" class="hide mt-1 text-[10px]" style="color:#388e3c;">
-                        剩餘 <span id="prescreen-eta-txt">--</span> 分鐘 |
-                        <button onclick="window.stopPrescreenScan()" class="underline font-black" style="color:#e53935;">中斷</button>
-                    </div>
-                </div>
-                <!-- 4. 啟動AI診斷（最後才按） -->
-                <div class="flex justify-center mt-3 mb-2">
-                    <button onclick="startManualScan()" class="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                 </div>
                 <!-- ✅ GitHub Actions 自動通知提醒卡 -->
                 <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
