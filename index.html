@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05041537</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05050938</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -3066,19 +3066,23 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         // ✅ Firebase有指標：直接做第三道（只抓5分K），跳過重抓週K/日K
                         const _fbResult = await analyzeStock(code, '5m', '5d');  // 只抓5分K
                         if (!_fbResult) return;
-                        // 用Firebase的指標覆蓋第一/二道結果
+                        // ✅ 05050938：第二道eLeader判斷（從Firebase指標讀取，不需重算）
+                        const _elLong  = _ind.el_long  !== undefined ? _ind.el_long  : true;  // 舊快取無此欄位→預設通過
+                        const _elShort = _ind.el_short !== undefined ? _ind.el_short : true;
+                        const _buyOk   = _ind.is_long  && (_ind.condD_l || _elLong)  && _fbResult.buy_signal;
+                        const _sellOk  = _ind.is_short && (_ind.condD_s || _elShort) && _fbResult.sell_signal;
                         result = {
                             price: _fbResult.price,
                             rsi: _ind.rsi,
                             rsi_trend: _ind.rsi > _ind.rsi_prev ? 'up' : 'down',
                             boll_position: _ind.boll_pos,
-                            buy_signal:  _ind.is_long  && _fbResult.buy_signal,
-                            sell_signal: _ind.is_short && _fbResult.sell_signal,
+                            buy_signal:  _buyOk,
+                            sell_signal: _sellOk,
                             conditions: _ind.condD_l ? ['條件D上軌'] : _ind.condD_s ? ['條件D下軌'] : ['A/B/C'],
                             debug_info: _fbResult.debug_info,
                             _mixedLabel: _ind.is_long ? '長期投資' : '中期投資',
                             _kLabel: '長期投資',
-                            _fromFirebase: true  // 標記來源
+                            _fromFirebase: true
                         };
                         _mxLabel = result._mixedLabel;
                     } else if (_mixedMode) {

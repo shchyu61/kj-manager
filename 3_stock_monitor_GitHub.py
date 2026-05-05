@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05041037'
+SCRIPT_VERSION = '05050938'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1189,34 +1189,29 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             _condD_long = False; _condD_short = False  # TEST_MODE 預設
 
         # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
-        # 兩種模式統一：eLeader必過才繼續（確保不在高檔區追高）
+        # ✅ 05050938：先執行eLeader判斷，儲存完整指標（含第二道結果）後再決定是否return None
         df_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
         if df_d is None or len(df_d) < 50: return None
         df_d = calc_indicators(df_d)
         if df_d is None: return None
 
+        # 第二道：eLeader判斷
+        is_eleader_ok       = False
+        is_eleader_short_ok = False
         if _is_long_ok:
             is_eleader_ok = check_buy_eleader(df_d) is not None
             if _condD_long:
-                # 條件D觸發（高位階上軌）→ eLeader 為可選，不強制
                 print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
             else:
-                # A/B/C 觸發（低位階下軌/中軌）→ eLeader 為必要條件
                 print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過，跳過"}')
-                if not is_eleader_ok:
-                    return None
         else:
             is_eleader_short_ok = check_short_eleader(df_d) is not None
             if _condD_short:
-                # 條件D空頭（高位階）→ eLeader 為可選
                 print(f'  {"✅" if is_eleader_short_ok else "⚠️"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過（條件D補位，繼續）"}')
             else:
-                # A/B/C 空頭（低位階）→ eLeader 為必要條件
                 print(f'  {"✅" if is_eleader_short_ok else "❌"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過，跳過"}')
-                if not is_eleader_short_ok:
-                    return None
 
-        # ✅ 05041037新增：第一+第二道通過後，儲存指標供Firebase快取
+        # ✅ 05050938：第一道通過即存指標（含eLeader結果），網頁版快速路徑才準確
         _code_only2 = ticker.split('.')[0]
         try:
             _ref_df = df_w if (SCAN_MODE == 'weekly') else df_d
@@ -1233,10 +1228,21 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 _bp2 = 'mid_zone'
             _prescreened_ind[_code_only2] = {
                 'rsi': round(_rsi_now2, 1), 'rsi_prev': round(_rsi_prv2, 1),
-                'boll_pos': _bp2, 'is_long': bool(_is_long_ok), 'is_short': bool(_is_short_ok),
-                'condD_l': bool(_condD_long), 'condD_s': bool(_condD_short),
+                'boll_pos': _bp2,
+                'is_long':  bool(_is_long_ok),
+                'is_short': bool(_is_short_ok),
+                'el_long':  bool(is_eleader_ok),        # ✅ 新增：第二道多頭eLeader結果
+                'el_short': bool(is_eleader_short_ok),  # ✅ 新增：第二道空頭eLeader結果
+                'condD_l':  bool(_condD_long),
+                'condD_s':  bool(_condD_short),
             }
         except Exception: pass
+
+        # 第二道未通過且非條件D → return None
+        if _is_long_ok and not _condD_long and not is_eleader_ok:
+            return None
+        if _is_short_ok and not _condD_short and not is_eleader_short_ok:
+            return None
 
         # ── 第三道：5分K即時轉折（週K/日K模式共用）─────────────
         now_ts = time.time()
