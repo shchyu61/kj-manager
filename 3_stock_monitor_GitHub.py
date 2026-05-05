@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05052224'
+SCRIPT_VERSION = '05052251'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -2226,8 +2226,10 @@ if __name__ == "__main__":
                 main_task()
             except Exception as e:
                 print(f"掃描發生錯誤: {e}")
-            print(f"😴 休息 {FUTURES_5MK_INTERVAL} 秒（5分鐘）...")
-            time.sleep(FUTURES_5MK_INTERVAL)
+            # ✅ 05052251：無訊號時5秒後結束（工作排程器每5分鐘自動再觸發）
+            print("⏱️ 本次無訊號，5秒後結束")
+            time.sleep(5)
+            break
         exit()
 
     # === [精準測試模式]：不受交易時間限制，發送兩封關鍵測試信後即結束 ===
@@ -2245,7 +2247,7 @@ if __name__ == "__main__":
         print("\n✅ 精準測試信已發出。")
         print("💡 確認手機通知與星星正確後，請將第一章節的 TEST_MODE 改為 False 存檔。")
         print("💡 晚上 21:30 再次執行 .bat 即可進入正式監控模式。")
-        time.sleep(10)
+        time.sleep(5)
         exit()
 
     # === [正式監控模式]：TEST_MODE 為 False 時才會進入以下邏輯 ===
@@ -2276,7 +2278,7 @@ if __name__ == "__main__":
             except: pass
         if _sat_done:
             print(f"[{now.strftime('%H:%M:%S')}] ✅ 週六預篩已執行過，今日不再重複")
-            time.sleep(10)
+            time.sleep(5)  # ✅ 05052251
             exit()
         print(f"[{now.strftime('%H:%M:%S')}] 📅 週六補跑：執行一次台股預篩快取上傳")
         loops = 1
@@ -2287,7 +2289,7 @@ if __name__ == "__main__":
         except: pass
     else:
         print(f"[{now.strftime('%H:%M:%S')}] ❌ 非交易時段啟動，直接結束")
-        time.sleep(10)
+        time.sleep(5)  # ✅ 05052251
         exit()
 
     print(f"🚀 {market_name} 監控模式啟動 (預計執行 {loops} 次)")
