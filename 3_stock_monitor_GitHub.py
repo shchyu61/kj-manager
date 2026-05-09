@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05100620'
+SCRIPT_VERSION = '05101039'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -967,6 +967,103 @@ def check_short_precondition(df, is_weekly=False):
     except:
         return False
 
+# ============================================================
+# 【條件E：V轉做多 / A轉做空（通用條件，OR 條件A）】
+# 整合 Wed3/Wed4（做多）和 Wed1/Wed2（做空）截圖邏輯
+# 適用所有週期（週K/日K/5分K）和所有標的
+# ============================================================
+def check_condE_long(df):
+    """條件E做多：V轉進場（近7根碰過下軌，RSI/MACD柱開始反轉）"""
+    try:
+        import pandas_ta as _pta
+        if df is None or len(df) < 20: return False
+        if 'boll_top20' not in df.columns or 'boll_bot20' not in df.columns: return False
+        if 'ma_c_20' not in df.columns or 'macd_hist' not in df.columns: return False
+
+        bt   = df['boll_top20']
+        bb   = df['boll_bot20']
+        ma20 = df['ma_c_20']
+        c    = df['Close']
+        o    = df['Open']
+        h    = df['High']
+        l    = df['Low']
+        v    = df['Volume']
+        mh   = df['macd_hist']
+
+        # RSI10 和 EMA5(RSI10)
+        rsi10 = _pta.rsi(c, length=10)
+        ema_r = _pta.ema(rsi10, length=5) if rsi10 is not None else None
+        if rsi10 is None or ema_r is None or len(rsi10) < 10: return False
+
+        # ── 主條件（截圖紫色框C1~C6）──
+        # C1: 前1根上軌>前2根上軌 AND 近5根最低低點 < 近5根下軌均值
+        C1 = (bt.iloc[-2] > bt.iloc[-3]) and (l.iloc[-6:-1].min() < bb.iloc[-6:-1].mean())
+        # C2: 近5根最大量 > 近5根平均量
+        C2 = float(v.iloc[-6:-1].max()) > float(v.iloc[-6:-1].mean())
+        # C3: 前2根7根均線 < 前3根7根均線（下跌趨勢中）
+        C3 = float(c.iloc[-9:-2].mean()) < float(c.iloc[-10:-3].mean())
+        # C4: 近5根最低開盤 < 當根下軌
+        C4 = float(o.iloc[-5:].min()) < float(bb.iloc[-1])
+        # C5: MACD柱 < -1 AND 當根 > 前根（柱轉升）
+        C5 = (float(mh.iloc[-1]) < -1) and (float(mh.iloc[-1]) > float(mh.iloc[-2]))
+        # C6: RSI10當根>前根 AND EMA5(RSI10)<51 AND RSI10<55
+        C6 = (float(rsi10.iloc[-1]) > float(rsi10.iloc[-2])) and              (float(ema_r.iloc[-1]) < 51) and (float(rsi10.iloc[-1]) < 55)
+
+        # ── 替代條件（截圖框外C11/C12）──
+        # C11: MA20前1根下降 AND 前1根低<MA20前1根 AND 前1根2根均開>前2根2根均開 AND 前1根2根均收>前2根2根均低 AND 當根高>開
+        C11 = (float(ma20.iloc[-2]) < float(ma20.iloc[-3])) and               (float(l.iloc[-2]) < float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 > (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 > (float(l.iloc[-4])+float(l.iloc[-3]))/2) and               (float(h.iloc[-1]) > float(o.iloc[-1]))
+        # C12: MA20前1根>前2根 AND MA20當根>前1根 AND 前1根低<MA20前1根 AND 2根均開升 AND 2根均收升 AND 當根2根均收升
+        C12 = (float(ma20.iloc[-2]) > float(ma20.iloc[-3])) and               (float(ma20.iloc[-1]) > float(ma20.iloc[-2])) and               (float(l.iloc[-2]) < float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 > (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 > (float(l.iloc[-4])+float(l.iloc[-3]))/2) and               ((float(c.iloc[-2])+float(c.iloc[-1]))/2 > (float(c.iloc[-3])+float(c.iloc[-2]))/2)
+
+        return (C1 and C2 and C3 and C4 and C5 and C6) or (C2 and C3 and (C11 or C12))
+    except Exception as _e:
+        return False
+
+def check_condE_short(df):
+    """條件E做空：A轉進場（近7根碰過上軌，RSI/MACD柱開始反轉）"""
+    try:
+        import pandas_ta as _pta
+        if df is None or len(df) < 20: return False
+        if 'boll_top20' not in df.columns or 'boll_bot20' not in df.columns: return False
+        if 'ma_c_20' not in df.columns or 'macd_hist' not in df.columns: return False
+
+        bt   = df['boll_top20']
+        bb   = df['boll_bot20']
+        ma20 = df['ma_c_20']
+        c    = df['Close']
+        o    = df['Open']
+        h    = df['High']
+        l    = df['Low']
+        v    = df['Volume']
+        mh   = df['macd_hist']
+
+        rsi10 = _pta.rsi(c, length=10)
+        ema_r = _pta.ema(rsi10, length=5) if rsi10 is not None else None
+        if rsi10 is None or ema_r is None or len(rsi10) < 10: return False
+
+        # C1: 前1根下軌<前2根下軌 AND 近5根最高高點>近5根上軌均值
+        C1 = (float(bb.iloc[-2]) < float(bb.iloc[-3])) and (float(h.iloc[-6:-1].max()) > float(bt.iloc[-6:-1].mean()))
+        # C2: 近5根最大量 > 近5根平均量
+        C2 = float(v.iloc[-6:-1].max()) > float(v.iloc[-6:-1].mean())
+        # C3: 前2根7根均線 > 前3根7根均線（上漲趨勢中）
+        C3 = float(c.iloc[-9:-2].mean()) > float(c.iloc[-10:-3].mean())
+        # C4: 近5根最高開盤 > 當根上軌
+        C4 = float(o.iloc[-5:].max()) > float(bt.iloc[-1])
+        # C5: MACD柱 > 1 AND 當根 < 前根（柱轉降）
+        C5 = (float(mh.iloc[-1]) > 1) and (float(mh.iloc[-1]) < float(mh.iloc[-2]))
+        # C6: RSI10當根<前根 AND EMA5(RSI10)>49 AND RSI10>45
+        C6 = (float(rsi10.iloc[-1]) < float(rsi10.iloc[-2])) and              (float(ema_r.iloc[-1]) > 49) and (float(rsi10.iloc[-1]) > 45)
+
+        # C11: MA20前1根上升 AND 前1根高>MA20前1根 AND 前1根2根均開降 AND 前1根2根均收降 AND 當根低<開
+        C11 = (float(ma20.iloc[-2]) > float(ma20.iloc[-3])) and               (float(h.iloc[-2]) > float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 < (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 < (float(h.iloc[-4])+float(h.iloc[-3]))/2) and               (float(l.iloc[-1]) < float(o.iloc[-1]))
+        # C12: MA20前1根<前2根 AND MA20當根<前1根 AND 前1根高>MA20前1根 AND 2根均開降 AND 2根均收降 AND 當根2根均收降
+        C12 = (float(ma20.iloc[-2]) < float(ma20.iloc[-3])) and               (float(ma20.iloc[-1]) < float(ma20.iloc[-2])) and               (float(h.iloc[-2]) > float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 < (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 < (float(h.iloc[-4])+float(h.iloc[-3]))/2) and               ((float(c.iloc[-2])+float(c.iloc[-1]))/2 < (float(c.iloc[-3])+float(c.iloc[-2]))/2)
+
+        return (C1 and C2 and C3 and C4 and C5 and C6) or (C2 and C3 and (C11 or C12))
+    except Exception as _e:
+        return False
+
+
 def check_short_eleader(df_d):
     """做空第二道：日K eLeader 25條件全部反向（多頭訊號→空頭訊號）"""
     try:
@@ -1165,10 +1262,20 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 # BUY_LOOKBACK_BARS=3，不換算，直接跑
                 _is_long_ok, _condD_long   = check_buy_precondition(_df1st)
                 _is_short_ok, _condD_short = check_short_precondition(_df1st)
+                # ✅ 05100733：條件E OR 條件A（日K模式）
+                if not _is_long_ok  and check_condE_long(_df1st):
+                    _is_long_ok, _condD_long  = True, False
+                if not _is_short_ok and check_condE_short(_df1st):
+                    _is_short_ok, _condD_short = True, False
             else:
                 # 週K模式第一道：用週K 3根（原設計）
                 _is_long_ok, _condD_long   = check_buy_precondition(df_w, is_weekly=True)
                 _is_short_ok, _condD_short = check_short_precondition(df_w, is_weekly=True)
+                # ✅ 05100733：條件E OR 條件A（週K模式）
+                if not _is_long_ok  and check_condE_long(df_w):
+                    _is_long_ok, _condD_long  = True, False
+                if not _is_short_ok and check_condE_short(df_w):
+                    _is_short_ok, _condD_short = True, False
             # ✅ 診斷輸出：第一道結果（_mode_label由scan_stock_mixed傳入）
             _wk_label = _mode_label if _mode_label else ('長期投資' if SCAN_MODE != 'daily' else '中期投資')
             if _is_long_ok:
@@ -1365,7 +1472,7 @@ notified = load_notified()
 today = datetime.now().strftime("%Y-%m-%d")
 
 if today not in notified:
-    notified[today] = []  # ✅ 05100620修正：只新增今天的key，不覆蓋整個字典
+    notified[today] = []  # ✅ 05101039修正：只新增今天的key，不覆蓋整個字典
 # ============================================================
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
@@ -1376,7 +1483,7 @@ if today not in notified:
 # 本機版優先使用此快取，避免每次都掃1800支
 # ============================================================
 def write_tw_stock_names():
-    """✅ 05100620：將twstock中文名稱對照表上傳Firebase（週六補跑時執行）"""
+    """✅ 05101039：將twstock中文名稱對照表上傳Firebase（週六補跑時執行）"""
     try:
         import json, os, requests as _req, twstock
         from datetime import datetime; import pytz
@@ -1735,7 +1842,7 @@ def main_task():
         if _tw_prescreened:
             print(f'\n🔍 正在將 {len(_tw_prescreened)} 支預篩台股寫入Firebase...')
             write_tw_prescreened(_tw_prescreened, _prescreened_ind)  # ✅ 05041037
-            if _is_saturday:  # ✅ 05100620：週六補跑時同步更新中文名稱
+            if _is_saturday:  # ✅ 05101039：週六補跑時同步更新中文名稱
                 print("\n🔍 正在更新台股中文名稱對照表...")
                 write_tw_stock_names()
         else:

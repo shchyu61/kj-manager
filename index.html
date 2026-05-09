@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05101039</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05100702</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -380,6 +380,7 @@
                     <button onclick="filterWatchlist('gold')" id="wl-tab-gold" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">黃金/貴金屬</button>
                     <button onclick="filterWatchlist('bond')" id="wl-tab-bond" class="wl-cat-btn shrink-0 px-3 py-1.5 rounded-xl text-sm font-black transition-all" style="background:#ede0cc;color:#3a2010;">債券基金</button>
                 </div>
+                <div class="text-[10px] mb-1" style="color:#94a3b8;">💡 股票依「加入時間」排列，最新加入的股票顯示在最下方</div>
                 <div id="watchlist-list" class="grid grid-cols-1 gap-4 min-h-[200px]"></div>
             </div>
         </div>
@@ -656,8 +657,12 @@
                 <div class="flex justify-center mt-3 mb-2">
                     <button onclick="startManualScan()" class="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                 </div>
-                <!-- ✅ GitHub Actions 自動通知提醒卡 -->
-                <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
+                <!-- ✅ 05100702：不發Gmail提醒 -->
+                <div class="text-[10px] text-center leading-relaxed mb-2" style="color:#94a3b8;">
+                    💡 「啟動AI診斷」結果僅顯示於螢幕，<b style="color:#e53935;">不會發送Gmail</b><br>
+                    Gmail由每天 09:05／13:00／22:35／03:55 雲端自動掃描發出
+                </div>
+                <!-- ✅ GitHub Actions 自動通知提醒卡 -->"background:#fffbe6; border:1.5px solid #f0c040;">
                     <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                     <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
                         ✅ 台股：每天 <b>09:05</b>、<b>13:00</b> 自動掃描，符合條件寄 Gmail<br>
@@ -850,7 +855,7 @@
         };
 
         // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
-        // ✅ 05101039：從Firebase載入台股中文名稱
+        // ✅ 05100620：從Firebase載入台股中文名稱
         const loadTwStockNames = async () => {
             try {
                 await initFirebaseAuth();
