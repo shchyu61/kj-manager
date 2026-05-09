@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05052251'
+SCRIPT_VERSION = '05100620'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1365,7 +1365,7 @@ notified = load_notified()
 today = datetime.now().strftime("%Y-%m-%d")
 
 if today not in notified:
-    notified = {today: []}
+    notified[today] = []  # ✅ 05100620修正：只新增今天的key，不覆蓋整個字典
 # ============================================================
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
@@ -1375,6 +1375,41 @@ if today not in notified:
 # 從 Firebase 讀取雲端版每天14:00更新的台股預篩清單
 # 本機版優先使用此快取，避免每次都掃1800支
 # ============================================================
+def write_tw_stock_names():
+    """✅ 05100620：將twstock中文名稱對照表上傳Firebase（週六補跑時執行）"""
+    try:
+        import json, os, requests as _req, twstock
+        from datetime import datetime; import pytz
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json: print("  ⚠️ Firebase憑證未設定"); return False
+        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+            scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+        # 只取4位數字代碼的台股（過濾權證等）
+        _names = {}
+        for code, info in twstock.codes.items():
+            if str(code).isdigit() and len(str(code)) == 4:
+                _names[code] = info.name
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_stock_names")
+        _r = _req.patch(_url, timeout=30,
+            headers={"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"},
+            json={"fields": {
+                "names": {"stringValue": json.dumps(_names, ensure_ascii=False)},
+                "count": {"integerValue": str(len(_names))},
+                "updated_at": {"stringValue": _now}}})
+        if _r.status_code in (200, 201):
+            print(f"  ✅ Firebase 台股中文名稱已更新：{len(_names)} 支 ({_now})")
+            return True
+        print(f"  ❌ 名稱寫入失敗：{_r.status_code}"); return False
+    except Exception as e: print(f"  ⚠️ 名稱寫入異常：{e}"); return False
+
 def write_tw_prescreened(codes_list, indicators_dict=None):
     """將預篩台股（代碼清單+第二道指標）寫入Firebase
     ✅ 05052224：平日採合併模式（只增不減），週六採覆蓋模式（完整重建）
@@ -1700,6 +1735,9 @@ def main_task():
         if _tw_prescreened:
             print(f'\n🔍 正在將 {len(_tw_prescreened)} 支預篩台股寫入Firebase...')
             write_tw_prescreened(_tw_prescreened, _prescreened_ind)  # ✅ 05041037
+            if _is_saturday:  # ✅ 05100620：週六補跑時同步更新中文名稱
+                print("\n🔍 正在更新台股中文名稱對照表...")
+                write_tw_stock_names()
         else:
             print('\n🔍 本次預篩：無台股通過條件')
 

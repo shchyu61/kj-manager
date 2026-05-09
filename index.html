@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05052313</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05100620</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -850,27 +850,32 @@
         };
 
         // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
-        const fetchStockName = async (code) => {
-            if (stockNameMap[code]) return; // 已有名稱，跳過
+        // ✅ 05100620：從Firebase載入台股中文名稱
+        const loadTwStockNames = async () => {
             try {
-                const isTW = /^\d{4,6}$/.test(code);
-                const ticker = isTW ? code + '.TW' : code;
-                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+                await initFirebaseAuth();
+                const _ref = doc(window.db,'artifacts',window.appId,'public','tw_stock_names');
+                const snap = await getDoc(_ref);
+                if (snap.exists() && snap.data().names) {
+                    Object.assign(stockNameMap, JSON.parse(snap.data().names));
+                }
+            } catch(e) {}
+        };
+
+        const fetchStockName = async (code) => {
+            if (stockNameMap[code]) return;
+            try {
+                if (/^\d{4,6}$/.test(code)) return; // 台股用Firebase，避免Yahoo英文名
+                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${code}?interval=1d&range=1d`;
                 const proxy = `${window._WORKER_URL}/${encodeURIComponent(url)}`;
                 const resp = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
                 if (!resp.ok) return;
                 const data = await resp.json();
                 const meta = data?.chart?.result?.[0]?.meta;
-                if (!meta) return;
-                // 優先取 longName，其次 shortName
-                const name = meta.longName || meta.shortName || '';
-                if (name) {
-                    stockNameMap[code] = name;
-                    // 自動重繪清單顯示新名稱
-                    window.renderStocks();
-                    window.renderWatchlist();
+                if (meta?.longName || meta?.shortName) {
+                    stockNameMap[code] = meta.longName || meta.shortName;
                 }
-            } catch(e) { /* 靜默失敗，顯示代碼即可 */ }
+            } catch(e) {}
         };
 
         let stocks = [];
@@ -1058,6 +1063,7 @@
             if (countdownTimer) clearInterval(countdownTimer);
             // ✅ 登入後讀取個人掃描模式設定（週K/日K）
             _loadScanModePref(email).catch(()=>{});
+            loadTwStockNames();
             // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
             if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
         };
