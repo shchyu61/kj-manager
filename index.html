@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05100620</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05101039</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -850,7 +850,7 @@
         };
 
         // ── 需求1+2：自動從Yahoo Finance抓取股票中文/英文名稱 ──────
-        // ✅ 05100620：從Firebase載入台股中文名稱
+        // ✅ 05101039：從Firebase載入台股中文名稱
         const loadTwStockNames = async () => {
             try {
                 await initFirebaseAuth();
@@ -1442,10 +1442,10 @@
                             _sigType==='bear_enter' ? 'text-purple-400' :
                             _sigType==='bull_exit'  ? 'text-orange-400' :
                             _sigType==='bear_exit'  ? 'text-blue-400' : (isHolding ? 'text-slate-400' : textSub)}">${
-                            _sigType==='bull_enter' ? '⭐ 做多進場' :
-                            _sigType==='bear_enter' ? '▼ 做空進場' :
-                            _sigType==='bull_exit'  ? '🔔 做多出場' :
-                            _sigType==='bear_exit'  ? '▲ 做空出場' : noSignalText}</div>
+                            _sigType==='bull_enter' ? `⭐ ${result._mixedLabel==='中期投資'?'中期':'長期'}做多進場` :
+                            _sigType==='bear_enter' ? `▼ ${result._mixedLabel==='中期投資'?'中期':'長期'}做空進場` :
+                            _sigType==='bull_exit'  ? `🔔 ${result._mixedLabel==='中期投資'?'中期':'長期'}做多出場` :
+                            _sigType==='bear_exit'  ? `▲ ${result._mixedLabel==='中期投資'?'中期':'長期'}做空出場` : noSignalText}</div>
                     </div>
                 </div>
                 <!-- 第二行：RSI + 布林（獨立一行，完整顯示不截斷）-->
