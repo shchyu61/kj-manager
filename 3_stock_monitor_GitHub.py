@@ -1193,6 +1193,66 @@ def analyse_market_index(ticker, label):
         print(f"  ⚠️ {label}大盤分析失敗: {e}")
     return result
 
+# ============================================================
+# 【週選擇權履約價推薦】
+# 僅在週三/週五 09:05~10:45 期貨5分K觸發時附加在通知信中
+# ============================================================
+def get_weekly_option_hint(current_price, signal_type):
+    """
+    根據當前台指期貨報價和訊號方向，推薦週選擇權履約價範圍
+    signal_type: 'buy'（做多→建議CALL）或 'sell'（做空→建議PUT）
+    """
+    try:
+        from datetime import datetime
+        import pytz
+        _tz = pytz.timezone('Asia/Taipei')
+        _now = datetime.now(_tz)
+        _wd  = _now.weekday()  # 2=週三, 4=週五
+        _date_str = _now.strftime('%m/%d')
+
+        # 到期日說明
+        if _wd == 2:
+            _expiry = f"本週三（{_date_str}）到期週選擇權"
+        elif _wd == 4:
+            _expiry = f"本週五（{_date_str}）到期週選擇權"
+        else:
+            _expiry = f"當日（{_date_str}）週選擇權"
+
+        # ATM 履約價（四捨五入至最近50點）
+        _atm = round(current_price / 50) * 50
+
+        if signal_type == 'sell':
+            # 做空 → 建議 PUT：ATM和略低於ATM（讓put稍有時間價值但不太貴）
+            _strikes = [_atm, _atm - 50, _atm - 100]
+            _opt_type = 'PUT'
+            _direction = '做空（buy PUT）'
+        else:
+            # 做多 → 建議 CALL：ATM和略高於ATM
+            _strikes = [_atm, _atm + 50, _atm + 100]
+            _opt_type = 'CALL'
+            _direction = '做多（buy CALL）'
+
+        _hint = (
+            f"\n\n{'='*40}\n"
+            f"📋 週選擇權建議（{_direction}）\n"
+            f"{'='*40}\n"
+            f"到期日：{_expiry}\n"
+            f"台指現價：{current_price:.0f}\n"
+            f"建議標的：{_opt_type}\n"
+            f"建議履約價範圍（擇一，依市價決定）：\n"
+        )
+        for _s in _strikes:
+            _hint += f"  → {int(_s)} {_opt_type}\n"
+        _hint += (
+            f"\n⚠️ 進場條件（請在永豐金確認）：\n"
+            f"  ✅ 市價 ≤ 20 元\n"
+            f"  ✅ 當日最低價 ≥ 12 元（避免時間價值耗盡）\n"
+            f"\n策略：建倉後不停損，持有至期貨5分K碰上/下軌反轉或結算"
+        )
+        return _hint
+    except Exception as _e:
+        return ""
+
 def scan_stock(ticker, is_holding=False, _mode_label=None):
     global _tw_prescreened, _wk_passed_1st, _prescreened_ind
     global weekly_cache, daily_cache
@@ -2099,12 +2159,19 @@ def main_task():
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
                     else:
                         send_gmail._futures_log.append(_now_ts)
+                        # ✅ 05101133：週三/週五加入週選擇權推薦
+                        _wd_now = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).weekday()
+                        _hour_now = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).hour
+                        _min_now  = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).minute
+                        _in_opt_window = (_wd_now in (2,4)) and (9*60+5 <= _hour_now*60+_min_now <= 10*60+45)
+                        _opt_hint = get_weekly_option_hint(close, 'buy') if _in_opt_window else ""
                         msg = (
                             f"💻【本機】⭐【期貨5分K買進訊號】⭐\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"
                             f"時間：{now_str_f}"
+                            + _opt_hint
                         )
                         _ok = send_gmail(f"💻【本機】⭐期貨5分K買進 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K買進訊號{'已發送' if _ok else '發送失敗'}")
@@ -2121,12 +2188,18 @@ def main_task():
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
                     else:
                         send_gmail._futures_log.append(_now_ts)
+                        _wd_now2 = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).weekday()
+                        _hour_now2 = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).hour
+                        _min_now2  = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).minute
+                        _in_opt_window2 = (_wd_now2 in (2,4)) and (9*60+5 <= _hour_now2*60+_min_now2 <= 10*60+45)
+                        _opt_hint2 = get_weekly_option_hint(close, 'sell') if _in_opt_window2 else ""
                         msg = (
                             f"💻【本機】🔔【期貨5分K平倉訊號】🔔\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林上緣：{boll_top:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
                             f"時間：{now_str_f}"
+                            + _opt_hint2
                         )
                         _ok = send_gmail(f"💻【本機】🔔期貨5分K平倉 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K平倉訊號{'已發送' if _ok else '發送失敗'}")
