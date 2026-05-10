@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05101156</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05101229</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -702,6 +702,124 @@
         </div>
 
         <!-- 設定頁面 -->
+        <!-- 零股計算頁面 -->
+        <div id="page-calculator" class="page hide max-w-lg mx-auto px-4 pb-24">
+            <div class="pt-6 pb-3 flex items-center justify-between">
+                <div>
+                    <h1 class="text-xl font-black text-slate-800">零股計算機</h1>
+                    <p class="text-[11px] text-slate-400 mt-0.5">波段獲利回推 ✕ T+2資金管理</p>
+                </div>
+                <button onclick="saveCalcSettings()" class="px-3 py-1.5 rounded-xl text-xs font-black text-white" style="background:#2563eb;">💾 儲存設定</button>
+            </div>
+
+            <!-- 資金管理卡 -->
+            <div class="bg-white border-2 border-blue-200 rounded-3xl p-4 mb-3">
+                <div class="text-sm font-black mb-3" style="color:#1d4ed8;">🏦 我的資金管理（T+2台股交割制度）</div>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">最新銀行餘額（元）</label>
+                        <input id="calc-bank" type="number" step="1" value="10000" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcBudget()">
+                    </div>
+                    <div class="rounded-xl p-2 text-[10px] leading-relaxed" style="background:#fef3c7;color:#92400e;">
+                        ⚠️ T+2規則：今天買的股票，2個交易日後才扣款。<br>
+                        請輸入這3天已購買尚未扣款的金額，避免違約交割！
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-[11px] text-slate-500 w-40">前天買的（今天扣款）</label>
+                        <input id="calc-day2" type="number" step="1" value="0" class="w-36 border-2 border-red-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcBudget()">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-[11px] text-slate-500 w-40">昨天買的（明天扣款）</label>
+                        <input id="calc-day1" type="number" step="1" value="0" class="w-36 border-2 border-amber-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcBudget()">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-[11px] text-slate-500 w-40">今天買的（後天扣款）</label>
+                        <input id="calc-day0" type="number" step="1" value="0" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcBudget()">
+                    </div>
+                    <div class="flex items-center justify-between py-2 px-3 rounded-xl" style="background:#dbeafe;">
+                        <span class="text-sm font-black" style="color:#1e40af;">今日實際可用預算</span>
+                        <span class="text-lg font-black" style="color:#1d4ed8;" id="r-available">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 每人設定 -->
+            <div class="bg-white border-2 border-slate-200 rounded-3xl p-4 mb-3">
+                <div class="text-sm font-black text-slate-600 mb-3">⚙️ 個人投資設定</div>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">每1支股票預算上限（元）</label>
+                        <input id="calc-per-stock" type="number" step="50" value="500" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">每天最多買幾支股票</label>
+                        <input id="calc-max-stocks" type="number" step="1" value="4" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
+                    </div>
+                    <div class="text-[10px] text-slate-400">※ 依個人資金和風險承受度自行決定</div>
+                </div>
+            </div>
+
+            <!-- 單次交易計算 -->
+            <div class="bg-white border-2 border-slate-200 rounded-3xl p-4 mb-3">
+                <div class="text-sm font-black text-slate-600 mb-3">📋 單次交易計算</div>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">買進股價（元）</label>
+                        <input id="calc-buy-price" type="number" step="0.01" value="34.61" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
+                    </div>
+                    <div class="flex items-center justify-between py-1.5 px-3 rounded-xl" style="background:#f0fdf4;">
+                        <span class="text-sm font-black" style="color:#166534;">💡 建議買幾股</span>
+                        <span class="text-lg font-black" style="color:#15803d;" id="r-suggest-shares">-</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">實際購買股數（股）</label>
+                        <input id="calc-shares" type="number" step="1" value="14" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">預計獲利目標（%）</label>
+                        <input id="calc-profit" type="number" step="1" value="20" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">手續費最低（元）</label>
+                        <select id="calc-fee-min" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black" onchange="calcResult()">
+                            <option value="1">1元（有1元優惠）</option>
+                            <option value="20">20元（一般無優惠）</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">電子下單折扣（幾折）</label>
+                        <input id="calc-discount" type="number" step="0.1" value="4.9" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
+                    </div>
+                    <div class="text-[10px] text-slate-400">例：永豐金49折輸入4.9；無折扣輸入10</div>
+                </div>
+            </div>
+
+            <!-- 計算結果 -->
+            <div class="bg-white border-2 border-slate-200 rounded-3xl p-4 mb-3">
+                <div class="text-sm font-black text-slate-600 mb-3">📊 計算結果</div>
+                <div class="space-y-1.5">
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">買進價值</span><span class="text-sm font-black text-slate-800" id="r-buy-value">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">買進手續費</span><span class="text-sm font-black text-slate-800" id="r-buy-fee">-</span></div>
+                    <div class="flex justify-between py-1.5 border-b border-slate-200"><span class="text-sm font-black text-slate-700">買進總花費</span><span class="text-sm font-black text-blue-600" id="r-buy-total">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">賣出手續費（估）</span><span class="text-sm font-black text-slate-800" id="r-sell-fee">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">賣出證交稅（0.3%）</span><span class="text-sm font-black text-slate-800" id="r-sell-tax">-</span></div>
+                    <div class="flex justify-between items-center py-2" style="background:#ecfdf5;border-radius:12px;padding:10px 12px;margin:4px 0;">
+                        <span class="text-sm font-black" style="color:#065f46;">▶ 目標賣出股價</span>
+                        <span class="text-xl font-black" style="color:#059669;" id="r-sell-price">-</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">每檔跳動（Tick）</span><span class="text-sm font-black text-slate-800" id="r-tick">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">買進+3 Tick觸價</span><span class="text-sm font-black text-amber-600" id="r-buy-plus3">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">預計獲利金額</span><span class="text-sm font-black text-emerald-600" id="r-profit-amt">-</span></div>
+                    <div class="flex justify-between py-1"><span class="text-sm font-black text-slate-700">扣掉成本實際獲利</span><span class="text-sm font-black text-emerald-700" id="r-net-profit">-</span></div>
+                </div>
+            </div>
+
+            <div class="rounded-2xl p-3" style="background:#fffbe6;border:1.5px solid #f0c040;">
+                <div class="text-[11px] leading-relaxed" style="color:#7a4a00;">⚠️ 目標賣出股價為估算值，實際下單前請在永豐金確認可用價位<br>💡 賣出採無折扣手續費計算（保守估算）<br>💡 點「💾 儲存設定」可保存銀行餘額和個人設定到雲端</div>
+            </div>
+        </div>
+
+                <!-- 設定頁面 -->
         <!-- 零股計算頁面 -->
         <div id="page-calculator" class="page hide max-w-lg mx-auto px-4 pb-24">
             <div class="pt-8 pb-4">
@@ -3840,14 +3958,31 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             }
         })();
 
-        // ══ 零股計算機 ═══════════════════════════════════════
+        // ══ 零股計算機 ════════════════════════════════════════════
+        window.calcBudget = function() {
+            var bank  = parseFloat(document.getElementById('calc-bank').value) || 0;
+            var day0  = parseFloat(document.getElementById('calc-day0').value) || 0;
+            var day1  = parseFloat(document.getElementById('calc-day1').value) || 0;
+            var day2  = parseFloat(document.getElementById('calc-day2').value) || 0;
+            var avail = bank - day0 - day1 - day2;
+            var el = document.getElementById('r-available');
+            if (el) { el.textContent = avail.toFixed(0) + ' 元'; el.style.color = avail < 0 ? '#dc2626' : '#1d4ed8'; }
+            window.calcResult();
+        };
         window.calcResult = function() {
-            var bp = parseFloat(document.getElementById('calc-buy-price').value) || 0;
-            var sh = parseInt(document.getElementById('calc-shares').value) || 0;
-            var pr = parseFloat(document.getElementById('calc-profit').value) / 100 || 0;
-            var fm = parseFloat(document.getElementById('calc-fee-min').value) || 1;
-            var dc = parseFloat(document.getElementById('calc-discount').value) / 10 || 1;
-            if (!bp || !sh) return;
+            var bp  = parseFloat(document.getElementById('calc-buy-price').value) || 0;
+            var sh  = parseInt(document.getElementById('calc-shares').value) || 0;
+            var pr  = parseFloat(document.getElementById('calc-profit').value) / 100 || 0;
+            var fm  = parseFloat(document.getElementById('calc-fee-min').value) || 1;
+            var dc  = parseFloat(document.getElementById('calc-discount').value) / 10 || 1;
+            var ps  = parseFloat(document.getElementById('calc-per-stock').value) || 500;
+            if (!bp) return;
+            // 建議買幾股
+            var sugSh = Math.floor(ps / bp);
+            if (sugSh < 1) sugSh = 1;
+            var rSug = document.getElementById('r-suggest-shares');
+            if (rSug) rSug.textContent = sugSh + ' 股（每股預算' + ps.toFixed(0) + '元÷' + bp.toFixed(2) + '元）';
+            if (!sh) { sh = sugSh; var shEl = document.getElementById('calc-shares'); if(shEl) shEl.value = sh; }
             var bv  = bp * sh;
             var bf  = Math.max(fm, bv * 0.001425 * dc);
             var bt  = bv + bf;
@@ -3868,8 +4003,52 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             document.getElementById('r-buy-plus3').textContent  = f(bp + 3*tick) + ' 元';
             document.getElementById('r-profit-amt').textContent = f(prof) + ' 元（' + f(prof/bt*100,1) + '%）';
             document.getElementById('r-net-profit').textContent = f(prof) + ' 元';
+            window.calcBudget && (() => {
+                var bank=parseFloat(document.getElementById('calc-bank').value)||0;
+                var d0=parseFloat(document.getElementById('calc-day0').value)||0;
+                var d1=parseFloat(document.getElementById('calc-day1').value)||0;
+                var d2=parseFloat(document.getElementById('calc-day2').value)||0;
+                var avail=bank-d0-d1-d2;
+                var el=document.getElementById('r-available');
+                if(el){el.textContent=avail.toFixed(0)+' 元';el.style.color=avail<0?'#dc2626':'#1d4ed8';}
+            })();
         };
-        setTimeout(window.calcResult, 600);
+        window.saveCalcSettings = async function() {
+            try {
+                await initFirebaseAuth();
+                var data = {
+                    bank:      document.getElementById('calc-bank').value,
+                    day0:      document.getElementById('calc-day0').value,
+                    day1:      document.getElementById('calc-day1').value,
+                    day2:      document.getElementById('calc-day2').value,
+                    per_stock: document.getElementById('calc-per-stock').value,
+                    max_stk:   document.getElementById('calc-max-stocks').value,
+                    fee_min:   document.getElementById('calc-fee-min').value,
+                    discount:  document.getElementById('calc-discount').value,
+                    profit:    document.getElementById('calc-profit').value,
+                    updated:   new Date().toLocaleString('zh-TW')
+                };
+                var _ref = doc(window.db,'artifacts',window.appId,'users',window._userEmail||'default','calc_settings','v1');
+                await setDoc(_ref, data);
+                window.showAlert('✅ 零股計算設定已儲存到雲端');
+            } catch(e) { window.showAlert('❌ 儲存失敗：' + e.message); }
+        };
+        window.loadCalcSettings = async function() {
+            try {
+                await initFirebaseAuth();
+                var _ref = doc(window.db,'artifacts',window.appId,'users',window._userEmail||'default','calc_settings','v1');
+                var snap = await getDoc(_ref);
+                if (snap.exists()) {
+                    var d = snap.data();
+                    var set = function(id, val) { var el=document.getElementById(id); if(el&&val!==undefined) el.value=val; };
+                    set('calc-bank', d.bank); set('calc-day0', d.day0); set('calc-day1', d.day1); set('calc-day2', d.day2);
+                    set('calc-per-stock', d.per_stock); set('calc-max-stocks', d.max_stk);
+                    set('calc-fee-min', d.fee_min); set('calc-discount', d.discount); set('calc-profit', d.profit);
+                }
+            } catch(e) {}
+            window.calcBudget();
+        };
+        setTimeout(function(){ window.loadCalcSettings && window.loadCalcSettings(); }, 800);
     </script>
 </body>
 </html>
