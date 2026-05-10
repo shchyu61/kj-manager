@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05110258</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05110335</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -4019,58 +4019,76 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             var fm    = parseFloat(document.getElementById('calc-fee-min').value)||20;
             var dc    = parseFloat(document.getElementById('calc-discount').value)/10||0.49;
             var ps    = parseFloat(document.getElementById('calc-per-stock').value)||500;
+            var ms    = parseInt(document.getElementById('calc-max-stocks').value)||4;
             if(!bpRaw) return;
+
             function getTick(p){ return p<=10?0.01:p<=50?0.05:p<=100?0.1:p<=500?0.5:p<=1000?1:5; }
-            function tickUp(p){ var t=getTick(p); return Math.ceil(Math.round(p/t*1e8)/1e8)*t; }
             function tickCeil(p){ var t=getTick(p); return Math.ceil(Math.round(p/t*1e8)/1e8)*t; }
-            // ✅ 買進股價無條件進位至合法Tick
-            var bp = parseFloat(tickUp(bpRaw).toFixed(10));
+
+            // C1 = CEILING(B1, B20)：合法Tick買進價
+            var bp = tickCeil(bpRaw);
+
+            // Tick提示
             var bpEl = document.getElementById('r-buy-price-valid');
-            if(bpEl) bpEl.textContent = Math.abs(bpRaw-bp)<0.0001
-                ? bp.toFixed(2)+' 元（已是合法價格）'
-                : bpRaw.toFixed(2)+' → '+bp.toFixed(2)+' 元（已進位到合法Tick）';
-            // ✅ 建議買幾股
-            var sugSh = Math.floor(ps/bp)||1;
-            var rSug = document.getElementById('r-suggest-shares');
-            if(rSug) rSug.textContent = sugSh+' 股（'+ps.toFixed(0)+'÷'+bp.toFixed(2)+'）';
-            if(!sh){ sh=sugSh; var shEl=document.getElementById('calc-shares'); if(shEl) shEl.value=sh; }
-            // ✅ 買進計算（折扣含最低費用：max(fm,計算費)×折扣）
-            var bv = Math.ceil(bp*sh);
-            var bf = Math.round(Math.max(fm, bv*0.001425)*dc);
-            var bt = bv+bf;
-            // ✅ 目標獲利：買進價值×獲利率，無條件進位
-            var profAmt = Math.ceil(bv*pr);
-            // ✅ 迭代求賣出總額
-            var sellGross = bt+profAmt+Math.max(fm,bt*0.001425)*dc+5;
-            for(var i=0;i<10;i++){
-                var sfe2=Math.round(Math.max(fm,sellGross*0.001425)*dc);
-                var sta2=Math.round(sellGross*0.003);
-                var sg2=bt+profAmt+sfe2+sta2;
-                if(Math.abs(sg2-sellGross)<0.001){sellGross=sg2;break;}
-                sellGross=sg2;
+            if(bpEl){
+                if(Math.abs(bpRaw-bp)<0.0001){
+                    bpEl.textContent='已是合法下單價格 '+bp.toFixed(2)+' 元 ✓';
+                    bpEl.style.color='#15803d';
+                } else {
+                    bpEl.textContent='⚠️ 請以 '+bp.toFixed(2)+' 元下單！勿用 '+bpRaw.toFixed(2)+' 元（委託失效）';
+                    bpEl.style.color='#dc2626';
+                }
             }
-            var sfe=Math.round(Math.max(fm,sellGross*0.001425)*dc);
-            var sta=Math.round(sellGross*0.003);
-            var netRecv=sellGross-sfe-sta;
-            var netProfit=netRecv-bt;
-            // ✅ 賣出股價：無條件進位至合法Tick（確保獲利目標）
-            var spTick=getTick(sellGross/sh);
-            var spValid=tickCeil(sellGross/sh);
-            var cloudHigh=parseFloat((spValid+3*spTick).toFixed(10));
+
+            // 建議買幾股 = E3 ≈ floor(J4/C1)
+            var sugSh=Math.floor(ps/bp)||1;
+            var rSug=document.getElementById('r-suggest-shares');
+            if(rSug) rSug.textContent=sugSh+' 股（'+ps.toFixed(0)+'÷'+bp.toFixed(2)+'）';
+            if(!sh){ sh=sugSh; var shEl=document.getElementById('calc-shares'); if(shEl) shEl.value=sh; }
+
+            // B11/B12（買/賣手續費含折扣）：IF(B1×B3×C6<=B5, ROUNDUP(B5×dc,0), ROUNDUP(B1×B3×C6×dc,1))
+            // ⚠️ 用bpRaw(B1)不用bp(C1)！
+            var fee_base = bpRaw * sh * 0.001425;
+            var bf = fee_base<=fm ? Math.ceil(fm*dc) : Math.ceil(fee_base*dc*10)/10;  // B11
+            var sfe = bf;  // B12（同公式同輸入）
+
+            // B8（賣股證交稅）：ROUNDUP(C1×B3×0.003, 0) ⚠️ 用bp(C1)！
+            var sta = Math.ceil(bp * sh * 0.003);
+
+            // B14（買進價值）：ROUNDUP(C1×B3, 0) ⚠️ 用bp(C1)！
+            var bv = Math.ceil(bp * sh);
+            // B15（買進共花費）：B14 + B11
+            var bt = bv + bf;
+
+            // B16（賣出）：ROUNDUP(C1×B3+B12, 1) × (1+B9) + B8 + B12
+            var x = Math.ceil((bp*sh + sfe)*10)/10;
+            var sellGross = x*(1+pr) + sta + sfe;
+
+            // C17（合法賣出股價）：CEILING(B16/B3, B21)
+            var spTick = getTick(sellGross/sh);
+            var spValid = tickCeil(sellGross/sh);
+
+            // E20（雲端觸價最高）= E21 + B21×3
+            var cloudHigh = parseFloat((spValid + 3*spTick).toFixed(10));
+
+            // B19（實際獲利）：ROUNDDOWN(B16-B15-B12-B8, 0)
+            var netProfit = Math.floor(sellGross - bt - sfe - sta);
+
             var f=function(n,d){return n.toFixed(d!==undefined?d:2);};
-            document.getElementById('r-buy-value').textContent     = f(bv)+' 元';
-            document.getElementById('r-buy-fee').textContent       = f(bf)+' 元';
-            document.getElementById('r-buy-total').textContent     = f(bt)+' 元';
-            document.getElementById('r-sell-fee').textContent      = f(sfe)+' 元';
-            document.getElementById('r-sell-tax').textContent      = f(sta)+' 元';
-            document.getElementById('r-sell-price').textContent    = f(spValid)+' 元';
-            document.getElementById('r-tick').textContent          = f(spTick)+' 元（賣出每Tick）';
+            document.getElementById('r-buy-value').textContent    = f(bv)+' 元';
+            document.getElementById('r-buy-fee').textContent      = f(bf)+' 元';
+            document.getElementById('r-buy-total').textContent    = f(bt)+' 元';
+            document.getElementById('r-sell-fee').textContent     = f(sfe)+' 元';
+            document.getElementById('r-sell-tax').textContent     = f(sta)+' 元';
+            document.getElementById('r-sell-price').textContent   = f(spValid)+' 元';
+            document.getElementById('r-tick').textContent         = f(spTick)+' 元（賣出每Tick）';
             var chEl=document.getElementById('r-cloud-high'); if(chEl) chEl.textContent=f(cloudHigh)+' 元';
             var csEl=document.getElementById('r-cloud-sell'); if(csEl) csEl.textContent=f(spValid)+' 元';
-            document.getElementById('r-profit-amt').textContent    = f(netProfit)+' 元（'+f(netProfit/bt*100,1)+'%）';
+            document.getElementById('r-profit-amt').textContent   = f(netProfit)+' 元（'+f(netProfit/bt*100,1)+'%）';
             var rn=document.getElementById('r-net-profit');
-            if(rn){rn.textContent=Math.floor(netProfit)+' 元';rn.style.color='#b45309';rn.style.fontWeight='900';}
-            // 更新可用預算
+            if(rn){rn.textContent=Math.floor(netProfit)+' 元';rn.style.color='#be185d';rn.style.fontWeight='900';}
+
+            // 可用預算 & 警示
             var bank=parseFloat(document.getElementById('calc-bank').value)||0;
             var d0=parseFloat(document.getElementById('calc-day0').value)||0;
             var d1=parseFloat(document.getElementById('calc-day1').value)||0;
@@ -4078,6 +4096,17 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             var avail=bank-d0-d1-d2;
             var el2=document.getElementById('r-available');
             if(el2){el2.textContent=avail.toFixed(0)+' 元';el2.style.color=avail<0?'#dc2626':'#1d4ed8';}
+            var planned=ps*ms;
+            var warnEl=document.getElementById('r-budget-warn');
+            if(warnEl){
+                if(avail<=0){
+                    warnEl.style.display='block';
+                    warnEl.textContent='🚫 今日可用預算為負！請勿再買股票，避免違約交割！';
+                } else if(planned>avail){
+                    warnEl.style.display='block';
+                    warnEl.textContent='⚠️ 預算不足！計畫花'+planned.toFixed(0)+'元（'+ps.toFixed(0)+'×'+ms+'支），今日只剩'+avail.toFixed(0)+'元。建議每股調降至'+Math.floor(avail/ms)+'元';
+                } else { warnEl.style.display='none'; }
+            }
         };
         window.saveCalcSettings = async function() {
             try {
