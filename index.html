@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05100702</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05101156</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -702,6 +702,43 @@
         </div>
 
         <!-- 設定頁面 -->
+        <!-- 零股計算頁面 -->
+        <div id="page-calculator" class="page hide max-w-lg mx-auto px-4 pb-24">
+            <div class="pt-8 pb-4">
+                <h1 class="text-2xl font-black text-slate-800">零股計算機</h1>
+                <p class="text-sm text-slate-400 mt-1">波段獲利回推目標賣出股價</p>
+            </div>
+            <div class="bg-white border-2 border-slate-200 rounded-3xl p-5 mb-4">
+                <div class="text-sm font-black text-slate-600 mb-4">📋 輸入參數</div>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between"><label class="text-sm font-black text-slate-600 w-40">買進股價（元）</label><input id="calc-buy-price" type="number" step="0.01" value="34.61" class="w-32 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()"></div>
+                    <div class="flex items-center justify-between"><label class="text-sm font-black text-slate-600 w-40">購買股數（股）</label><input id="calc-shares" type="number" step="1" value="14" class="w-32 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()"></div>
+                    <div class="flex items-center justify-between"><label class="text-sm font-black text-slate-600 w-40">預計獲利目標（%）</label><input id="calc-profit" type="number" step="1" value="20" class="w-32 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()"></div>
+                    <div class="flex items-center justify-between"><label class="text-sm font-black text-slate-600 w-40">手續費最低（元）</label><select id="calc-fee-min" class="w-32 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black" onchange="calcResult()"><option value="1">1元（有優惠）</option><option value="20">20元（一般）</option></select></div>
+                    <div class="flex items-center justify-between"><label class="text-sm font-black text-slate-600 w-40">電子下單折扣（幾折）</label><input id="calc-discount" type="number" step="0.1" value="4.9" class="w-32 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()"></div>
+                    <div class="text-[10px] text-slate-400">例：永豐金49折輸入4.9；無折扣輸入10</div>
+                </div>
+            </div>
+            <div class="bg-white border-2 border-slate-200 rounded-3xl p-5 mb-4">
+                <div class="text-sm font-black text-slate-600 mb-4">📊 計算結果</div>
+                <div class="space-y-2">
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">買進價值</span><span class="text-sm font-black text-slate-800" id="r-buy-value">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">買進手續費</span><span class="text-sm font-black text-slate-800" id="r-buy-fee">-</span></div>
+                    <div class="flex justify-between py-1.5 border-b border-slate-200"><span class="text-sm font-black text-slate-600">買進總花費</span><span class="text-sm font-black text-blue-600" id="r-buy-total">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">賣出手續費（估）</span><span class="text-sm font-black text-slate-800" id="r-sell-fee">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">賣出證交稅（0.3%）</span><span class="text-sm font-black text-slate-800" id="r-sell-tax">-</span></div>
+                    <div class="flex justify-between items-center py-2 mb-1" style="background:#ecfdf5;border-radius:12px;padding:10px 12px;"><span class="text-sm font-black" style="color:#065f46;">▶ 目標賣出股價</span><span class="text-xl font-black" style="color:#059669;" id="r-sell-price">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">每檔跳動（Tick）</span><span class="text-sm font-black text-slate-800" id="r-tick">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">買進+3 Tick觸價（最高）</span><span class="text-sm font-black text-amber-600" id="r-buy-plus3">-</span></div>
+                    <div class="flex justify-between py-1 border-b border-slate-100"><span class="text-sm text-slate-500">預計獲利金額</span><span class="text-sm font-black text-emerald-600" id="r-profit-amt">-</span></div>
+                    <div class="flex justify-between py-1"><span class="text-sm font-black text-slate-600">扣掉成本實際獲利</span><span class="text-sm font-black text-emerald-700" id="r-net-profit">-</span></div>
+                </div>
+            </div>
+            <div class="rounded-2xl p-3" style="background:#fffbe6;border:1.5px solid #f0c040;">
+                <div class="text-[11px] leading-relaxed" style="color:#7a4a00;">⚠️ 目標賣出股價為估算值，實際下單前請在永豐金確認可用價位<br>💡 賣出採無折扣手續費計算（保守估算）<br>💡 觸價最高價 = 買進股價 + 3個Tick，可設定看盤軟體觸價提醒</div>
+            </div>
+        </div>
+
         <div id="page-settings" class="hide space-y-6">
             <div class="text-left px-2">
                 <h3 class="text-2xl font-black italic tracking-tight uppercase">Account Management</h3>
@@ -779,6 +816,10 @@
             <button onclick="switchPage('scan')" id="tab-scan" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="brain-circuit" class="w-6 h-6"></i>
                 <span class="text-[12px] font-black">智能診斷</span>
+            </button>
+            <button onclick="switchPage('calculator')" id="tab-calculator" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
+                <i data-lucide="calculator" class="w-6 h-6"></i>
+                <span class="text-[12px] font-black">零股計算</span>
             </button>
             <button onclick="switchPage('settings')" id="tab-settings" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
                 <i data-lucide="user-check" class="w-6 h-6"></i>
@@ -3798,6 +3839,37 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 }
             }
         })();
+
+        // ══ 零股計算機 ═══════════════════════════════════════
+        window.calcResult = function() {
+            var bp = parseFloat(document.getElementById('calc-buy-price').value) || 0;
+            var sh = parseInt(document.getElementById('calc-shares').value) || 0;
+            var pr = parseFloat(document.getElementById('calc-profit').value) / 100 || 0;
+            var fm = parseFloat(document.getElementById('calc-fee-min').value) || 1;
+            var dc = parseFloat(document.getElementById('calc-discount').value) / 10 || 1;
+            if (!bp || !sh) return;
+            var bv  = bp * sh;
+            var bf  = Math.max(fm, bv * 0.001425 * dc);
+            var bt  = bv + bf;
+            var sp  = (bt * (1 + pr) + fm) / (sh * (1 - 0.001425 - 0.003));
+            var sfe = Math.max(fm, sp * sh * 0.001425);
+            var sta = sp * sh * 0.003;
+            var tick = bp<=10?0.01:bp<=50?0.05:bp<=100?0.1:bp<=500?0.5:bp<=1000?1:5;
+            var spR  = Math.ceil(sp / tick) * tick;
+            var prof = spR * sh - sfe - sta - bt;
+            var f = function(n,d){return n.toFixed(d||2);};
+            document.getElementById('r-buy-value').textContent  = f(bv) + ' 元';
+            document.getElementById('r-buy-fee').textContent    = f(bf) + ' 元';
+            document.getElementById('r-buy-total').textContent  = f(bt) + ' 元';
+            document.getElementById('r-sell-fee').textContent   = f(sfe) + ' 元';
+            document.getElementById('r-sell-tax').textContent   = f(sta) + ' 元';
+            document.getElementById('r-sell-price').textContent = f(spR) + ' 元';
+            document.getElementById('r-tick').textContent       = f(tick) + ' 元';
+            document.getElementById('r-buy-plus3').textContent  = f(bp + 3*tick) + ' 元';
+            document.getElementById('r-profit-amt').textContent = f(prof) + ' 元（' + f(prof/bt*100,1) + '%）';
+            document.getElementById('r-net-profit').textContent = f(prof) + ' 元';
+        };
+        setTimeout(window.calcResult, 600);
     </script>
 </body>
 </html>
