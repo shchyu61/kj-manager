@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05110335</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05111049</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -3330,6 +3330,25 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     if (!result) return;
 
                     // ✅ 05051530：只顯示有訊號的卡片（無訊號不佔版面）
+                    // ✅ 05111049：買進訊號寫入Firebase供T+2追蹤
+                    if (result.buy_signal) {
+                        (async function(_c,_r){
+                            try {
+                                await initFirebaseAuth();
+                                var _d=new Date();
+                                var _ds=_d.getFullYear().toString()+(('0'+(_d.getMonth()+1)).slice(-2))+(('0'+_d.getDate()).slice(-2));
+                                var _sr=doc(window.db,'artifacts',window.appId,'public','signals_'+_ds);
+                                var _sn=await getDoc(_sr);
+                                var _ex={}; try{if(_sn.exists()&&_sn.data().signals)_ex=JSON.parse(_sn.data().signals);}catch(e){}
+                                var _tk=_r.close<=10?0.01:_r.close<=50?0.05:_r.close<=100?0.1:_r.close<=500?0.5:_r.close<=1000?1:5;
+                                var _lm=Math.floor(_r.close*1.1/_tk)*_tk;
+                                _ex[_c]={ticker:_c,price:_r.close,limit_price:_lm,
+                                    condition:_r._mixedLabel||'做多進場',
+                                    time:_d.toLocaleTimeString('zh-TW'),market:'TW'};
+                                await setDoc(_sr,{signals:JSON.stringify(_ex),updated_at:_d.toLocaleString('zh-TW')});
+                            } catch(e){}
+                        })(code, result);
+                    }
                     if (result.buy_signal || result.sell_signal) {
                         const cardHtml = makeDiagCard(code, result, true, false);
                         if (resultList) resultList.insertAdjacentHTML('beforeend', cardHtml);
@@ -4139,6 +4158,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     set('calc-bank', d.bank); set('calc-day0', d.day0); set('calc-day1', d.day1); set('calc-day2', d.day2);
                     set('calc-per-stock', d.per_stock); set('calc-max-stocks', d.max_stk);
                     set('calc-fee-min', d.fee_min); set('calc-discount', d.discount); set('calc-profit', d.profit);
+                    set('calc-split-n', d.split_n);
+                    if(d.ctrl_mode){ var cmEl=document.getElementById('calc-ctrl-mode'); if(cmEl){ cmEl.value=d.ctrl_mode; } }
                 }
             } catch(e) {}
             window.calcBudget();

@@ -1542,6 +1542,50 @@ if today not in notified:
 # 從 Firebase 讀取雲端版每天14:00更新的台股預篩清單
 # 本機版優先使用此快取，避免每次都掃1800支
 # ============================================================
+def write_buy_signal_firebase(ticker, price, condition, now_str, market='TW'):
+    """✅ 05111049：寫入買進訊號到Firebase，供網頁版T+2追蹤使用"""
+    try:
+        import json, os, requests as _req
+        from datetime import datetime; import pytz
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json: return False
+        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+            scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        _tz = pytz.timezone('Asia/Taipei')
+        _today = datetime.now(_tz).strftime('%Y%m%d')
+        # 計算漲停價（price × 1.1 → 無條件捨去至合法Tick）
+        def _tick(p): return 0.01 if p<=10 else 0.05 if p<=50 else 0.1 if p<=100 else 0.5 if p<=500 else 1 if p<=1000 else 5
+        _t = _tick(price)
+        _limit = round(int(price * 1.1 / _t) * _t, 10)
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}"
+                f"/public/signals_{_today}")
+        # 讀取現有訊號
+        _rg = _req.get(_url, headers={"Authorization": f"Bearer {_c.token}"}, timeout=10)
+        _existing = {}
+        if _rg.status_code == 200:
+            try: _existing = json.loads(_rg.json().get('fields',{}).get('signals',{}).get('stringValue','{}'))
+            except: _existing = {}
+        _existing[ticker] = {
+            'ticker': ticker, 'market': market,
+            'price': float(price), 'limit_price': float(_limit),
+            'condition': condition, 'time': now_str, 'date': _today
+        }
+        _r = _req.patch(_url, timeout=15,
+            headers={"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"},
+            json={"fields": {
+                "signals":    {"stringValue": json.dumps(_existing, ensure_ascii=False)},
+                "updated_at": {"stringValue": now_str}}})
+        return _r.status_code in (200, 201)
+    except Exception as _e:
+        return False
+
 def write_tw_stock_names():
     """✅ 05101039：將twstock中文名稱對照表上傳Firebase（週六補跑時執行）"""
     try:
@@ -1902,7 +1946,9 @@ def main_task():
         if _tw_prescreened:
             print(f'\n🔍 正在將 {len(_tw_prescreened)} 支預篩台股寫入Firebase...')
             write_tw_prescreened(_tw_prescreened, _prescreened_ind)  # ✅ 05041037
-            if _is_saturday:  # ✅ 05101039：週六補跑時同步更新中文名稱
+            # ✅ 05101039：週六補跑時同步更新中文名稱（直接判斷weekday，不依賴函數內部變數）
+            import pytz as _ptz_sat
+            if __import__('datetime').datetime.now(_ptz_sat.timezone('Asia/Taipei')).weekday() == 5:
                 print("\n🔍 正在更新台股中文名稱對照表...")
                 write_tw_stock_names()
         else:
@@ -2344,6 +2390,10 @@ def main_task():
 
             send_gmail(f"💻【本機】⭐做多進場 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
+            # ✅ 05111049：寫入買進訊號到Firebase供網頁版T+2追蹤
+            for _s in filtered:
+                _mkt, _cd, _c2, *_ = _s
+                write_buy_signal_firebase(_cd, _c2, '⭐做多進場', now_str, _mkt)
         else:
             print(f"🔕 買進訊號 {len(buy_signals)-len(filtered)} 支已通知過")
 
