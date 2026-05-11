@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05111705</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05111725</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -758,15 +758,30 @@
             <div class="bg-white border-2 border-slate-200 rounded-3xl p-4 mb-3">
                 <div class="text-sm font-black text-slate-600 mb-3">⚙️ 個人投資設定</div>
                 <div class="space-y-2">
+                    <!-- 資金控管模式 -->
                     <div class="flex items-center justify-between">
-                        <label class="text-sm font-black text-slate-600 w-40">每1支股票預算上限（元）</label>
+                        <label class="text-sm font-black text-slate-600 w-40">資金控管</label>
+                        <select id="calc-ctrl-mode" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black" onchange="onCtrlModeChange()">
+                            <option value="split">分散投資</option>
+                            <option value="all">全力集中</option>
+                        </select>
+                    </div>
+                    <!-- 分散份數（分散投資才顯示） -->
+                    <div id="calc-split-row" class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">分散份數（份）</label>
+                        <input id="calc-split-n" type="number" step="1" value="10" min="1"
+                            class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right"
+                            oninput="onSplitChange()">
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">每支股票預算上限（元）</label>
                         <input id="calc-per-stock" type="number" step="50" value="500" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
                     </div>
                     <div class="flex items-center justify-between">
                         <label class="text-sm font-black text-slate-600 w-40">每天最多買幾支股票</label>
                         <input id="calc-max-stocks" type="number" step="1" value="4" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
                     </div>
-                    <div class="text-[10px] text-slate-400">※ 依個人資金和風險承受度自行決定<br>💡 小資族每股上限建議100元；每天股票數量依預算決定<br>💾 以上設定均會自動儲存到各自雲端，下次登入自動讀取</div>
+                    <div class="text-[10px] text-slate-400">※ 分散份數和每支預算依個人風險決定，儲存到各自雲端，其他人看不到您的設定<br>💡 小資族每支股票預算建議100元；分散投資模式會依可用資金÷份數自動計算</div>
                 </div>
             </div>
 
