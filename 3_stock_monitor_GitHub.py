@@ -1,8 +1,8 @@
-SCRIPT_VERSION = '05101039'
+SCRIPT_VERSION = '05122231'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
-# 更新日期：(由AI每次改版時依照對話視窗提供的日期,並經由使用者確認後為準)（新增期貨5分K模式：TEST_MODE="5mk"，週一13:00~週三11:30）
+# 更新日期：(由AI每次改版時依照對話視窗提供的日期,並經由使用者確認後為準)（新增期貨5分K模式：TEST_MODE="5mk"，週一12:50~週三11:30）
 # 適用：台股1845支 + 美股38支 + 虛擬幣3支 + 三合一追蹤【安聯月配息基金】
 # 通知方式：Gmail發信到 shchyu61@gmail.com
 # 重要：本程式原則上只適用週K，可視情況用於日K以下
@@ -19,11 +19,11 @@ DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 # 驗證篩選模式：
 #   False  = 正式模式（週K三層嚴格過濾，正式交易監控）
 #   True   = 測試模式（只發測試Gmail確認通知是否正常）
-#   '5mk'  = 期貨5分K模式（週一13:00~週三11:30，只掃台指近月）
+#   '5mk'  = 期貨5分K模式（週一12:50~週三11:30，只掃台指近月）
 TEST_MODE = False   # 切換：False / True / '5mk'
 
 # ── 【期貨5分K專屬設定】（TEST_MODE = '5mk' 時才啟用）──────────
-# 執行時段：週一13:00 → 週三大盤收盤11:30（日盤+夜盤+隔日日盤）
+# 執行時段：週一12:50 → 週三大盤收盤11:30（日盤+夜盤+隔日日盤）
 # 掃描標的：台灣加權指數（^TWII）作為台指期替代標的
 # 通知對象：僅 shchyu61@gmail.com（本人專屬，家人親友不適用）
 FUTURES_5MK_TARGETS  = ['^TWII']   # 期貨標的（可加入 'TXFF' 等）
@@ -367,10 +367,10 @@ def get_active_markets():
         active.append('US')      # 美股
         active.append('CRYPTO')  # 虛擬幣
 
-    # 期貨5分K時段：週一13:00~週三11:30（深夜01:00~05:00不觸發，人在睡覺）
+    # 期貨5分K時段：週一12:50~週三11:30（深夜01:00~05:00不觸發，人在睡覺）
     is_futures_time = False
-    # 週一 13:00 以後
-    if weekday == 0 and time_val >= 13*60:
+    # 週一 12:50 以後
+    if weekday == 0 and time_val >= 12*60+50:
         is_futures_time = True
     # 週二（排除深夜01:00~05:00）
     elif weekday == 1 and (time_val < 1*60 or time_val >= 5*60):
@@ -2461,17 +2461,17 @@ if __name__ == "__main__":
         tv_f  = now_f.hour * 60 + now_f.minute
 
         in_futures = (
-            (wd_f == 0 and tv_f >= 13*60) or                             # 週一13:00後
+            (wd_f == 0 and tv_f >= 12*60+50) or                             # 週一12:50後
             (wd_f == 1 and (tv_f < 1*60 or tv_f >= 5*60)) or            # 週二（排除深夜01:00~05:00）
             (wd_f == 2 and tv_f <= 11*60+30)                             # 週三11:30前
         )
 
         if not in_futures:
-            print(f"[{test_now}] ❌ 非期貨5分K時段（週一13:00~週三11:30，深夜01~05除外），直接結束")
+            print(f"[{test_now}] ❌ 非期貨5分K時段（週一12:50~週三11:30，深夜01~05除外），直接結束")
             time.sleep(5)
             exit()
 
-        print(f"🚀 期貨5分K模式啟動（週一13:00~週三11:30）")
+        print(f"🚀 期貨5分K模式啟動（週一12:50~週三11:30）")
         print(f"   標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
         print(f"   專屬帳號：{FUTURES_5MK_OWNER}")
 
@@ -2482,7 +2482,7 @@ if __name__ == "__main__":
             tv_l  = now_loop.hour * 60 + now_loop.minute
             _is_night = (wd_l == 1 and 1*60 <= tv_l < 5*60)  # 週二深夜01~05
             in_f  = (
-                (wd_l == 0 and tv_l >= 13*60) or
+                (wd_l == 0 and tv_l >= 12*60+50) or
                 (wd_l == 1 and (tv_l < 1*60 or tv_l >= 5*60)) or  # 排除深夜01:00~05:00
                 (wd_l == 2 and tv_l <= 11*60+30) or
                 (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉
