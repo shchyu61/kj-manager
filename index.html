@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05170251</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05170304</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -857,7 +857,11 @@
                     </div>
                     <div class="flex justify-between py-1 border-b border-slate-100">
                         <span class="text-sm text-slate-500">賣出每檔跳動（Tick）</span>
-                        <span class="text-sm font-black text-slate-800" id="r-tick">-</span>
+                        <span class="text-sm font-black text-slate-800" id="r-sell-tick">-</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-slate-100">
+                        <span class="text-sm text-slate-500">買進每檔跳動（Tick）</span>
+                        <span class="text-sm font-black text-slate-800" id="r-buy-tick">-</span>
                     </div>
                     <div class="py-1.5 border-b border-slate-100">
                         <div class="flex justify-between items-center">
@@ -4133,7 +4137,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             document.getElementById('r-sell-fee').textContent     = f(sfe)+' 元';
             document.getElementById('r-sell-tax').textContent     = f(sta)+' 元';
             document.getElementById('r-sell-price').textContent   = f(spValid)+' 元';
-            document.getElementById('r-sell-tick').textContent  = f(spTick)+' 元';
+            var stEl=document.getElementById('r-sell-tick'); if(stEl) stEl.textContent=f(spTick)+' 元';
             var btEl=document.getElementById('r-buy-tick'); if(btEl) btEl.textContent=f(buyTick)+' 元';
             var chEl=document.getElementById('r-cloud-high'); if(chEl) chEl.textContent=f(cloudHigh)+' 元';
             var csEl=document.getElementById('r-cloud-sell'); if(csEl) csEl.textContent=f(spValid)+' 元';
