@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05170235</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05170251</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -4116,9 +4116,9 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             var sellGross = x*(1+pr) + sta + sfe;
 
             // C17（合法賣出股價）：CEILING(B16/B3, B21)
-            var spTick = getTick(sellGross/sh);
-            var buyTick = getTick(bp);
             var spValid = tickCeil(sellGross/sh);
+            var spTick  = getTick(spValid);  // ✅ 用合法賣出價計算Tick
+            var buyTick = getTick(bp);       // ✅ 用合法買進價計算Tick
 
             // E20（雲端觸價最高）= E21 + B21×3
             var cloudHigh = parseFloat((spValid + 3*spTick).toFixed(10));
