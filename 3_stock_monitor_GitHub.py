@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05170228'
+SCRIPT_VERSION = '05170312'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -255,7 +255,9 @@ _cash_delivery_cache = {'codes': set(), 'ts': None}
 _cash_delivery_lock  = _threading.Lock()
 
 def get_cash_delivery_set():
-    """全額交割股 Set，重試2次，快取72小時，空白時保留舊快取"""
+    """全額交割股 Set，重試3次，快取72小時，空白時保留舊快取
+    ✅ v05170312：改善headers，新增多個備援URL，改用session維持連線
+    """
     if not ENABLE_CASH_DELIVERY_CHECK:
         return set()
     from datetime import datetime as _dt
@@ -267,52 +269,94 @@ def get_cash_delivery_set():
             if elapsed < CASH_DELIVERY_CACHE_HOURS:
                 return _cash_delivery_cache['codes']
     codes = set()
-    headers = {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}
-    def _fetch(url):
-        import requests as _req
-        for attempt in range(1, 3):
+    import requests as _req
+    _sess = _req.Session()
+    _sess.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+    })
+    def _fetch_json(url, referer=''):
+        if referer: _sess.headers['Referer'] = referer
+        for attempt in range(1, 4):
             try:
-                r = _req.get(url, headers=headers, timeout=15)
-                if r.status_code == 200:
+                r = _sess.get(url, timeout=15)
+                if r.status_code == 200 and r.text.strip():
                     data = r.json()
-                    if data:
-                        return data
-                print(f'  ⚠️ 第{attempt}次失敗，{"重試中..." if attempt < 2 else "放棄"}')
+                    if data: return data
+                elif r.status_code != 200:
+                    print(f'  ⚠️ 第{attempt}次失敗(HTTP {r.status_code})，{"重試中..." if attempt < 3 else "放棄"}')
+                else:
+                    print(f'  ⚠️ 第{attempt}次失敗(空回應)，{"重試中..." if attempt < 3 else "放棄"}')
             except Exception as e:
-                print(f'  ⚠️ 第{attempt}次失敗：{e}，{"重試中..." if attempt < 2 else "放棄"}')
-            if attempt < 2:
-                _time.sleep(5)
+                print(f'  ⚠️ 第{attempt}次失敗：{e}，{"重試中..." if attempt < 3 else "放棄"}')
+            if attempt < 3: _time.sleep(3)
         return None
-    d1 = _fetch('https://openapi.twse.com.tw/v1/company/cashPaymentStocks')
-    if d1:
-        for item in d1:
-            c = item.get('公司代號') or item.get('Code') or item.get('code') or ''
-            if c: codes.add(str(c).strip())
-        print(f'  ✅ TWSE全額交割上市：{len(codes)} 支')
-    else:
-        print(f'  ❌ TWSE全額交割：重試2次均失敗')
+    def _extract_codes(data, fallback_keys=('公司代號','Code','code','StockCode','CompCode')):
+        result = set()
+        for item in (data if isinstance(data, list) else [data]):
+            for k in fallback_keys:
+                v = item.get(k, '') if isinstance(item, dict) else ''
+                if v: result.add(str(v).strip()); break
+        return result
+    # ── TWSE上市全額交割（多備援URL）
+    twse_urls = [
+        ('https://openapi.twse.com.tw/v1/company/cashPaymentStocks', 'https://www.twse.com.tw/'),
+        ('https://www.twse.com.tw/rwd/zh/company/cashPaymentStocks', 'https://www.twse.com.tw/'),
+    ]
+    twse_ok = False
+    for url, ref in twse_urls:
+        d1 = _fetch_json(url, ref)
+        if d1:
+            new_c = _extract_codes(d1)
+            codes.update(new_c)
+            print(f'  ✅ TWSE全額交割上市：{len(new_c)} 支')
+            twse_ok = True; break
+    if not twse_ok:
+        print(f'  ❌ TWSE全額交割：全部URL均失敗')
+    # ── TPEX上櫃全額交割（多備援URL）
     before = len(codes)
-    d2 = _fetch('https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks')
-    if d2:
-        for item in d2:
-            c = item.get('公司代號') or item.get('Code') or item.get('code') or ''
-            if c: codes.add(str(c).strip())
-        print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
-    else:
-        print(f'  ❌ TPEX全額交割：重試2次均失敗')
+    tpex_urls = [
+        ('https://www.tpex.org.tw/openapi/v1/tpex_cash_payment_stocks', 'https://www.tpex.org.tw/'),
+        ('https://tpex.org.tw/openapi/v1/tpex_cash_payment_stocks', 'https://www.tpex.org.tw/'),
+    ]
+    tpex_ok = False
+    for url, ref in tpex_urls:
+        d2 = _fetch_json(url, ref)
+        if d2:
+            new_c = _extract_codes(d2)
+            codes.update(new_c)
+            print(f'  ✅ TPEX全額交割上櫃：{len(codes)-before} 支')
+            tpex_ok = True; break
+    if not tpex_ok:
+        print(f'  ❌ TPEX全額交割：全部URL均失敗')
+    # ── HTML備援（美化版：抓更多選擇器）
     if not codes:
         try:
-            import requests as _req
             from bs4 import BeautifulSoup as _BS
-            r3 = _req.get('https://www.twse.com.tw/zh/page/trading/exchange/TWTB4U.html',
-                          headers=headers, timeout=15)
-            soup = _BS(r3.text, 'html.parser')
-            for td in soup.select('table td:first-child'):
-                c = td.get_text(strip=True)
-                if c.isdigit() and len(c) == 4: codes.add(c)
-            print(f'  ✅ 備援HTML全額交割：{len(codes)} 支')
+            for html_url, selector, referer in [
+                ('https://www.twse.com.tw/zh/page/trading/exchange/TWTB4U.html',
+                 'table td:first-child, .table-data td:first-child', 'https://www.twse.com.tw/'),
+            ]:
+                _sess.headers['Referer'] = referer
+                r3 = _sess.get(html_url, timeout=20)
+                if r3.status_code == 200 and len(r3.text) > 500:
+                    soup = _BS(r3.text, 'html.parser')
+                    found = set()
+                    for td in soup.select(selector):
+                        t = td.get_text(strip=True)
+                        if t.isdigit() and 4 <= len(t) <= 6: found.add(t)
+                    if found:
+                        codes.update(found)
+                        print(f'  ✅ 備援HTML全額交割：{len(found)} 支')
+                        break
+                    else:
+                        print(f'  ⚠️ 備援HTML：頁面存在但未找到股票代碼（可能為動態載入）')
         except Exception as e:
             print(f'  ⚠️ 備援HTML失敗：{e}')
+    # ── 更新快取
     with _cash_delivery_lock:
         if codes:
             _cash_delivery_cache['codes'] = codes
