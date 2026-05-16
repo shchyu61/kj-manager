@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05122231'
+SCRIPT_VERSION = '05170228'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -760,11 +760,24 @@ def check_buy_eleader(df_w, df_d=None, df_5m=None, name=None):
         Cond63 = ((ma_c20>ma_c20.shift(1))&(bb20>bb20.shift(1))&(rsi>rsi.shift(1))&(ersi.shift(1)<ersi.shift(2))&(ersi>ersi.shift(1))&(c>ma_o2.shift(1)))
         Cond66 = ((c.shift(1)>o.shift(1))&(ma_c20.shift(2)>ma_c20.shift(3))&(ma_c20.shift(1)>ma_c20.shift(2))&(l.shift(1)>ma_c20.shift(1))&(bt20.shift(1)>bt20.shift(2))&(bt2.shift(1)>bt20.shift(1))&(bb20<bb20.shift(1))&(o.shift(1)<bt20.shift(1))&(o<bt20)&(macd>msig)&(o.shift(1)<ma_o2.shift(1))&(c.shift(1)>ma_o2.shift(1))&(c.shift(1)>=ma_l2.shift(1))&(ma_l2>ma_l2.shift(1))&(c>o))
         Cond71 = ((c.shift(1)>o.shift(1))&(c.shift(2)<o.shift(2))&(bb2.shift(2)>bb20.shift(2))&(ma_l2.shift(2)>bb20.shift(2))&(bb20>bb20.shift(1))&(o.shift(1)<ma_c20.shift(1))&(((ma_o2>ma_o2.shift(1))&(h.shift(1)<ma_h2.shift(1))&(c>ma_c2))|((ma_o2<ma_o2.shift(1))&(l<ma_o2)&(c>ma_o2)))&(o>ma_o2)&(ma_l2>=ma_l2.shift(1))&(c.shift(1)>=ma_c2.shift(1)))
+        # ✅ v05171702：條件F升級 - 新增Cond72和Cond0
+        import pandas_ta as _pta_el
+        _rsi10_el = _pta_el.rsi(c, length=10)
+        if _rsi10_el is None or len(_rsi10_el) < 3:
+            _rsi10_el = rsi  # fallback to rsi14
+        Cond72 = ((ma_c20.shift(1)>ma_c20.shift(2)) & (bb20.shift(1)>bb20.shift(2)) &
+                  (bb20<bb20.shift(1)) & (h.shift(1)>bt20.shift(1)) &
+                  (_rsi10_el.shift(1)<_rsi10_el.shift(2)) & (_rsi10_el>_rsi10_el.shift(1)) &
+                  (l.shift(1)>o.shift(2)) & (h.shift(1)>h.shift(2)) &
+                  (mosc>mosc.shift(1)))
+        Cond0 = (((l.shift(1)<ma_c20.shift(1)) & (ma_c20.shift(1)>ma_c20.shift(2)) &
+                  (emacd>emacd.shift(1)) & (mosc>mosc.shift(1))) |
+                 ((l.shift(1)>=ma_c20.shift(1)) & (bt20.shift(1)>bt20.shift(2))))
 
         group_A = (Cond01 & Cond02 & Cond03 & Cond04)
-        group_B = (Cond11|Cond12|Cond21|Cond22|Cond23|Cond24|Cond25|Cond26|Cond27|Cond28|Cond41|Cond42|Cond43|Cond44|Cond45|Cond46|Cond47|Cond48|Cond49|Cond50|Cond61|Cond62|Cond63|Cond66|Cond71)
+        group_B = (Cond11|Cond12|Cond21|Cond22|Cond23|Cond24|Cond25|Cond26|Cond27|Cond28|Cond41|Cond42|Cond43|Cond44|Cond45|Cond46|Cond47|Cond48|Cond49|Cond50|Cond61|Cond62|Cond63|Cond66|Cond71|Cond72)
 
-        is_buy_candidate = bool((base & (group_A | group_B)).iloc[-1])
+        is_buy_candidate = bool((Cond0 & base & (group_A | group_B)).iloc[-1])
 
         if is_buy_candidate:
             # 如果有 5分K 資料，進行精確進場判定
@@ -973,93 +986,94 @@ def check_short_precondition(df, is_weekly=False):
 # 適用所有週期（週K/日K/5分K）和所有標的
 # ============================================================
 def check_condE_long(df):
-    """條件E做多：V轉進場（近7根碰過下軌，RSI/MACD柱開始反轉）"""
+    """條件E做多 v2（新版：更新Cond01/Cond03，新增Cond72）"""
     try:
         import pandas_ta as _pta
         if df is None or len(df) < 20: return False
         if 'boll_top20' not in df.columns or 'boll_bot20' not in df.columns: return False
         if 'ma_c_20' not in df.columns or 'macd_hist' not in df.columns: return False
-
-        bt   = df['boll_top20']
-        bb   = df['boll_bot20']
-        ma20 = df['ma_c_20']
-        c    = df['Close']
-        o    = df['Open']
-        h    = df['High']
-        l    = df['Low']
-        v    = df['Volume']
-        mh   = df['macd_hist']
-
-        # RSI10 和 EMA5(RSI10)
-        rsi10 = _pta.rsi(c, length=10)
-        ema_r = _pta.ema(rsi10, length=5) if rsi10 is not None else None
-        if rsi10 is None or ema_r is None or len(rsi10) < 10: return False
-
-        # ── 主條件（截圖紫色框C1~C6）──
-        # C1: 前1根上軌>前2根上軌 AND 近5根最低低點 < 近5根下軌均值
-        C1 = (bt.iloc[-2] > bt.iloc[-3]) and (l.iloc[-6:-1].min() < bb.iloc[-6:-1].mean())
+        bt=df['boll_top20']; bb=df['boll_bot20']; ma20=df['ma_c_20']
+        c=df['Close']; o=df['Open']; h=df['High']; l=df['Low']
+        v=df['Volume']; mh=df['macd_hist']
+        rsi10=_pta.rsi(c,length=10)
+        ema_r=_pta.ema(rsi10,length=5) if rsi10 is not None else None
+        if rsi10 is None or ema_r is None or len(rsi10)<10: return False
+        # C1: 近5根最低低點 < 近5根下軌均值（去除bollbandtop條件）
+        C1 = float(l.iloc[-6:-1].min()) < float(bb.iloc[-6:-1].mean())
         # C2: 近5根最大量 > 近5根平均量
         C2 = float(v.iloc[-6:-1].max()) > float(v.iloc[-6:-1].mean())
-        # C3: 前2根7根均線 < 前3根7根均線（下跌趨勢中）
-        C3 = float(c.iloc[-9:-2].mean()) < float(c.iloc[-10:-3].mean())
+        # C3（新）: RSI10當根>前根 AND EMA_RSI10當根>前根
+        C3 = (float(rsi10.iloc[-1])>float(rsi10.iloc[-2])) and (float(ema_r.iloc[-1])>float(ema_r.iloc[-2]))
         # C4: 近5根最低開盤 < 當根下軌
         C4 = float(o.iloc[-5:].min()) < float(bb.iloc[-1])
-        # C5: MACD柱 < -1 AND 當根 > 前根（柱轉升）
-        C5 = (float(mh.iloc[-1]) < -1) and (float(mh.iloc[-1]) > float(mh.iloc[-2]))
-        # C6: RSI10當根>前根 AND EMA5(RSI10)<51 AND RSI10<55
-        C6 = (float(rsi10.iloc[-1]) > float(rsi10.iloc[-2])) and              (float(ema_r.iloc[-1]) < 51) and (float(rsi10.iloc[-1]) < 55)
-
-        # ── 替代條件（截圖框外C11/C12）──
-        # C11: MA20前1根下降 AND 前1根低<MA20前1根 AND 前1根2根均開>前2根2根均開 AND 前1根2根均收>前2根2根均低 AND 當根高>開
-        C11 = (float(ma20.iloc[-2]) < float(ma20.iloc[-3])) and               (float(l.iloc[-2]) < float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 > (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 > (float(l.iloc[-4])+float(l.iloc[-3]))/2) and               (float(h.iloc[-1]) > float(o.iloc[-1]))
-        # C12: MA20前1根>前2根 AND MA20當根>前1根 AND 前1根低<MA20前1根 AND 2根均開升 AND 2根均收升 AND 當根2根均收升
-        C12 = (float(ma20.iloc[-2]) > float(ma20.iloc[-3])) and               (float(ma20.iloc[-1]) > float(ma20.iloc[-2])) and               (float(l.iloc[-2]) < float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 > (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 > (float(l.iloc[-4])+float(l.iloc[-3]))/2) and               ((float(c.iloc[-2])+float(c.iloc[-1]))/2 > (float(c.iloc[-3])+float(c.iloc[-2]))/2)
-
-        return (C1 and C2 and C3 and C4 and C5 and C6) or (C2 and C3 and (C11 or C12))
+        # C5: MACD柱 < -1 AND 當根 > 前根
+        C5 = (float(mh.iloc[-1])<-1) and (float(mh.iloc[-1])>float(mh.iloc[-2]))
+        # C6: RSI10當根>前根 AND EMA5<51 AND RSI10<55
+        C6 = (float(rsi10.iloc[-1])>float(rsi10.iloc[-2])) and (float(ema_r.iloc[-1])<51) and (float(rsi10.iloc[-1])<55)
+        # C11/C12（保留原版）
+        C11 = ((float(ma20.iloc[-2])<float(ma20.iloc[-3])) and (float(l.iloc[-2])<float(ma20.iloc[-2])) and
+               ((float(o.iloc[-3])+float(o.iloc[-2]))/2>(float(o.iloc[-4])+float(o.iloc[-3]))/2) and
+               ((float(c.iloc[-3])+float(c.iloc[-2]))/2>(float(l.iloc[-4])+float(l.iloc[-3]))/2) and
+               (float(h.iloc[-1])>float(o.iloc[-1])))
+        C12 = ((float(ma20.iloc[-2])>float(ma20.iloc[-3])) and (float(ma20.iloc[-1])>float(ma20.iloc[-2])) and
+               (float(l.iloc[-2])<float(ma20.iloc[-2])) and
+               ((float(o.iloc[-3])+float(o.iloc[-2]))/2>(float(o.iloc[-4])+float(o.iloc[-3]))/2) and
+               ((float(c.iloc[-3])+float(c.iloc[-2]))/2>(float(l.iloc[-4])+float(l.iloc[-3]))/2) and
+               ((float(c.iloc[-2])+float(c.iloc[-1]))/2>(float(c.iloc[-3])+float(c.iloc[-2]))/2))
+        # C72（新增）
+        C72 = ((float(ma20.iloc[-2])>float(ma20.iloc[-3])) and (float(bb.iloc[-2])>float(bb.iloc[-3])) and
+               (float(bb.iloc[-1])<float(bb.iloc[-2])) and (float(h.iloc[-2])>float(bt.iloc[-2])) and
+               (float(rsi10.iloc[-2])<float(rsi10.iloc[-3])) and (float(rsi10.iloc[-1])>float(rsi10.iloc[-2])) and
+               (float(l.iloc[-2])>float(o.iloc[-3])) and (float(h.iloc[-2])>float(h.iloc[-3])) and
+               (float(mh.iloc[-1])>float(mh.iloc[-2])))
+        # 新版Result：(C1&C2&C3&C4&C5&C6) | ((C3)&(C11|C12|C72))
+        return (C1 and C2 and C3 and C4 and C5 and C6) or (C3 and (C11 or C12 or C72))
     except Exception as _e:
         return False
 
+
 def check_condE_short(df):
-    """條件E做空：A轉進場（近7根碰過上軌，RSI/MACD柱開始反轉）"""
+    """條件E做空 v2（新版：更新Cond01/Cond03，新增Cond72）"""
     try:
         import pandas_ta as _pta
         if df is None or len(df) < 20: return False
         if 'boll_top20' not in df.columns or 'boll_bot20' not in df.columns: return False
         if 'ma_c_20' not in df.columns or 'macd_hist' not in df.columns: return False
-
-        bt   = df['boll_top20']
-        bb   = df['boll_bot20']
-        ma20 = df['ma_c_20']
-        c    = df['Close']
-        o    = df['Open']
-        h    = df['High']
-        l    = df['Low']
-        v    = df['Volume']
-        mh   = df['macd_hist']
-
-        rsi10 = _pta.rsi(c, length=10)
-        ema_r = _pta.ema(rsi10, length=5) if rsi10 is not None else None
-        if rsi10 is None or ema_r is None or len(rsi10) < 10: return False
-
-        # C1: 前1根下軌<前2根下軌 AND 近5根最高高點>近5根上軌均值
-        C1 = (float(bb.iloc[-2]) < float(bb.iloc[-3])) and (float(h.iloc[-6:-1].max()) > float(bt.iloc[-6:-1].mean()))
+        bt=df['boll_top20']; bb=df['boll_bot20']; ma20=df['ma_c_20']
+        c=df['Close']; o=df['Open']; h=df['High']; l=df['Low']
+        v=df['Volume']; mh=df['macd_hist']
+        rsi10=_pta.rsi(c,length=10)
+        ema_r=_pta.ema(rsi10,length=5) if rsi10 is not None else None
+        if rsi10 is None or ema_r is None or len(rsi10)<10: return False
+        # C1: 近5根最高高點 > 近5根上軌均值（簡化）
+        C1 = float(h.iloc[-6:-1].max()) > float(bt.iloc[-6:-1].mean())
         # C2: 近5根最大量 > 近5根平均量
         C2 = float(v.iloc[-6:-1].max()) > float(v.iloc[-6:-1].mean())
-        # C3: 前2根7根均線 > 前3根7根均線（上漲趨勢中）
-        C3 = float(c.iloc[-9:-2].mean()) > float(c.iloc[-10:-3].mean())
+        # C3（新）: RSI10當根<前根 AND EMA_RSI10當根<前根
+        C3 = (float(rsi10.iloc[-1])<float(rsi10.iloc[-2])) and (float(ema_r.iloc[-1])<float(ema_r.iloc[-2]))
         # C4: 近5根最高開盤 > 當根上軌
         C4 = float(o.iloc[-5:].max()) > float(bt.iloc[-1])
-        # C5: MACD柱 > 1 AND 當根 < 前根（柱轉降）
-        C5 = (float(mh.iloc[-1]) > 1) and (float(mh.iloc[-1]) < float(mh.iloc[-2]))
-        # C6: RSI10當根<前根 AND EMA5(RSI10)>49 AND RSI10>45
-        C6 = (float(rsi10.iloc[-1]) < float(rsi10.iloc[-2])) and              (float(ema_r.iloc[-1]) > 49) and (float(rsi10.iloc[-1]) > 45)
-
-        # C11: MA20前1根上升 AND 前1根高>MA20前1根 AND 前1根2根均開降 AND 前1根2根均收降 AND 當根低<開
-        C11 = (float(ma20.iloc[-2]) > float(ma20.iloc[-3])) and               (float(h.iloc[-2]) > float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 < (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 < (float(h.iloc[-4])+float(h.iloc[-3]))/2) and               (float(l.iloc[-1]) < float(o.iloc[-1]))
-        # C12: MA20前1根<前2根 AND MA20當根<前1根 AND 前1根高>MA20前1根 AND 2根均開降 AND 2根均收降 AND 當根2根均收降
-        C12 = (float(ma20.iloc[-2]) < float(ma20.iloc[-3])) and               (float(ma20.iloc[-1]) < float(ma20.iloc[-2])) and               (float(h.iloc[-2]) > float(ma20.iloc[-2])) and               ((float(o.iloc[-3])+float(o.iloc[-2]))/2 < (float(o.iloc[-4])+float(o.iloc[-3]))/2) and               ((float(c.iloc[-3])+float(c.iloc[-2]))/2 < (float(h.iloc[-4])+float(h.iloc[-3]))/2) and               ((float(c.iloc[-2])+float(c.iloc[-1]))/2 < (float(c.iloc[-3])+float(c.iloc[-2]))/2)
-
-        return (C1 and C2 and C3 and C4 and C5 and C6) or (C2 and C3 and (C11 or C12))
+        # C5: MACD柱 > 1 AND 當根 < 前根
+        C5 = (float(mh.iloc[-1])>1) and (float(mh.iloc[-1])<float(mh.iloc[-2]))
+        # C6: RSI10當根<前根 AND EMA5>49 AND RSI10>45
+        C6 = (float(rsi10.iloc[-1])<float(rsi10.iloc[-2])) and (float(ema_r.iloc[-1])>49) and (float(rsi10.iloc[-1])>45)
+        # C11/C12（保留原版鏡像）
+        C11 = ((float(ma20.iloc[-2])>float(ma20.iloc[-3])) and (float(h.iloc[-2])>float(ma20.iloc[-2])) and
+               ((float(o.iloc[-3])+float(o.iloc[-2]))/2<(float(o.iloc[-4])+float(o.iloc[-3]))/2) and
+               ((float(c.iloc[-3])+float(c.iloc[-2]))/2<(float(h.iloc[-4])+float(h.iloc[-3]))/2) and
+               (float(l.iloc[-1])<float(o.iloc[-1])))
+        C12 = ((float(ma20.iloc[-2])<float(ma20.iloc[-3])) and (float(ma20.iloc[-1])<float(ma20.iloc[-2])) and
+               (float(h.iloc[-2])>float(ma20.iloc[-2])) and
+               ((float(o.iloc[-3])+float(o.iloc[-2]))/2<(float(o.iloc[-4])+float(o.iloc[-3]))/2) and
+               ((float(c.iloc[-3])+float(c.iloc[-2]))/2<(float(h.iloc[-4])+float(h.iloc[-3]))/2) and
+               ((float(c.iloc[-2])+float(c.iloc[-1]))/2<(float(c.iloc[-3])+float(c.iloc[-2]))/2))
+        # C72（新增，做空版本）
+        C72 = ((float(ma20.iloc[-2])<float(ma20.iloc[-3])) and (float(bt.iloc[-2])<float(bt.iloc[-3])) and
+               (float(bt.iloc[-1])>float(bt.iloc[-2])) and (float(l.iloc[-2])<float(bb.iloc[-2])) and
+               (float(rsi10.iloc[-2])>float(rsi10.iloc[-3])) and (float(rsi10.iloc[-1])<float(rsi10.iloc[-2])) and
+               (float(h.iloc[-2])<float(o.iloc[-3])) and (float(l.iloc[-2])<float(l.iloc[-3])) and
+               (float(mh.iloc[-1])<float(mh.iloc[-2])))
+        return (C1 and C2 and C3 and C4 and C5 and C6) or (C3 and (C11 or C12 or C72))
     except Exception as _e:
         return False
 
@@ -1119,11 +1133,24 @@ def check_short_eleader(df_d):
         SC63 = ((ma_c20<ma_c20.shift(1))&(bt20<bt20.shift(1))&(rsi<rsi.shift(1))&(ersi.shift(1)>ersi.shift(2))&(ersi<ersi.shift(1))&(c<ma_o2.shift(1)))
         SC66 = ((c.shift(1)<o.shift(1))&(ma_c20.shift(2)<ma_c20.shift(3))&(ma_c20.shift(1)<ma_c20.shift(2))&(h.shift(1)<ma_c20.shift(1))&(bb20.shift(1)<bb20.shift(2))&(bb2.shift(1)<bb20.shift(1))&(bt20>bt20.shift(1))&(o.shift(1)>bb20.shift(1))&(o>bb20)&(macd<msig)&(o.shift(1)>ma_o2.shift(1))&(c.shift(1)<ma_o2.shift(1))&(c.shift(1)<=ma_h2.shift(1))&(ma_h2<ma_h2.shift(1))&(c<o))
         SC71 = ((c.shift(1)<o.shift(1))&(c.shift(2)>o.shift(2))&(bt2.shift(2)<bt20.shift(2))&(ma_h2.shift(2)<bt20.shift(2))&(bt20<bt20.shift(1))&(o.shift(1)>ma_c20.shift(1))&(((ma_o2<ma_o2.shift(1))&(l.shift(1)>ma_l2.shift(1))&(c<ma_c2))|((ma_o2>ma_o2.shift(1))&(h>ma_o2)&(c<ma_o2)))&(o<ma_o2)&(ma_h2<=ma_h2.shift(1))&(c.shift(1)<=ma_c2.shift(1)))
+        # ✅ v05171702：條件F升級 - 新增SC72和SC0（做空版本）
+        import pandas_ta as _pta_els
+        _rsi10_els = _pta_els.rsi(c, length=10)
+        if _rsi10_els is None or len(_rsi10_els) < 3:
+            _rsi10_els = rsi
+        SC72 = ((ma_c20.shift(1)<ma_c20.shift(2)) & (bt20.shift(1)<bt20.shift(2)) &
+                (bt20>bt20.shift(1)) & (l.shift(1)<bb20.shift(1)) &
+                (_rsi10_els.shift(1)>_rsi10_els.shift(2)) & (_rsi10_els<_rsi10_els.shift(1)) &
+                (h.shift(1)<o.shift(2)) & (l.shift(1)<l.shift(2)) &
+                (mosc<mosc.shift(1)))
+        SC0 = (((h.shift(1)>ma_c20.shift(1)) & (ma_c20.shift(1)<ma_c20.shift(2)) &
+                (emacd<emacd.shift(1)) & (mosc<mosc.shift(1))) |
+               ((h.shift(1)<=ma_c20.shift(1)) & (bb20.shift(1)<bb20.shift(2))))
 
         short_group_A = (SC01 & SC02 & SC03 & SC04)
-        short_group_B = (SC11|SC12|SC21|SC22|SC23|SC24|SC25|SC26|SC27|SC28|SC41|SC42|SC43|SC44|SC45|SC46|SC47|SC48|SC49|SC50|SC61|SC62|SC63|SC66|SC71)
+        short_group_B = (SC11|SC12|SC21|SC22|SC23|SC24|SC25|SC26|SC27|SC28|SC41|SC42|SC43|SC44|SC45|SC46|SC47|SC48|SC49|SC50|SC61|SC62|SC63|SC66|SC71|SC72)
 
-        is_short = bool((short_base & (short_group_A | short_group_B)).iloc[-1])
+        is_short = bool((SC0 & short_base & (short_group_A | short_group_B)).iloc[-1])
         if is_short:
             return ('SHORT', c.iloc[-1], bt20.iloc[-1], rsi.iloc[-1])
         return None
