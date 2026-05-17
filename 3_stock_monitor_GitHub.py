@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05170954'
+SCRIPT_VERSION = '05171047'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1667,6 +1667,55 @@ def write_buy_signal_firebase(ticker, price, condition, now_str, market='TW'):
     except Exception as _e:
         return False
 
+def _export_scan_results(buy_signals, sell_signals, now_str):
+    """✅ v05171047：輸出篩選結果到CSV和JSON，方便複製代碼到eleader/三竹股市"""
+    try:
+        import json, csv
+        from datetime import datetime as _dt
+        _date = _dt.now().strftime('%Y%m%d_%H%M')
+        # 整理買進訊號
+        _buy = [{'market':s[0],'code':s[1],'close':round(s[2],2),'rsi':round(s[3],1),
+                 'boll':s[4],'conditions':str(s[5])} for s in buy_signals]
+        _sell = [{'market':s[0],'code':s[1],'close':round(s[2],2),'rsi':round(s[3],1)} for s in sell_signals]
+        # 買進代碼清單（純代碼，方便複製）
+        _buy_codes = [s[1] for s in buy_signals]
+        _sell_codes = [s[1] for s in sell_signals]
+        # JSON（完整資訊）
+        _result = {'scan_time':now_str,'buy':_buy,'sell':_sell,
+                   'buy_codes':_buy_codes,'sell_codes':_sell_codes}
+        with open(f'scan_result_{_date}.json','w',encoding='utf-8') as f:
+            json.dump(_result,f,ensure_ascii=False,indent=2)
+        # CSV（買進，方便貼入試算表）
+        if _buy:
+            with open(f'scan_buy_{_date}.csv','w',newline='',encoding='utf-8-sig') as f:
+                _w = csv.DictWriter(f,fieldnames=['market','code','close','rsi','boll','conditions'])
+                _w.writeheader(); _w.writerows(_buy)
+        print(f"\n📄 已輸出：scan_result_{_date}.json{'  scan_buy_'+_date+'.csv' if _buy else ''}")
+        print(f"   📋 買進代碼（複製到eleader）：{' '.join(_buy_codes) if _buy_codes else '（無）'}")
+    except Exception as _e:
+        print(f"  ⚠️ 輸出CSV/JSON失敗：{_e}")
+
+
+def _print_scan_summary(buy_signals, sell_signals):
+    """✅ v05171047：掃描完成後底部統整，不用往上翻"""
+    print(f"\n{'═'*55}")
+    print(f"  📊 掃描結果統整（不用往上翻）")
+    print(f"{'═'*55}")
+    if buy_signals:
+        print(f"  ⭐ 做多進場信號（{len(buy_signals)}支）：")
+        for s in buy_signals:
+            print(f"    {s[0]} {s[1]}  收：{s[2]:.2f}  RSI：{s[3]:.1f}  {s[4]}")
+    else:
+        print(f"  ⭐ 做多進場：無")
+    if sell_signals:
+        print(f"  🔴 賣出/做空信號（{len(sell_signals)}支）：")
+        for s in sell_signals:
+            print(f"    {s[0]} {s[1]}  收：{s[2]:.2f}  RSI：{s[3]:.1f}")
+    else:
+        print(f"  🔴 賣出/做空：無")
+    print(f"{'═'*55}\n")
+
+
 def write_scan_status_to_firebase(buy_count, sell_count, now_str):
     """✅ v05170940：寫入掃描完成狀態到Firebase，供網頁版「上次掃描時間」顯示使用"""
     try:
@@ -2458,6 +2507,10 @@ def main_task():
     print(f"{'='*55}")
     # ✅ v05170940：寫入掃描狀態到Firebase供網頁版「上次掃描時間」顯示
     write_scan_status_to_firebase(len(buy_signals), len(sell_signals), now_str)
+    # ✅ v05171047：輸出篩選結果到CSV和JSON，方便複製代碼到eleader/三竹
+    _export_scan_results(buy_signals, sell_signals, now_str)
+    # ✅ v05171047：底部統整大盤位階和符合策略股票清單
+    _print_scan_summary(buy_signals, sell_signals)
 
 # =====================
 # ❌❌ 下市警報通知（最高優先級，最先發送）
