@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05170312'
+SCRIPT_VERSION = '05170954'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -9,7 +9,7 @@ SCRIPT_VERSION = '05170312'
 # =========================
 # 快取設定（週K決定要不要看，日K決定準不準，5分K決定何時動手）
 USE_CACHE = True
-WEEKLY_REFRESH_HOUR = 8   # 每天早上更新一次週K
+WEEKLY_REFRESH_HOUR = 8   # 每天早上更新一次月K快取（long-term）
 five_min_cache = {}  # ✅ 新增 5 分鐘 K 線快取容器
 DELISTING_CHECK_DAYS = 1  # 每1天重新查詢（避免誤快取）（3天兼顧效能與即時性，可改1~7）
 DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
@@ -159,8 +159,8 @@ import pytz
 import json
 import os
 
-weekly_cache = {} # 3.0版用到的快取,週資料不常變，存起來對
-daily_cache  = {} # 3.0版用到的快取,日資料一天變一次，存起來也對。
+weekly_cache = {} # 長期投資月K快取（原週K，v05170856改月K）
+daily_cache  = {} # 中期投資週K快取（原日K，v05170856改週K）
 
 warnings.filterwarnings('ignore')
 import logging
@@ -428,7 +428,7 @@ def get_active_markets():
 
     return active
 
-def get_stock_data(ticker, period='2y', interval='1wk', cache=None):
+def get_stock_data(ticker, period='5y', interval='1mo', cache=None):  # ✅ v05170856 預設改月K
     """
     【核心函數】負責抓取 Yahoo Finance 資料並處理時區。
     修復 scan_stock() 呼叫時找不到此函數的問題。
@@ -1220,7 +1220,7 @@ def analyse_market_index(ticker, label):
     result = {'bull_abc':False,'bull_d':False,'bear_abc':False,'bear_d':False,'warn':False,'rsi_w':0,'rsi_d':0}
     try:
         # 週K
-        df_w = yf.download(ticker, period='2y', interval='1wk', progress=False)
+        df_w = yf.download(ticker, period='5y', interval='1mo', progress=False)
         if df_w is None or len(df_w) < 30: return result
         df_w = calc_indicators(df_w)
         ok_w, condD_bull_w = check_buy_precondition(df_w, is_weekly=True)
@@ -1359,7 +1359,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         # ══════════════════════════════════════════════════════════
 
         # ── 共用：抓取週K（第一道 or 賣出判斷用）────────────────
-        df_w = get_stock_data(ticker, period='2y', interval='1wk', cache=weekly_cache)
+        df_w = get_stock_data(ticker, period='5y', interval='1mo', cache=weekly_cache)  # ✅ v05170856 長期投資改月K
         if df_w is None or len(df_w) < 30: return None
         df_w['boll_top20'], df_w['boll_mid20'], df_w['boll_bot20'] = ta.bbands(df_w['Close'], length=20).iloc[:, 0:3].values.T
         df_w['rsi14'] = ta.rsi(df_w['Close'], length=14)
@@ -1386,7 +1386,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         if not TEST_MODE:
             if SCAN_MODE == 'daily':
                 # 日K模式第一道：日K 3根，條件A or B
-                _df1st = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
+                _df1st = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # ✅ v05170856 中期投資改週K
                 if _df1st is None or len(_df1st) < 50: return None
                 _df1st = calc_indicators(_df1st)
                 if _df1st is None: return None
@@ -1428,7 +1428,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 
         # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
         # 兩種模式統一：eLeader必過才繼續（確保不在高檔區追高）
-        df_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
+        df_d = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # ✅ v05170856 中期投資改週K
         if df_d is None or len(df_d) < 50: return None
         df_d = calc_indicators(df_d)
         if df_d is None: return None
@@ -1469,10 +1469,20 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 else:                             _bp2 = 'mid_zone'
             else:
                 _bp2 = 'mid_zone'
+            # ✅ v05170954：加入產業類別（group）上傳雲端
+            try:
+                import twstock as _tws
+                _grp = _tws.codes.get(_code_only2)
+                _industry = _grp.group if _grp and _grp.group else ''
+                _stk_name = _grp.name if _grp else ''
+            except Exception:
+                _industry = ''; _stk_name = ''
             _prescreened_ind[_code_only2] = {
                 'rsi': round(_rsi_now2, 1), 'rsi_prev': round(_rsi_prv2, 1),
                 'boll_pos': _bp2, 'is_long': bool(_is_long_ok), 'is_short': bool(_is_short_ok),
                 'condD_l': bool(_condD_long), 'condD_s': bool(_condD_short),
+                'industry': _industry,  # 產業類別（例：半導體業、金融保險業）
+                'name': _stk_name,      # 股票中文名稱
             }
         except Exception: pass
 
@@ -1655,6 +1665,41 @@ def write_buy_signal_firebase(ticker, price, condition, now_str, market='TW'):
                 "updated_at": {"stringValue": now_str}}})
         return _r.status_code in (200, 201)
     except Exception as _e:
+        return False
+
+def write_scan_status_to_firebase(buy_count, sell_count, now_str):
+    """✅ v05170940：寫入掃描完成狀態到Firebase，供網頁版「上次掃描時間」顯示使用"""
+    try:
+        import json, os, requests as _req
+        from datetime import datetime; import pytz
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json: return False
+        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+            scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}"
+                f"/public/futures_status")
+        _status = 'signal' if (buy_count + sell_count) > 0 else 'completed'
+        _r = _req.patch(_url, timeout=15,
+            headers={"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"},
+            json={"fields": {
+                "status":       {"stringValue": _status},
+                "scan_time":    {"stringValue": now_str},
+                "signal_count": {"integerValue": str(buy_count + sell_count)},
+                "buy_count":    {"integerValue": str(buy_count)},
+                "sell_count":   {"integerValue": str(sell_count)},
+                "updated_at":   {"stringValue": now_str},
+                "source":       {"stringValue": "python"}
+            }})
+        return _r.status_code in (200, 201)
+    except Exception as _e:
+        print(f"  ⚠️ write_scan_status 失敗：{_e}")
         return False
 
 def write_tw_stock_names():
@@ -2015,6 +2060,10 @@ def main_task():
             time.sleep(0.1) # 稍微加快掃描速度
 
         if _tw_prescreened:
+            # ✅ v05170954：FinMind財務篩選（流動比率>1.5，<4支不啟用）
+            if _tw_prescreened:
+                print("  🔍 FinMind財務篩選中...")
+                _tw_prescreened = apply_finmind_filter(_tw_prescreened)
             print(f'\n🔍 正在將 {len(_tw_prescreened)} 支預篩台股寫入Firebase...')
             write_tw_prescreened(_tw_prescreened, _prescreened_ind)  # ✅ 05041037
             # ✅ 05101039：週六補跑時同步更新中文名稱（直接判斷weekday，不依賴函數內部變數）
@@ -2160,18 +2209,47 @@ def main_task():
                 # 日K門檻：參考用（印出日K位階供參考，但不強制擋住）
                 # ══════════════════════════════════════════════
                 # ══════════════════════════════════════════════
-                # ✅【三道關卡】期貨5分K進場先決條件
-                # 第一道：週K位階（check_buy_precondition，BUY_LOOKBACK_BARS=3根）
-                # 第二道：日K eLeader條件（check_buy_eleader）
+                # ✅【三道關卡】期貨5分K進場先決條件 v05170920更新
+                # 第一道：EWT 30分K位階（覆蓋台灣夜盤，美市09:30~16:00 ET=台灣21:30~04:00）
+                #         → 同條件check_buy_precondition，餵30分K資料
+                #         → 夜盤15:00~05:00已有28根bar，09:10前完整
+                #         → 符合「不把日當日看」原則，同eleader切換K線週期
+                # 第二道：月K eLeader條件（check_buy_eleader，df_w為月K）
                 # 第三道：5分K 54根條件A/B + RSI門檻（BUY_LOOKBACK_5MK=54根）
                 # ══════════════════════════════════════════════
 
-                # ── 第一道：日K 3根位階──
-                df5_d = get_stock_data(ticker, period='6mo', interval='1d', cache=daily_cache)
-                if df5_d is None or len(df5_d) < 50:
-                    print(f'  ⚠️ {ticker} 日K資料不足，跳過')
+                # ── 第一道：30分K位階（含夜盤） ──────────────────────────────
+                # ✅ v05170920：改用30分K取代日K作為5分K策略的第一道
+                # 【設計理由】：
+                #   eLeader策略實測發現，需在09:10~09:20就判斷當天多空
+                #   → 日K在09:30才有第1根，太慢
+                #   → 30分K：夜盤(15:00~隔日05:00)已有28根完整bar
+                #   → 09:10時，這28根夜盤bar已完整，可以直接評估A轉/V轉
+                #   eLeader也是把夜盤收盤前幾根K棒納入多空趨勢評估
+                #
+                # 【不把日當日看的實踐】：
+                #   同一套條件（check_buy_precondition）
+                #   餵入30分K資料 → 評估30分K位階
+                #   不是評估「日K位階」，而是「30分K位階」
+                #   但判斷邏輯完全相同，符合eleader切換K線週期原則
+                # ✅ v05170924：30分K改用EWT（美股台灣ETF）取代^TWII
+                # 【EWT設計理由】：
+                #   ^TWII = 台灣現貨加權指數，無夜盤資料
+                #   大台近月期貨有夜盤（15:00~隔日05:00台灣時間）
+                #   EWT在美國NYSE交易：09:30~16:00 ET = 台灣時間21:30~04:00
+                #   → 完整覆蓋台灣夜盤時段！
+                #   → 這幾年主力手法多在夜盤發生大行情，需納入評估
+                #   → EWT與台指期夜盤高度相關（MSCI台灣指數成分股）
+                #   → Yahoo Finance EWT 30分K資料穩定，不像台指期ticker不穩
+                # 【架構說明】：
+                #   第一道 → EWT 30分K（夜盤趨勢方向）
+                #   進場訊號 → ^TWII 5分K（日盤精確時機）
+                import yfinance as _yf30
+                _df30 = _yf30.download('EWT', period='5d', interval='30m', progress=False)
+                if _df30 is None or len(_df30) < 20:
+                    print(f'  ⚠️ EWT 30分K資料不足，跳過')
                     continue
-                df5_d = calc_indicators(df5_d)
+                df5_d = calc_indicators(_df30)
                 if df5_d is None: continue
                 _orig5 = BUY_LOOKBACK_BARS
                 globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
@@ -2179,8 +2257,8 @@ def main_task():
                 _1st_short = check_short_precondition(df5_d)
                 globals()['BUY_LOOKBACK_BARS'] = _orig5
                 if not _1st_long and not _1st_short:
-                    print(f'  ❌ {ticker} 第一道日K3根未通過，跳過'); continue
-                print(f'  ✅ {ticker} 第一道日K3根通過（多:{_1st_long} 空:{_1st_short}）')
+                    print(f'  ❌ {ticker} 第一道30分K位階未通過，跳過'); continue
+                print(f'  ✅ {ticker} 第一道30分K通過（多:{_1st_long} 空:{_1st_short}）')
 
                 # ── 第二道：日K eLeader ──────────────────────
                 # （df5_d已在上面取得，直接使用）
@@ -2378,6 +2456,8 @@ def main_task():
     print(f"\n{'='*55}")
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
+    # ✅ v05170940：寫入掃描狀態到Firebase供網頁版「上次掃描時間」顯示
+    write_scan_status_to_firebase(len(buy_signals), len(sell_signals), now_str)
 
 # =====================
 # ❌❌ 下市警報通知（最高優先級，最先發送）
