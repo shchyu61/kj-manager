@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05171047'
+SCRIPT_VERSION = '05171629'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1716,6 +1716,94 @@ def _print_scan_summary(buy_signals, sell_signals):
     print(f"{'═'*55}\n")
 
 
+def check_financial_health_finmind(stock_id):
+    """✅ v05170954：FinMind財務篩選 流動比率>1.5"""
+    global _finmind_cache
+    from datetime import datetime as _dt,timedelta as _td
+    now=_dt.now()
+    if stock_id in _finmind_cache:
+        c=_finmind_cache[stock_id]
+        if (now-c['ts']).total_seconds()/3600<168: return c['pass']
+    try:
+        import requests as _req
+        r=_req.get('https://api.finmindtrade.com/api/v4/data',
+            params={'dataset':'TaiwanStockBalanceSheet','stock_id':stock_id,
+                    'date':(now-_td(days=400)).strftime('%Y-%m-%d'),'token':FINMIND_TOKEN},timeout=15)
+        if r.status_code!=200: _finmind_cache[stock_id]={'pass':None,'ts':now}; return None
+        d=r.json()
+        if d.get('status')!=200 or not d.get('data'): _finmind_cache[stock_id]={'pass':None,'ts':now}; return None
+        items=sorted(d['data'],key=lambda x:x.get('date',''),reverse=True)
+        cur_a=cur_l=None
+        for item in items:
+            t=item.get('type',''); v=float(item.get('value',0) or 0)
+            if t=='CurrentAssets' and cur_a is None: cur_a=v
+            if t=='CurrentLiabilities' and cur_l is None: cur_l=v
+            if cur_a is not None and cur_l is not None: break
+        if cur_a is None or cur_l is None or cur_a<=0: _finmind_cache[stock_id]={'pass':None,'ts':now}; return None
+        result=cur_l<(cur_a/1.5)
+        _finmind_cache[stock_id]={'pass':result,'ts':now}; return result
+    except: _finmind_cache[stock_id]={'pass':None,'ts':now}; return None
+
+
+def apply_finmind_filter(stock_codes):
+    """✅ v05170954：FinMind財務篩選（<4支不啟用）"""
+    if not stock_codes: return stock_codes
+    results={c:check_financial_health_finmind(c) for c in stock_codes}
+    passed=[c for c in stock_codes if results.get(c) is not False]
+    pass_count=len([c for c in stock_codes if results.get(c) is True])
+    if pass_count<FINMIND_MIN_PASS:
+        print(f"  ℹ️ FinMind財務篩選：通過{pass_count}支<最低{FINMIND_MIN_PASS}支，不啟用"); return stock_codes
+    print(f"  ✅ FinMind財務篩選：{pass_count}支通過，已篩除{len(stock_codes)-len(passed)}支")
+    return passed
+
+
+def check_tdcc_holder_trend(stock_id):
+    """✅ v05171629：集保大戶持股趨勢（加分制，7天快取，週報不超FinMind免費額度）
+    大戶=400張以上(level 6~10)，散戶=200張以下(level 1~4)，連1週即符合
+    """
+    global _finmind_cache
+    from datetime import datetime as _dt,timedelta as _td
+    _ck=f'tdcc_{stock_id}'; now=_dt.now()
+    if _ck in _finmind_cache:
+        c=_finmind_cache[_ck]
+        if (now-c['ts']).total_seconds()/3600<168: return c['data']
+    _e={'big_up':False,'small_down':False,'big_pct':0,'small_pct':0}
+    try:
+        import requests as _req
+        r=_req.get('https://api.finmindtrade.com/api/v4/data',
+            params={'dataset':'TaiwanStockHoldingSharesPer','stock_id':stock_id,
+                    'date':(now-_td(days=90)).strftime('%Y-%m-%d'),'token':FINMIND_TOKEN},timeout=15)
+        if r.status_code!=200: _finmind_cache[_ck]={'data':_e,'ts':now}; return _e
+        d=r.json()
+        if d.get('status')!=200 or not d.get('data'): _finmind_cache[_ck]={'data':_e,'ts':now}; return _e
+        rows=d['data']
+        dates=sorted(set(x['date'] for x in rows),reverse=True)[:2]
+        if len(dates)<2: _finmind_cache[_ck]={'data':_e,'ts':now}; return _e
+        def _sp(rows,dt,lvls): return sum(float(x.get('HoldingPer',0) or 0) for x in rows if x.get('date')==dt and int(x.get('HoldingLevel',0)) in lvls)
+        bn=_sp(rows,dates[0],{6,7,8,9,10}); bp2=_sp(rows,dates[1],{6,7,8,9,10})
+        sn=_sp(rows,dates[0],{1,2,3,4}); sp2=_sp(rows,dates[1],{1,2,3,4})
+        res={'big_up':bn>bp2,'small_down':sn<sp2,'big_pct':round(bn-bp2,3),'small_pct':round(sn-sp2,3)}
+        _finmind_cache[_ck]={'data':res,'ts':now}; return res
+    except: _finmind_cache[_ck]={'data':_e,'ts':now}; return _e
+
+
+def apply_tdcc_bonus_score(buy_signals):
+    """✅ v05171629：集保大戶加分排序（>4支才啟用，加分制不阻斷通知）"""
+    if len(buy_signals)<=4: return buy_signals
+    print(f"  🏆 集保大戶加分排序（{len(buy_signals)}支>4支，啟用）")
+    scored=[]
+    for s in buy_signals:
+        code=s[1]
+        if not(code.isdigit() and len(code)==4): scored.append((0,s)); continue
+        t=check_tdcc_holder_trend(code)
+        sc=(1 if t['big_up'] else 0)+(1 if t['small_down'] else 0)
+        print(f"    {code}: 大戶{'↑+'+str(t['big_pct'])+'%' if t['big_up'] else '→'} 散戶{'↓'+str(abs(t['small_pct']))+'%' if t['small_down'] else '→'} +{sc}分")
+        scored.append((sc,s))
+    scored.sort(key=lambda x:x[0],reverse=True)
+    print(f"  ✅ 排序完成，最高{scored[0][0] if scored else 0}分排前面")
+    return [s for _,s in scored]
+
+
 def write_scan_status_to_firebase(buy_count, sell_count, now_str):
     """✅ v05170940：寫入掃描完成狀態到Firebase，供網頁版「上次掃描時間」顯示使用"""
     try:
@@ -2508,6 +2596,9 @@ def main_task():
     # ✅ v05170940：寫入掃描狀態到Firebase供網頁版「上次掃描時間」顯示
     write_scan_status_to_firebase(len(buy_signals), len(sell_signals), now_str)
     # ✅ v05171047：輸出篩選結果到CSV和JSON，方便複製代碼到eleader/三竹
+    # ✅ v05171629：集保大戶加分排序（>4支才啟用）
+    if len(buy_signals) > 4:
+        buy_signals = apply_tdcc_bonus_score(buy_signals)
     _export_scan_results(buy_signals, sell_signals, now_str)
     # ✅ v05171047：底部統整大盤位階和符合策略股票清單
     _print_scan_summary(buy_signals, sell_signals)
