@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05170304</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05172348</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -780,6 +780,14 @@
                     <div class="flex items-center justify-between">
                         <label class="text-sm font-black text-slate-600 w-40">每天最多買幾支股票</label>
                         <input id="calc-max-stocks" type="number" step="1" value="4" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black text-right" oninput="calcResult()">
+                    </div>
+                    <!-- Gmail通知開關 -->
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm font-black text-slate-600 w-40">網頁版掃描Gmail通知</label>
+                        <select id="calc-gmail-notify" class="w-36 border-2 border-slate-200 rounded-xl px-3 py-1.5 text-sm font-black">
+                            <option value="off">OFF（預設，不通知）</option>
+                            <option value="on">ON（掃到訊號發Gmail）</option>
+                        </select>
                     </div>
                     <div class="text-[10px] text-slate-400">※ 分散份數和每支預算依個人風險決定，儲存到各自雲端，其他人看不到您的設定<br>💡 小資族每支股票預算建議100元；分散投資模式會依可用資金÷份數自動計算</div>
                 </div>
@@ -3364,6 +3372,24 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     // ✅ 05051530：只顯示有訊號的卡片（無訊號不佔版面）
                     // ✅ 05111049：買進訊號寫入Firebase供T+2追蹤
                     if (result.buy_signal) {
+                        // ✅ v05172348：若用戶開啟Gmail通知，寫入pending請求
+                        (async function(_c,_r){
+                            try{
+                                var _gnEl=document.getElementById('calc-gmail-notify');
+                                if(_gnEl && _gnEl.value==='on'){
+                                    await initFirebaseAuth();
+                                    var _ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+                                    var _pgRef=doc(window.db,'artifacts',window.appId,'public','pending_gmail_'+_ts+'_'+_c);
+                                    await setDoc(_pgRef,{
+                                        ticker:_c, signal:'BUY', price:_r.close,
+                                        condition:_r._mixedLabel||'做多進場',
+                                        time:new Date().toLocaleString('zh-TW'),
+                                        user:window._userEmail||'unknown',
+                                        sent:false
+                                    });
+                                }
+                            }catch(e){}
+                        })(_c2,result);
                         (async function(_c,_r){
                             try {
                                 await initFirebaseAuth();
@@ -4215,6 +4241,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     set('calc-bank', d.bank); set('calc-day0', d.day0); set('calc-day1', d.day1); set('calc-day2', d.day2);
                     set('calc-per-stock', d.per_stock); set('calc-max-stocks', d.max_stk);
                     set('calc-fee-min', d.fee_min); set('calc-discount', d.discount); set('calc-profit', d.profit);
+                    if(d.gmail_notify){var gnEl=document.getElementById('calc-gmail-notify');if(gnEl)gnEl.value=d.gmail_notify;}
                     set('calc-split-n', d.split_n);
                     if(d.ctrl_mode){ var cmEl=document.getElementById('calc-ctrl-mode'); if(cmEl){ cmEl.value=d.ctrl_mode; } }
                 }

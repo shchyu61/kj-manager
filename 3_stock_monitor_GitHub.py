@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05171758'
+SCRIPT_VERSION = '05172348'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1883,6 +1883,68 @@ def apply_tdcc_bonus_score(buy_signals):
     return [s for _,s in scored]
 
 
+def process_pending_gmail_requests(now_str):
+    """✅ v05172348：處理網頁版發起的Gmail通知請求（pending_gmail_*）
+    網頁版用戶開啟Gmail通知後，掃到訊號會寫入Firebase
+    Python每次掃描前讀取並發送，發送後刪除請求
+    """
+    try:
+        import json, os, requests as _req
+        from datetime import datetime; import pytz
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json: return
+        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+            scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        _base = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                 f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public")
+        # 列出所有pending_gmail開頭的文件
+        _list_r = _req.get(f"{_base}", headers={"Authorization": f"Bearer {_c.token}"}, timeout=10)
+        if _list_r.status_code != 200: return
+        _docs = _list_r.json().get('documents', [])
+        _pending = [d for d in _docs if '/pending_gmail_' in d.get('name','')]
+        if not _pending: return
+        print(f"  📧 發現{len(_pending)}個網頁版Gmail通知請求，處理中...")
+        for doc in _pending:
+            try:
+                fields = doc.get('fields', {})
+                ticker    = fields.get('ticker',    {}).get('stringValue','')
+                signal    = fields.get('signal',    {}).get('stringValue','')
+                price     = fields.get('price',     {}).get('doubleValue', 0)
+                condition = fields.get('condition', {}).get('stringValue','')
+                time_str  = fields.get('time',      {}).get('stringValue','')
+                user      = fields.get('user',      {}).get('stringValue','')
+                sent      = fields.get('sent',      {}).get('booleanValue', False)
+                if sent: continue
+                msg = (f"📱【網頁版{signal}訊號】{ticker}
+"
+                       f"條件：{condition}
+"
+                       f"市價：{price:.2f}
+"
+                       f"時間：{time_str}
+"
+                       f"用戶：{user}
+"
+                       f"⚠️ 本訊號由網頁版掃描觸發")
+                ok = send_gmail(f"📱【網頁版】{signal} {ticker} - {time_str}", msg)
+                if ok:
+                    # 刪除已處理的請求
+                    doc_name = doc['name']
+                    _req.delete(f"https://firestore.googleapis.com/v1/{doc_name}",
+                               headers={"Authorization": f"Bearer {_c.token}"}, timeout=10)
+                    print(f"    ✅ {ticker} Gmail已發送，請求已刪除")
+            except Exception as _e:
+                print(f"    ⚠️ 處理請求失敗：{_e}")
+    except Exception as _e:
+        print(f"  ⚠️ process_pending_gmail失敗：{_e}")
+
+
 def write_scan_status_to_firebase(buy_count, sell_count, now_str):
     """✅ v05170940：寫入掃描完成狀態到Firebase，供網頁版「上次掃描時間」顯示使用"""
     try:
@@ -2669,6 +2731,8 @@ def main_task():
 # ============================================================
 # 【１５．發送Gmail通知】
 # ============================================================
+    # ✅ v05172348：處理網頁版發起的Gmail通知請求
+    process_pending_gmail_requests(now_str)
     print(f"\n{'='*55}")
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
