@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05171629'
+SCRIPT_VERSION = '05171758'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1745,6 +1745,85 @@ def check_financial_health_finmind(stock_id):
     except: _finmind_cache[stock_id]={'pass':None,'ts':now}; return None
 
 
+def check_institutional_buying(stock_id):
+    """✅ v05171758：法人合計淨買條件（外資+投信+自營，加分制）
+    來源：FinMind TaiwanStockInstitutionalInvestorsBuySell（日報）
+    說明：主力強度為三竹/eleader平台專屬指標，無公開API
+          本函數以「法人合計淨買」作為最接近的替代方案
+    條件：(外資淨買 + 投信淨買 + 自營淨買) > 0 → 法人合計大買
+    快取：1天（日報，每天更新）
+    費用：48支×1次/天=48次，遠低於FinMind免費額度600次/天
+    回傳：{'net_buy': float, 'is_buying': bool, 'detail': str}
+    """
+    global _finmind_cache
+    from datetime import datetime as _dt, timedelta as _td
+    _cache_key = f'inst_{stock_id}'
+    now = _dt.now()
+    if _cache_key in _finmind_cache:
+        c = _finmind_cache[_cache_key]
+        if (now - c['ts']).total_seconds() / 3600 < 24: return c['data']
+    _empty = {'net_buy': 0, 'is_buying': False, 'detail': '無資料'}
+    try:
+        import requests as _req
+        # 取最近5個交易日（確保有最新資料）
+        date_from = (now - _td(days=10)).strftime('%Y-%m-%d')
+        r = _req.get('https://api.finmindtrade.com/api/v4/data',
+            params={'dataset': 'TaiwanStockInstitutionalInvestorsBuySell',
+                    'stock_id': stock_id, 'date': date_from,
+                    'token': FINMIND_TOKEN}, timeout=15)
+        if r.status_code != 200:
+            _finmind_cache[_cache_key] = {'data': _empty, 'ts': now}; return _empty
+        d = r.json()
+        if d.get('status') != 200 or not d.get('data'):
+            _finmind_cache[_cache_key] = {'data': _empty, 'ts': now}; return _empty
+        rows = sorted(d['data'], key=lambda x: x.get('date',''), reverse=True)
+        # 取最新一天的資料
+        latest_date = rows[0].get('date','') if rows else ''
+        latest = [r for r in rows if r.get('date') == latest_date]
+        # 計算各法人淨買
+        net = {}
+        for item in latest:
+            name = item.get('name','')
+            buy  = float(item.get('buy',0) or 0)
+            sell = float(item.get('sell',0) or 0)
+            net[name] = buy - sell
+        foreign    = net.get('外資', 0)
+        trust      = net.get('投信', 0)
+        dealer     = net.get('自營商', net.get('自營', 0))
+        total      = foreign + trust + dealer
+        detail = f"外資{'+' if foreign>=0 else ''}{int(foreign/1000)}K 投信{'+' if trust>=0 else ''}{int(trust/1000)}K 自營{'+' if dealer>=0 else ''}{int(dealer/1000)}K"
+        result = {'net_buy': total, 'is_buying': total > 0, 'detail': detail}
+        _finmind_cache[_cache_key] = {'data': result, 'ts': now}; return result
+    except Exception as _e:
+        _finmind_cache[_cache_key] = {'data': _empty, 'ts': now}; return _empty
+
+
+def apply_institutional_bonus_score(buy_signals):
+    """✅ v05171758：法人合計大買加分排序（>4支才啟用，與集保大戶共同排序）
+    法人合計淨買>0 → +1分（疊加集保大戶的分數）
+    """
+    if len(buy_signals) <= 4: return buy_signals
+    print(f"  💼 法人合計淨買加分（{len(buy_signals)}支>4支，啟用）")
+    scored = []
+    for item in buy_signals:
+        code = item[1] if isinstance(item, tuple) and len(item) > 1 else (item[0][1] if isinstance(item, tuple) and isinstance(item[0], tuple) else '')
+        # 相容已有TDCC分數的格式
+        if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], int):
+            prev_score, s = item
+            code = s[1]
+        else:
+            prev_score = 0; s = item
+        if not (code.isdigit() and len(code) == 4):
+            scored.append((prev_score, s)); continue
+        inst = check_institutional_buying(code)
+        sc = prev_score + (1 if inst['is_buying'] else 0)
+        print(f"    {code}: {inst['detail']} {'✅法人大買+1分' if inst['is_buying'] else '→持平'} 合計{sc}分")
+        scored.append((sc, s))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    print(f"  ✅ 法人+集保加分完成，最高{scored[0][0] if scored else 0}分排前面")
+    return [s for _, s in scored]
+
+
 def apply_finmind_filter(stock_codes):
     """✅ v05170954：FinMind財務篩選（<4支不啟用）"""
     if not stock_codes: return stock_codes
@@ -2596,9 +2675,10 @@ def main_task():
     # ✅ v05170940：寫入掃描狀態到Firebase供網頁版「上次掃描時間」顯示
     write_scan_status_to_firebase(len(buy_signals), len(sell_signals), now_str)
     # ✅ v05171047：輸出篩選結果到CSV和JSON，方便複製代碼到eleader/三竹
-    # ✅ v05171629：集保大戶加分排序（>4支才啟用）
+    # ✅ v05171629+v05171758：集保大戶+法人大買雙重加分排序（>4支才啟用）
     if len(buy_signals) > 4:
         buy_signals = apply_tdcc_bonus_score(buy_signals)
+        buy_signals = apply_institutional_bonus_score(buy_signals)
     _export_scan_results(buy_signals, sell_signals, now_str)
     # ✅ v05171047：底部統整大盤位階和符合策略股票清單
     _print_scan_summary(buy_signals, sell_signals)
