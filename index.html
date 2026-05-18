@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05190639</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05181843</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -3823,7 +3823,27 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if (!logs.length) {
                     logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">此類別無紀錄</div>'; return;
                 }
-                logList.innerHTML = logs.map(l => {
+                // ✅ v05190727修正：各帳號各自登入次數統計（只計成功登入）
+                const _allLogs = _snap.data().logs || [];
+                const _me = currentUserEmail || '';
+                const _cntMap = {};
+                _allLogs.filter(l => l.success && l.email).forEach(l => {
+                    _cntMap[l.email] = (_cntMap[l.email] || 0) + 1;
+                });
+                const _colors = ['#1a5a30','#3a1060','#6a4000','#1a3a6a','#6a1a1a','#2a4a1a'];
+                const _statRows = Object.entries(_cntMap)
+                    .sort((a,b) => b[1]-a[1])
+                    .map(([email,cnt],i) => {
+                        const isMe = email===_me;
+                        const label = isMe ? `👤 我（${email}）` : `👥 ${email}`;
+                        const col = _colors[i % _colors.length];
+                        return `<span style="font-size:12px;font-weight:700;color:${col};">${label}：${cnt} 次</span>`;
+                    }).join('');
+                const _statHtml = `<div style="background:#f0e8ff;border:1.5px solid #c4a0e0;border-radius:0.75rem;padding:0.6rem 0.8rem;margin-bottom:0.5rem;display:flex;gap:0.75rem 1.5rem;flex-wrap:wrap;">
+                    <span style="font-size:12px;font-weight:900;color:#3a1060;width:100%;">📊 各帳號成功登入次數（200筆內）</span>
+                    ${_statRows}
+                </div>`;
+                logList.innerHTML = _statHtml + logs.map(l => {
                     const isBlocked = l.reason && l.reason.includes('黑名單');
                     const icon  = l.success ? '✅ 成功' : (isBlocked ? '🚫 黑名單' : '❌ 失敗');
                     const bg    = l.success ? '#f0fff4' : (isBlocked ? '#fff8e8' : '#fff0f0');
