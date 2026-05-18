@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05172348'
+SCRIPT_VERSION = '05181836'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1434,7 +1434,10 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         if df_d is None: return None
 
         if _is_long_ok:
-            is_eleader_ok = check_buy_eleader(df_d) is not None
+            # ✅ v05181836：第二道eLeader = 月K OR 週K（事不過三）
+            _df_w_el = calc_indicators(df_w.copy()) if df_w is not None else None
+            is_eleader_ok = (signal_within_n(lambda d: check_buy_eleader(d) is not None, _df_w_el, n=3) or
+                             signal_within_n(lambda d: check_buy_eleader(d) is not None, df_d, n=3))
             if _condD_long:
                 # 條件D觸發（高位階上軌）→ eLeader 為可選，不強制
                 print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
@@ -1444,7 +1447,10 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 if not is_eleader_ok:
                     return None
         else:
-            is_eleader_short_ok = check_short_eleader(df_d) is not None
+            # ✅ v05181836：做空eLeader = 月K OR 週K（事不過三）
+            _df_w_el2 = _df_w_el if '_df_w_el' in dir() else (calc_indicators(df_w.copy()) if df_w is not None else None)
+            is_eleader_short_ok = (signal_within_n(lambda d: check_short_eleader(d) is not None, _df_w_el2, n=3) or
+                                   signal_within_n(lambda d: check_short_eleader(d) is not None, df_d, n=3))
             if _condD_short:
                 # 條件D空頭（高位階）→ eLeader 為可選
                 print(f'  {"✅" if is_eleader_short_ok else "⚠️"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過（條件D補位，繼續）"}')
@@ -2510,19 +2516,28 @@ def main_task():
                 #   餵入30分K資料 → 評估30分K位階
                 #   不是評估「日K位階」，而是「30分K位階」
                 #   但判斷邏輯完全相同，符合eleader切換K線週期原則
-                # ✅ v05170924：30分K改用EWT（美股台灣ETF）取代^TWII
-                # 【EWT設計理由】：
-                #   ^TWII = 台灣現貨加權指數，無夜盤資料
-                #   大台近月期貨有夜盤（15:00~隔日05:00台灣時間）
-                #   EWT在美國NYSE交易：09:30~16:00 ET = 台灣時間21:30~04:00
-                #   → 完整覆蓋台灣夜盤時段！
-                #   → 這幾年主力手法多在夜盤發生大行情，需納入評估
-                #   → EWT與台指期夜盤高度相關（MSCI台灣指數成分股）
-                #   → Yahoo Finance EWT 30分K資料穩定，不像台指期ticker不穩
-                # 【架構說明】：
-                #   第一道 → EWT 30分K（夜盤趨勢方向）
-                #   進場訊號 → ^TWII 5分K（日盤精確時機）
+                # ✅ v05181836：5分K策略先大後小原則（先日K後EWT 30分K後5分K）
+                # 【正確先大後小架構】：
+                #   第一道 → 日K（事不過三=3個交易日）← 大週期，看整體位階
+                #   第二道 → EWT 30分K（夜盤方向）← 中週期，確認隔夜方向
+                #   進場   → ^TWII 5分K ← 小週期，精確入場時機
+                # 【為何日K在前】：
+                #   昨日13:30收盤後日K完整成形，代表昨日整體位階
+                #   符合「先看大週期，後看小週期」投資定律
+                # 【EWT設計理由維持不變】：
+                #   EWT=iShares MSCI Taiwan ETF，NYSE交易
+                #   ET 09:30~16:00 = 台灣夜盤21:30~04:00
+                #   完整覆蓋台灣夜盤，Yahoo Finance資料穩定
                 import yfinance as _yf30
+                # 第一道：日K（事不過三=3個交易日）
+                _df_daily_5mk = _yf30.download(ticker, period='60d', interval='1d', progress=False)
+                if _df_daily_5mk is not None and not _df_daily_5mk.empty:
+                    _df_daily_5mk = calc_indicators(_df_daily_5mk)
+                    _1st_daily_long  = signal_within_n(lambda d: check_buy_precondition(d)[0], _df_daily_5mk, n=3, reverse_check=check_sell_condition)
+                    _1st_daily_short = signal_within_n(lambda d: check_short_precondition(d)[0], _df_daily_5mk, n=3)
+                else:
+                    _1st_daily_long = _1st_daily_short = False
+                # 第二道：EWT 30分K（夜盤方向確認）
                 _df30 = _yf30.download('EWT', period='5d', interval='30m', progress=False)
                 if _df30 is None or len(_df30) < 20:
                     print(f'  ⚠️ EWT 30分K資料不足，跳過')
@@ -2531,12 +2546,12 @@ def main_task():
                 if df5_d is None: continue
                 _orig5 = BUY_LOOKBACK_BARS
                 globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
-                _1st_long  = check_buy_precondition(df5_d)
-                _1st_short = check_short_precondition(df5_d)
-                globals()['BUY_LOOKBACK_BARS'] = _orig5
+                # ✅ v05181836：第一道=日K AND EWT 30分K雙重確認
+                _1st_long  = _1st_daily_long  and (check_buy_precondition(df5_d)[0] if df5_d is not None else False)
+                _1st_short = _1st_daily_short and (check_short_precondition(df5_d)[0] if df5_d is not None else False)
                 if not _1st_long and not _1st_short:
-                    print(f'  ❌ {ticker} 第一道30分K位階未通過，跳過'); continue
-                print(f'  ✅ {ticker} 第一道30分K通過（多:{_1st_long} 空:{_1st_short}）')
+                    print(f'  ❌ {ticker} 第一道(日K AND EWT 30分K)未通過，跳過'); continue
+                print(f'  ✅ {ticker} 第一道(日K AND EWT 30分K)通過（多:{_1st_long} 空:{_1st_short}）')
 
                 # ── 第二道：日K eLeader ──────────────────────
                 # （df5_d已在上面取得，直接使用）

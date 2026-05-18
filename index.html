@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05172348</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05181843</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -2537,23 +2537,24 @@
         const analyzeMixed = async (code) => {
             // ✅ 週K和日K並行，速度快且不互相干擾
             const [r1, r2] = await Promise.allSettled([
-                analyzeStock(code, '1wk', '2y'),
-                analyzeStock(code, '1d',  '1y'),
+                // ✅ v05181843：月K OR 週K（先大後小，符合先看長週期原則）
+                analyzeStock(code, '1mo', '5y'),  // 月K（長期投資）
+                analyzeStock(code, '1wk', '2y'),  // 週K（中期投資）
             ]);
-            const wk = r1.status === 'fulfilled' ? r1.value : null;
-            const dk = r2.status === 'fulfilled' ? r2.value : null;
-            // 週K/日K第一道是否通過（有任何資料就代表第一道通過）
-            const _wkPass1st = wk !== null;
-            const _dkPass1st = dk !== null;
-            // 有買進訊號：優先回傳長期（週K），其次中期（日K）
-            if (wk && wk.buy_signal) return { result: wk, mode: '長期投資', kLabel: '長期投資' };
-            if (dk && dk.buy_signal) {
-                const _lbl = _wkPass1st ? '長期+中期投資' : '中期投資';
-                return { result: dk, mode: '中期投資', kLabel: _lbl };
+            const mk = r1.status === 'fulfilled' ? r1.value : null;  // 月K
+            const wk = r2.status === 'fulfilled' ? r2.value : null;  // 週K
+            // ✅ v05181843：月K OR 週K（任一有訊號即通過，OR邏輯）
+            const _mkPass = mk !== null;
+            const _wkPass = wk !== null;
+            // 有買進訊號：月K優先（長期），週K次之（中期），OR邏輯
+            if (mk && mk.buy_signal) return { result: mk, mode: '長期投資', kLabel: '長期投資' };
+            if (wk && wk.buy_signal) {
+                const _lbl = _mkPass ? '長期+中期投資' : '中期投資';
+                return { result: wk, mode: '中期投資', kLabel: _lbl };
             }
             // 無訊號：標籤說明通過的投資週期
-            const _noSigLabel = _wkPass1st && _dkPass1st ? '長期+中期投資' : _wkPass1st ? '長期投資' : _dkPass1st ? '中期投資' : '－';
-            return { result: wk || dk, mode: null, kLabel: _noSigLabel };
+            const _noSigLabel = _mkPass && _wkPass ? '長期+中期投資' : _mkPass ? '長期投資' : _wkPass ? '中期投資' : '－';
+            return { result: mk || wk, mode: null, kLabel: _noSigLabel };
         };
 
         // ── AI預篩清單：從Firebase讀取（每天14:00由雲端自動更新）────────
