@@ -1,7 +1,7 @@
 # ============================================================
 # GitHub Actions：台股1827支股票和期貨5分K自動掃描排程
 # 檔案位置：.github/workflows/stock_scan.yml
-# 最後更新：2026/05/17 10:47
+# 最後更新：2026/05/19 06:39
 # 說明：新增22:35（證交所20:00後更新資料）
 #   scan job      → 每週一~五 09:05、12:50 和 22:35（台灣時間）自動執行
 #   futures-scan  → 週一12:50~週三11:30，日盤/夜盤每5分鐘，深夜01~05每15分鐘
@@ -80,6 +80,7 @@ jobs:
           GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
           GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
           FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
+          SCAN_TYPE: tw          # ✅ v05190013：告知Python此次為台股掃描
         run: |
           python 3_stock_monitor_GitHub.py
 
@@ -114,6 +115,7 @@ jobs:
           GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
           GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
           TEST_MODE:            '5mk'
+          SCAN_TYPE:            futures  # ✅ v05190013：告知Python此次為期貨掃描
           FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
         run: |
           python 3_stock_monitor_GitHub.py
