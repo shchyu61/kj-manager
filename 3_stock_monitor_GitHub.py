@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05191209'
+SCRIPT_VERSION = '05191228'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -29,6 +29,12 @@ TEST_MODE = False   # 切換：False / True / '5mk'
 FUTURES_5MK_TARGETS  = ['^TWII']   # 期貨標的（可加入 'TXFF' 等）
 FUTURES_5MK_INTERVAL = 300         # 每300秒（5分鐘）掃描一次
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
+
+# FinMind設定（財務篩選 + 集保大戶 + 法人大買）
+FINMIND_TOKEN      = __import__('os').environ.get('FINMIND_TOKEN', '')  # 可選Token
+FINMIND_MIN_PASS   = 4       # 通過財務篩選最低支數（低於此數不啟用）
+FINMIND_CACHE_HOURS = 168    # 財務資料快取7天（週報不常更新）
+_finmind_cache     = {}      # ✅ 模組頂層宣告，防止 'not defined' 錯誤
 
 # Firebase設定（本機版：讀取AI預篩清單快取）
 FIREBASE_PROJECT_ID    = 'kj-wealth-manager'
