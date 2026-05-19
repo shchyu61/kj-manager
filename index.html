@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05190727</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05191209</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1022,7 +1022,7 @@
                 <i data-lucide="calculator" class="w-6 h-6"></i>
                 <span class="text-[12px] font-black">零股計算</span>
             </button>
-            <button onclick="switchPage('settings')" id="tab-settings" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400">
+            <button onclick="switchPage('settings')" id="tab-settings" class="flex flex-col items-center gap-1 py-2 px-3 transition-all text-slate-400" style="display:none;">  <!-- ✅ v05191209：預設隱藏，isAdmin才顯示 -->
                 <i data-lucide="user-check" class="w-6 h-6"></i>
                 <span class="text-[12px] font-black">帳號權限</span>
             </button>
@@ -1221,6 +1221,9 @@
                 window.renderWatchlist();
                 loadTwPrescreened().catch(()=>{}); // 非同步載入AI預篩清單
                 window._isAdmin = (currentUserEmail === 'shchyu61@gmail.com');
+            // ✅ v05191209：帳號權限tab只對管理員顯示
+            const _settingsTab = document.getElementById('tab-settings');
+            if (_settingsTab) _settingsTab.style.display = window._isAdmin ? '' : 'none';
             } catch (e) {
                 console.error("Cloud load error:", e);
                 window.showAlert("讀取失敗：" + e.message);
@@ -2537,13 +2540,13 @@
         const analyzeMixed = async (code) => {
             // ✅ 週K和日K並行，速度快且不互相干擾
             const [r1, r2] = await Promise.allSettled([
-                // ✅ v05190727：月K OR 週K（先大後小，符合先看長週期原則）
+                // ✅ v05191209：月K OR 週K（先大後小，符合先看長週期原則）
                 analyzeStock(code, '1mo', '5y'),  // 月K（長期投資）
                 analyzeStock(code, '1wk', '2y'),  // 週K（中期投資）
             ]);
             const mk = r1.status === 'fulfilled' ? r1.value : null;  // 月K
             const wk = r2.status === 'fulfilled' ? r2.value : null;  // 週K
-            // ✅ v05190727：月K OR 週K（任一有訊號即通過，OR邏輯）
+            // ✅ v05191209：月K OR 週K（任一有訊號即通過，OR邏輯）
             const _mkPass = mk !== null;
             const _wkPass = wk !== null;
             // 有買進訊號：月K優先（長期），週K次之（中期），OR邏輯
@@ -3823,7 +3826,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if (!logs.length) {
                     logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">此類別無紀錄</div>'; return;
                 }
-                // ✅ v05190727修正：各帳號各自登入次數統計（只計成功登入）
+                // ✅ v05191209修正：各帳號各自登入次數統計（只計成功登入）
                 const _allLogs = _snap.data().logs || [];
                 const _me = currentUserEmail || '';
                 const _cntMap = {};
@@ -3831,13 +3834,19 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     _cntMap[l.email] = (_cntMap[l.email] || 0) + 1;
                 });
                 const _colors = ['#1a5a30','#3a1060','#6a4000','#1a3a6a','#6a1a1a','#2a4a1a'];
+                // ✅ v05191209：各帳號最後登入時間
+                const _lastMap = {};
+                _allLogs.filter(l => l.success && l.email).forEach(l => {
+                    if (!_lastMap[l.email] || l.time > _lastMap[l.email]) _lastMap[l.email] = l.time;
+                });
                 const _statRows = Object.entries(_cntMap)
                     .sort((a,b) => b[1]-a[1])
                     .map(([email,cnt],i) => {
                         const isMe = email===_me;
                         const label = isMe ? `👤 我（${email}）` : `👥 ${email}`;
                         const col = _colors[i % _colors.length];
-                        return `<span style="font-size:12px;font-weight:700;color:${col};">${label}：${cnt} 次</span>`;
+                        const lastT = _lastMap[email] || '';
+                        return `<span style="font-size:12px;font-weight:700;color:${col};">${label}：${cnt} 次　最後登入：${lastT}</span>`;
                     }).join('');
                 const _statHtml = `<div style="background:#f0e8ff;border:1.5px solid #c4a0e0;border-radius:0.75rem;padding:0.6rem 0.8rem;margin-bottom:0.5rem;display:flex;gap:0.75rem 1.5rem;flex-wrap:wrap;">
                     <span style="font-size:12px;font-weight:900;color:#3a1060;width:100%;">📊 各帳號成功登入次數（200筆內）</span>

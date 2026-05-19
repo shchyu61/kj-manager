@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05190639'
+SCRIPT_VERSION = '05191209'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1785,6 +1785,7 @@ def check_financial_health_finmind(stock_id):
 
 
 def check_institutional_buying(stock_id):
+    global _finmind_cache
     """✅ v05171758：法人合計淨買條件（外資+投信+自營，加分制）
     來源：FinMind TaiwanStockInstitutionalInvestorsBuySell（日報）
     說明：主力強度為三竹/eleader平台專屬指標，無公開API
@@ -1864,6 +1865,7 @@ def apply_institutional_bonus_score(buy_signals):
 
 
 def apply_finmind_filter(stock_codes):
+    global _finmind_cache
     """✅ v05170954：FinMind財務篩選（<4支不啟用）"""
     if not stock_codes: return stock_codes
     results={c:check_financial_health_finmind(c) for c in stock_codes}
@@ -1906,6 +1908,7 @@ def check_tdcc_holder_trend(stock_id):
 
 
 def apply_tdcc_bonus_score(buy_signals):
+    global _finmind_cache
     """✅ v05171629：集保大戶加分排序（>4支才啟用，加分制不阻斷通知）"""
     if len(buy_signals)<=4: return buy_signals
     print(f"  🏆 集保大戶加分排序（{len(buy_signals)}支>4支，啟用）")
