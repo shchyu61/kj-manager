@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05191209</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05191724</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -3835,9 +3835,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 });
                 const _colors = ['#1a5a30','#3a1060','#6a4000','#1a3a6a','#6a1a1a','#2a4a1a'];
                 // ✅ v05191209：各帳號最後登入時間
+                // ✅ v05191724：logs陣列最新在前，第一次出現=最新登入時間
                 const _lastMap = {};
                 _allLogs.filter(l => l.success && l.email).forEach(l => {
-                    if (!_lastMap[l.email] || l.time > _lastMap[l.email]) _lastMap[l.email] = l.time;
+                    if (!_lastMap[l.email]) _lastMap[l.email] = l.time;
                 });
                 const _statRows = Object.entries(_cntMap)
                     .sort((a,b) => b[1]-a[1])

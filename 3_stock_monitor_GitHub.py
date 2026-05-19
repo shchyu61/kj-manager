@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05191228'
+SCRIPT_VERSION = '05191724'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -137,7 +137,7 @@ ENABLE_INDEX_FILTER  = True    # True=啟用大盤過濾警告 / False=忽略大
 # 全額交割股 = 財務惡化警訊，是下市前最重要的早期指標！
 # 持股在清單：❌❌終極警報，請儘速評估是否出清
 # 觀察股在清單：⚠️ 勿碰預警，等恢復正常交割再說
-ENABLE_CASH_DELIVERY_CHECK = True   # True=啟用全額交割預警 / False=關閉
+ENABLE_CASH_DELIVERY_CHECK = False  # ✅ v05191724：停用全額交割（TWSE/TPEX持續封鎖超過半個月）
 CASH_DELIVERY_CACHE_HOURS  = 72     # 全額交割清單快取時間（小時，72=3天）
 
 # ── 【２-7】做空入場策略：空頭三道關卡條件 ────────────────────────
