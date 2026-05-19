@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05191724'
+SCRIPT_VERSION = '05192327'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1228,12 +1228,17 @@ def analyse_market_index(ticker, label):
     """
     result = {'bull_abc':False,'bull_d':False,'bear_abc':False,'bear_d':False,'warn':False,'rsi_w':0,'rsi_d':0}
     try:
-        # 週K
-        df_w = yf.download(ticker, period='5y', interval='1mo', progress=False)
+        # ✅ v05192313：月K+週K+日K三週期全判斷
+        df_w = yf.download(ticker, period='5y', interval='1mo', progress=False)  # 月K
+        df_wk = yf.download(ticker, period='2y', interval='1wk', progress=False)  # 週K
+        df_wk = calc_indicators(df_wk) if df_wk is not None and len(df_wk)>=20 else None
         if df_w is None or len(df_w) < 30: return result
         df_w = calc_indicators(df_w)
-        ok_w, condD_bull_w = check_buy_precondition(df_w, is_weekly=True)
-        ok_ws, condD_bear_w = check_short_precondition(df_w, is_weekly=True)
+        ok_w, condD_bull_w  = check_buy_precondition(df_w, is_weekly=True)
+        ok_ws,condD_bear_w  = check_short_precondition(df_w, is_weekly=True)
+        # 週K額外判斷
+        _ok_wk,_cdD_wk  = check_buy_precondition(df_wk) if df_wk is not None else (False,False)
+        _ok_wks,_cdDs_wk= check_short_precondition(df_wk) if df_wk is not None else (False,False)
         last_w = df_w.iloc[-1]; prev_w = df_w.iloc[-2]
         result['rsi_w'] = float(last_w['rsi14'])
 
@@ -1247,14 +1252,21 @@ def analyse_market_index(ticker, label):
         else:
             ok_d = ok_ds = condD_bull_d = condD_bear_d = False
 
-        # 多頭A/B/C：週K或日K通過（非條件D）
-        result['bull_abc'] = (ok_w and not condD_bull_w) or (ok_d and not condD_bull_d)
-        # 多頭條件D：週K條件D通過（條件D只適用週K）
-        result['bull_d']   = condD_bull_w
-        # 空頭A/B/C：週K或日K空頭通過（非條件D）
-        result['bear_abc'] = (ok_ws and not condD_bear_w) or (ok_ds and not condD_bear_d)
-        # 空頭條件D：週K空頭條件D
-        result['bear_d']   = condD_bear_w
+        # ✅ v05192313：守門員加入條件E，條件D擴展至月K/日K
+        _e_bull_w = check_condE_long(df_w) if df_w is not None else False
+        _e_bull_d = check_condE_long(df_d) if df_d is not None else False
+        _e_bear_w = check_condE_short(df_w) if df_w is not None else False
+        _e_bear_d = check_condE_short(df_d) if df_d is not None else False
+        # 多頭A/B/C/E：月K或日K通過（非條件D）
+        result['bull_abc'] = ((ok_w and not condD_bull_w) or _e_bull_w or
+                              (ok_d and not condD_bull_d) or _e_bull_d)
+        # 多頭條件D：月K或日K條件D通過
+        result['bull_d']   = condD_bull_w or condD_bull_d
+        # 空頭A/B/C/E：月K或日K空頭通過（非條件D）
+        result['bear_abc'] = ((ok_ws and not condD_bear_w) or _e_bear_w or
+                              (ok_ds and not condD_bear_d) or _e_bear_d)
+        # 空頭條件D：月K或日K空頭條件D
+        result['bear_d']   = condD_bear_w or condD_bear_d
         # 下彎警告：RSI↓ AND MACD柱↓（兩個都下彎才警告）
         rsi_down  = float(last_w['rsi14']) < float(prev_w['rsi14'])
         macd_down = float(last_w['macd_hist']) < float(prev_w['macd_hist'])
@@ -1437,29 +1449,37 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 
         # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
         # 兩種模式統一：eLeader必過才繼續（確保不在高檔區追高）
-        df_d = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # ✅ v05170856 中期投資改週K
-        if df_d is None or len(df_d) < 50: return None
+        # ✅ v05191855：週K快取保留供其他用途
+        df_d = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # 週K（保留供參考）
+        if df_d is None or len(df_d) < 20: return None
         df_d = calc_indicators(df_d)
         if df_d is None: return None
+        # ✅ v05191855：第二道改用日K（A/B/C/E OR F，符合先大後小原則）
+        _df_1d = get_stock_data(ticker, period='1y', interval='1d', cache=daily_cache)
+        _df_1d = calc_indicators(_df_1d) if _df_1d is not None and len(_df_1d) >= 20 else None
 
         if _is_long_ok:
-            # ✅ v05181836：第二道eLeader = 月K OR 週K（事不過三）
-            _df_w_el = calc_indicators(df_w.copy()) if df_w is not None else None
-            is_eleader_ok = (signal_within_n(lambda d: check_buy_eleader(d) is not None, _df_w_el, n=3) or
-                             signal_within_n(lambda d: check_buy_eleader(d) is not None, df_d, n=3))
+            # ✅ v05191855：第二道 = 日K A/B/C/E（事不過三）OR 日K F(eLeader)
+            _2nd_abc = (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_1d, n=3) or
+                        (_df_1d is not None and check_condE_long(_df_1d))) if _df_1d is not None else False
+            _2nd_el  = signal_within_n(lambda d: check_buy_eleader(d) is not None, _df_1d, n=3) if _df_1d is not None else False
+            is_eleader_ok = _2nd_abc or _2nd_el
             if _condD_long:
-                # 條件D觸發（高位階上軌）→ eLeader 為可選，不強制
-                print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
+                # ✅ v05192327：高位階第二道 = 日K 條件D OR F（可選，不強制）
+                _2nd_d_ok = check_buy_precondition(_df_1d)[1] if _df_1d is not None else False  # condD日K
+                is_eleader_ok = is_eleader_ok or _2nd_d_ok  # D OR F 任一通過
+                print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道高位階(日K D or F) {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
             else:
                 # A/B/C 觸發（低位階下軌/中軌）→ eLeader 為必要條件
                 print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過，跳過"}')
                 if not is_eleader_ok:
                     return None
         else:
-            # ✅ v05181836：做空eLeader = 月K OR 週K（事不過三）
-            _df_w_el2 = _df_w_el if '_df_w_el' in dir() else (calc_indicators(df_w.copy()) if df_w is not None else None)
-            is_eleader_short_ok = (signal_within_n(lambda d: check_short_eleader(d) is not None, _df_w_el2, n=3) or
-                                   signal_within_n(lambda d: check_short_eleader(d) is not None, df_d, n=3))
+            # ✅ v05191855：做空第二道 = 日K A/B/C/E（事不過三）OR 日K F(做空eLeader)
+            _2nd_sabc = (signal_within_n(lambda d: check_short_precondition(d)[0], _df_1d, n=3) or
+                         (_df_1d is not None and check_condE_short(_df_1d))) if _df_1d is not None else False
+            _2nd_sel  = signal_within_n(lambda d: check_short_eleader(d) is not None, _df_1d, n=3) if _df_1d is not None else False
+            is_eleader_short_ok = _2nd_sabc or _2nd_sel
             if _condD_short:
                 # 條件D空頭（高位階）→ eLeader 為可選
                 print(f'  {"✅" if is_eleader_short_ok else "⚠️"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過（條件D補位，繼續）"}')
@@ -1683,7 +1703,11 @@ def write_buy_signal_firebase(ticker, price, condition, now_str, market='TW'):
         return False
 
 def _export_scan_results(buy_signals, sell_signals, now_str):
-    """✅ v05171047：輸出篩選結果到CSV和JSON，方便複製代碼到eleader/三竹股市"""
+    """✅ v05171047：輸出篩選結果到CSV和JSON，方便複製代碼到eleader/三竹股市
+    ✅ v05192313：無訊號時不輸出空檔案"""
+    if not buy_signals and not sell_signals:
+        print("  ℹ️ 無訊號，不輸出CSV/JSON")
+        return
     try:
         import json, csv
         from datetime import datetime as _dt
@@ -2571,8 +2595,13 @@ def main_task():
                 _df_daily_5mk = _yf30.download(ticker, period='60d', interval='1d', progress=False)
                 if _df_daily_5mk is not None and not _df_daily_5mk.empty:
                     _df_daily_5mk = calc_indicators(_df_daily_5mk)
-                    _1st_daily_long  = signal_within_n(lambda d: check_buy_precondition(d)[0], _df_daily_5mk, n=3, reverse_check=check_sell_condition)
-                    _1st_daily_short = signal_within_n(lambda d: check_short_precondition(d)[0], _df_daily_5mk, n=3)
+                    # ✅ v05192327：5分K第一道日K加E和F
+                    _1st_daily_long  = (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_daily_5mk, n=3, reverse_check=check_sell_condition) or
+                                        check_condE_long(_df_daily_5mk) or
+                                        (check_buy_eleader(_df_daily_5mk) is not None))
+                    _1st_daily_short = (signal_within_n(lambda d: check_short_precondition(d)[0], _df_daily_5mk, n=3) or
+                                        check_condE_short(_df_daily_5mk) or
+                                        (check_short_eleader(_df_daily_5mk) is not None))
                 else:
                     _1st_daily_long = _1st_daily_short = False
                 # 第二道：EWT 30分K（夜盤方向確認）
@@ -2585,8 +2614,15 @@ def main_task():
                 _orig5 = BUY_LOOKBACK_BARS
                 globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
                 # ✅ v05181836：第一道=日K AND EWT 30分K雙重確認
-                _1st_long  = _1st_daily_long  and (check_buy_precondition(df5_d)[0] if df5_d is not None else False)
-                _1st_short = _1st_daily_short and (check_short_precondition(df5_d)[0] if df5_d is not None else False)
+                # ✅ v05192327：5分K第二道EWT 30分K加E和F
+                _ewt_long  = ((check_buy_precondition(df5_d)[0] if df5_d is not None else False) or
+                              (check_condE_long(df5_d) if df5_d is not None else False) or
+                              (check_buy_eleader(df5_d) is not None if df5_d is not None else False))
+                _ewt_short = ((check_short_precondition(df5_d)[0] if df5_d is not None else False) or
+                              (check_condE_short(df5_d) if df5_d is not None else False) or
+                              (check_short_eleader(df5_d) is not None if df5_d is not None else False))
+                _1st_long  = _1st_daily_long  and _ewt_long
+                _1st_short = _1st_daily_short and _ewt_short
                 if not _1st_long and not _1st_short:
                     print(f'  ❌ {ticker} 第一道(日K AND EWT 30分K)未通過，跳過'); continue
                 print(f'  ✅ {ticker} 第一道(日K AND EWT 30分K)通過（多:{_1st_long} 空:{_1st_short}）')
@@ -2639,7 +2675,14 @@ def main_task():
                 _5mk_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
                 _5mk_macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
                 _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and macd_rising
-                _5mk_buy = (_5mk_cond_A or _5mk_cond_B) and rsi_now > BUY_RSI_MIN
+                # ✅ v05192313：5分K進場加入條件D（追高/追空）
+                _5mk_cond_D_long  = getattr(df5.iloc[-1],'rsi14',0) > getattr(df5.iloc[-2],'rsi14',0) and near_upper
+                _5mk_cond_D_short = getattr(df5.iloc[-1],'rsi14',0) < getattr(df5.iloc[-2],'rsi14',0) and near_lower
+                # ✅ v05192327：5分K進場加E和F
+                _5mk_cond_E_long = check_condE_long(df5) if df5 is not None else False
+                _5mk_cond_F_long = check_buy_eleader(df5) is not None if df5 is not None else False
+                _5mk_buy = (_5mk_cond_A or _5mk_cond_B or _5mk_cond_D_long or
+                            _5mk_cond_E_long or _5mk_cond_F_long) and rsi_now > BUY_RSI_MIN
 
                 near_lower   = close  <= boll_bot * BUY_BOLL_TOLERANCE
                 near_upper   = close  >= boll_top * 1.00
