@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05200928'
+SCRIPT_VERSION = '05201555'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -2335,9 +2335,11 @@ def main_task():
         # 這裡要兼容 .TW 和 .TWO
         holdings_tw_full = [c + '.TW' for c in HOLDINGS_TW] + [c + '.TWO' for c in HOLDINGS_TW]
 
-        # ── 優先從Firebase讀取預篩快取（避免每次掃1800支）──────────
+        # ── 週六全量掃描 OR 平日使用Firebase快取 ──────────────────
+        # ✅ v05201555：週六強制全量1827支重掃（定期更新預篩清單）
+        _is_saturday_scan = (datetime.now().weekday() == 5) or (SCAN_TYPE == 'tw_full')
         _fb_cache = read_tw_prescreened()
-        if _fb_cache and len(_fb_cache.get('codes', [])) > 0:
+        if not _is_saturday_scan and _fb_cache and len(_fb_cache.get('codes', [])) > 0:
             _cached_codes = _fb_cache['codes']
             _cache_time   = _fb_cache.get('updated_at', '—')
             _ticker_map   = {t.split('.')[0]: t for t in tw_list}
@@ -2345,7 +2347,10 @@ def main_task():
             print(f'\n📊 台股：使用 Firebase AI預篩快取（更新：{_cache_time}）')
             print(f'   快取共 {len(_cached_codes)} 支 → 本次掃描 {len(tw_list)} 支')
         else:
-            print(f'\n📊 台股：Firebase無預篩快取，執行完整掃描')
+            if _is_saturday_scan:
+                print(f'\n📊 台股：週六全量掃描 1827支（強制更新預篩清單）')
+            else:
+                print(f'\n📊 台股：Firebase無預篩快取，執行完整掃描')
 
         total_tw = len(tw_list)
         print(f'📊 台股掃描：共{total_tw}支')
