@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05200000</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05200840</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -2540,19 +2540,19 @@
         const analyzeMixed = async (code) => {
             // ✅ 週K和日K並行，速度快且不互相干擾
             const [r1, r2] = await Promise.allSettled([
-                            // ✅ v05200000：第一道月K/週K OR，第二道日K A/B/C/E OR F
-                analyzeStock(code, '1mo', '5y'),  // 月K
-                analyzeStock(code, '1wk', '2y'),  // 週K
-                analyzeStock(code, '1d',  '1y'),  // 日K（第二道）
+                            // ✅ v05200840：備用路徑恢復2呼叫（月K+週K），避免API過載
+                // 第二道日K由Firebase快取處理，不在備用路徑增加API呼叫
+                analyzeStock(code, '1mo', '5y'),  // 月K（第一道）
+                analyzeStock(code, '1wk', '2y'),  // 週K（第一道）
             ]);
             const mk=r1.status==='fulfilled'?r1.value:null;
             const wk=r2.status==='fulfilled'?r2.value:null;
-            const dk=r3&&r3.status==='fulfilled'?r3.value:null;
-            const _1stOk=(mk&&(mk.buy_signal||mk.sell_signal))||(wk&&(wk.buy_signal||wk.sell_signal));
             const _mkPass=mk!==null; const _wkPass=wk!==null;
-            if(_1stOk&&dk&&dk.buy_signal) return{result:dk,mode:'做多',kLabel:_mkPass?'長期+中期→日K':'中期→日K'};
-            if(_1stOk&&dk&&dk.sell_signal) return{result:dk,mode:'做空',kLabel:_mkPass?'長期+中期→日K':'中期→日K'};
             const _noSigLabel=_mkPass&&_wkPass?'長期+中期':_mkPass?'長期':_wkPass?'中期':'－';
+            if(mk&&mk.buy_signal) return{result:mk,mode:'做多',kLabel:'長期月K'};
+            if(wk&&wk.buy_signal) return{result:wk,mode:'做多',kLabel:_mkPass?'長期+中期':'中期週K'};
+            if(mk&&mk.sell_signal) return{result:mk,mode:'做空',kLabel:'長期月K'};
+            if(wk&&wk.sell_signal) return{result:wk,mode:'做空',kLabel:_mkPass?'長期+中期':'中期週K'};
             return{result:mk||wk,mode:null,kLabel:_noSigLabel};
         };
 
