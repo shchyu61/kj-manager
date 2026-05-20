@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05192327'
+SCRIPT_VERSION = '05200928'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1429,7 +1429,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 if not _is_short_ok and check_condE_short(df_w):
                     _is_short_ok, _condD_short = True, False
             # ✅ 診斷輸出：第一道結果（_mode_label由scan_stock_mixed傳入）
-            _wk_label = _mode_label if _mode_label else ('長期投資' if SCAN_MODE != 'daily' else '中期投資')
+            _wk_label = _mode_label if _mode_label else ('月K' if SCAN_MODE != 'daily' else '週K')  # ✅ v05200928
             if _is_long_ok:
                 print(f'  ✅ {ticker} 第一道{_wk_label}通過（多頭 {"條件D" if _condD_long else "A/B/C"}）')
             elif _is_short_ok:
@@ -1471,7 +1471,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道高位階(日K D or F) {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
             else:
                 # A/B/C 觸發（低位階下軌/中軌）→ eLeader 為必要條件
-                print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道eLeader多頭 {"通過" if is_eleader_ok else "未通過，跳過"}')
+                print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道日K多頭(A/B/C/E OR eLeader) {"通過" if is_eleader_ok else "未通過，跳過"}')
                 if not is_eleader_ok:
                     return None
         else:
@@ -1485,7 +1485,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 print(f'  {"✅" if is_eleader_short_ok else "⚠️"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過（條件D補位，繼續）"}')
             else:
                 # A/B/C 空頭（低位階）→ eLeader 為必要條件
-                print(f'  {"✅" if is_eleader_short_ok else "❌"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過，跳過"}')
+                print(f'  {"✅" if is_eleader_short_ok else "❌"} {ticker} 第二道日K空頭(A/B/C/E OR eLeader) {"通過" if is_eleader_short_ok else "未通過，跳過"}')
                 if not is_eleader_short_ok:
                     return None
 
@@ -2232,12 +2232,12 @@ def scan_stock_mixed(ticker, is_holding=False):
     # ✅ 週K先跑（長期投資），先清旗標
     _wk_passed_1st = False
     SCAN_MODE = 'weekly'
-    r_w = scan_stock(ticker, is_holding, _mode_label='長期投資')
+    r_w = scan_stock(ticker, is_holding, _mode_label='月K')
     SCAN_MODE = 'mixed'
     if r_w and r_w[0] in ('BUY', 'SHORT'):
         return r_w + ('長期投資',)
     # ✅ 日K再跑（中期投資），用旗標判斷週K是否也通過第一道
-    _day_label = '長期+中期投資' if _wk_passed_1st else '中期投資'
+    _day_label = '月K+週K' if _wk_passed_1st else '週K'
     SCAN_MODE = 'daily'
     r_d = scan_stock(ticker, is_holding, _mode_label=_day_label)
     SCAN_MODE = 'mixed'
@@ -2295,9 +2295,8 @@ def main_task():
     elif 'TW' not in active_markets:
         print('\n📊 台股：非交易時段，跳過')
     else:
-        # 🟢 台股大盤守門員（A/B/C/D多空全條件）
-        print('\n🔍 正在檢查台股大盤位階 (^TWII)...')
-        _tse_mkt = analyse_market_index('^TWII', '台股')
+        # 🟢 台股大盤守門員（A/B/C/D/E多空全條件，移到底部顯示）
+        _tse_mkt = analyse_market_index('^TWII', '台股')  # ✅ v05200928 執行但結果移到底部顯示
         _tw_market_bull_abc = _tse_mkt['bull_abc']
         _tw_market_bull_d   = _tse_mkt['bull_d']
         _tw_market_bear_abc = _tse_mkt['bear_abc']
@@ -2841,6 +2840,10 @@ def main_task():
         buy_signals = apply_institutional_bonus_score(buy_signals)
     _export_scan_results(buy_signals, sell_signals, now_str)
     # ✅ v05171047：底部統整大盤位階和符合策略股票清單
+    # ✅ v05200928：台股大盤位階判定移到底部（不用往上翻）
+    if '_tse_mkt' in dir() and _tse_mkt:
+        _flags = ' / '.join(_tse_mkt.get('flags',['中性觀望']))
+        print(f"\n🔍 台股大盤位階：{_flags}（週K RSI:{_tse_mkt.get('rsi_w',0):.1f} 日K RSI:{_tse_mkt.get('rsi_d',0):.1f}）")
     _print_scan_summary(buy_signals, sell_signals)
 
 # =====================
