@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05201555'
+SCRIPT_VERSION = '05231322'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -237,6 +237,16 @@ def get_delisting_risk(ticker):
         _es = str(e)
         if any(k in _es for k in ['Too Many Requests','Rate limit','429','HTTPError','ConnectionError']):
             print(f'  ⏭️ {ticker} Yahoo速率限制，跳過下市檢查')
+            return False, ''
+        # ✅ v05231322：區分網路錯誤和真正下市
+        _err_str = str(e).lower()
+        _is_network_err = any(kw in _err_str for kw in [
+            'could not resolve', 'failed to connect', 'connection',
+            'timeout', 'timed out', 'curl', 'network', 'ssl',
+            'name or service not known', 'temporary failure'
+        ])
+        if _is_network_err:
+            print(f'  ⚠️ {ticker} 網路連線問題，跳過下市檢查（非下市）')
             return False, ''
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
@@ -1649,6 +1659,14 @@ today = datetime.now().strftime("%Y-%m-%d")
 
 if today not in notified:
     notified[today] = []  # ✅ 05101039修正：只新增今天的key，不覆蓋整個字典
+
+# ✅ v05231322：跨午夜保護（00:00-06:00視為前一個交易日，避免重複通知）
+_cur_hour = datetime.now().hour
+if _cur_hour < 6:
+    from datetime import timedelta as _tdelta
+    _prev_day = (datetime.now()-_tdelta(days=1)).strftime("%Y-%m-%d")
+    if _prev_day in notified:
+        notified[today] = list(set(notified.get(today,[]) + notified[_prev_day]))
 # ============================================================
 # 【１３．主程式。邏輯：執行單次掃描】
 # ============================================================
@@ -2931,7 +2949,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"💻【本機】⭐做多進場 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"💻【本機】⭐做多進場 {len(filtered)}支【{_signal_label}】- {now_str}", body)
             save_notified(notified)
             # ✅ 05111049：寫入買進訊號到Firebase供網頁版T+2追蹤
             for _s in filtered:
@@ -2969,7 +2987,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"💻【本機】🔔出場訊號 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"💻【本機】🔔出場訊號 {len(filtered)}支【{_signal_label}】- {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
