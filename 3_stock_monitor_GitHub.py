@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05231322'
+SCRIPT_VERSION = '05231340'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1740,14 +1740,13 @@ def _export_scan_results(buy_signals, sell_signals, now_str):
         # JSON（完整資訊）
         _result = {'scan_time':now_str,'buy':_buy,'sell':_sell,
                    'buy_codes':_buy_codes,'sell_codes':_sell_codes}
-        with open(f'scan_result_{_date}.json','w',encoding='utf-8') as f:
-            json.dump(_result,f,ensure_ascii=False,indent=2)
+        # ✅ v05231340：停用JSON輸出，只保留CSV（JSON不方便複製代碼）
         # CSV（買進，方便貼入試算表）
         if _buy:
             with open(f'scan_buy_{_date}.csv','w',newline='',encoding='utf-8-sig') as f:
                 _w = csv.DictWriter(f,fieldnames=['market','code','close','rsi','boll','conditions'])
                 _w.writeheader(); _w.writerows(_buy)
-        print(f"\n📄 已輸出：scan_result_{_date}.json{'  scan_buy_'+_date+'.csv' if _buy else ''}")
+        print(f"\n📄 已輸出：{'scan_buy_'+_date+'.csv' if _buy else '（無買進訊號）'}")
         print(f"   📋 買進代碼（複製到eleader）：{' '.join(_buy_codes) if _buy_codes else '（無）'}")
     except Exception as _e:
         print(f"  ⚠️ 輸出CSV/JSON失敗：{_e}")
