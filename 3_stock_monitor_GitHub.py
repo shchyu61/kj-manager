@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05231340'
+SCRIPT_VERSION = '05280800'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -562,12 +562,14 @@ def save_notified_firebase(data):
         print(f"  ⚠️ Firebase notified 寫入失敗：{e}")
 
 def load_notified():
-    """載入通知紀錄：雲端版優先用Firebase，本機版用json檔"""
-    import os
-    # 雲端版：FIREBASE_CRED_ENV 存在時用 Firebase
-    if os.environ.get(FIREBASE_CRED_ENV):
-        return load_notified_firebase()
-    # 本機版：用json檔
+    """✅ v05280750：本機版和GitHub都優先用Firebase（共享狀態防重複通知）"""
+    # 優先從Firebase讀取（本機版和GitHub Actions共用，防止重複通知）
+    try:
+        fb_data = load_notified_firebase()
+        if fb_data:
+            return fb_data
+    except: pass
+    # Firebase無資料或失敗，從本地JSON讀取
     if os.path.exists('4_notified_today.json'):
         try:
             with open('4_notified_today.json', 'r', encoding='utf-8') as f:
@@ -575,6 +577,15 @@ def load_notified():
         except:
             print("⚠️ 通知紀錄檔損壞，已重置")
     return {}
+
+def _get_period_label(mode_label):
+    """✅ v05280800：月K/週K轉換為家人親友可理解的長期/中期（不洩漏技術細節）"""
+    ml = str(mode_label or '')
+    if '月K' in ml and '週K' in ml: return '長期+中期投資'
+    if '月K' in ml: return '長期投資'
+    if '週K' in ml: return '中期投資'
+    return '長期投資'  # 預設長期投資
+
 
 def save_notified(data):
     """儲存通知紀錄：雲端版優先用Firebase，本機版用json檔"""
@@ -1644,7 +1655,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
                     f"RSI轉折：{r_prev:.1f} → {r_now:.1f}\n"
                     f"⚠️ 嚴禁用於當沖或隔日沖\n"
                 )
-                send_gmail(f"💻【本機】🔔基金買進訊號：{fund_name}", msg_body)
+                send_gmail(f"💻【本機】🔔【{_get_period_label("月K")}】基金買進訊號：{fund_name}", msg_body)
                 print(f"✅ {fund_name} 已發送觸發買進訊號，已加入今日彙整清單！")
         else:
             print(f"ℹ️ {fund_name}：目前尚未共振達標。")
@@ -2948,7 +2959,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"💻【本機】⭐做多進場 {len(filtered)}支【{_signal_label}】- {now_str}", body)
+            send_gmail(f"💻【本機】⭐【{_get_period_label(_signal_label)}】做多進場 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
             # ✅ 05111049：寫入買進訊號到Firebase供網頁版T+2追蹤
             for _s in filtered:
@@ -2986,7 +2997,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"💻【本機】🔔出場訊號 {len(filtered)}支【{_signal_label}】- {now_str}", body)
+            send_gmail(f"💻【本機】🔔【{_get_period_label(_signal_label)}】出場訊號 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
