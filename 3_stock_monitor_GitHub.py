@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05280820'
+SCRIPT_VERSION = '05282305'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -238,15 +238,19 @@ def get_delisting_risk(ticker):
         if any(k in _es for k in ['Too Many Requests','Rate limit','429','HTTPError','ConnectionError']):
             print(f'  ⏭️ {ticker} Yahoo速率限制，跳過下市檢查')
             return False, ''
-        # ✅ v05231322：區分網路錯誤和真正下市
+        # ✅ v05282305：任何例外一律跳過下市檢查（只有明確delistingDate才真正警報）
+        # 原因：NoneType/網路/資料錯誤都不應觸發下市警報（IBM大漲5%被誤報案例）
         _err_str = str(e).lower()
-        _is_network_err = any(kw in _err_str for kw in [
-            'could not resolve', 'failed to connect', 'connection',
-            'timeout', 'timed out', 'curl', 'network', 'ssl',
-            'name or service not known', 'temporary failure'
-        ])
-        if _is_network_err:
-            print(f'  ⚠️ {ticker} 網路連線問題，跳過下市檢查（非下市）')
+        _is_skip_err = any(kw in _err_str for kw in [
+            # 網路錯誤
+            'could not resolve', 'failed to connect', 'connection', 'timeout',
+            'timed out', 'curl', 'network', 'ssl', 'name or service not known',
+            # Python資料錯誤（yfinance回傳None等）
+            'nonetype', 'is not iterable', 'attributeerror', 'typeerror',
+            'keyerror', 'valueerror', 'indexerror', 'none'
+        ]) or True  # ✅ 預設全部跳過，只信任delistingDate明確欄位
+        if _is_skip_err:
+            print(f'  ⚠️ {ticker} 資料異常跳過下市檢查：{str(e)[:60]}')
             return False, ''
         is_at_risk = True
         msg = f"無法獲取股票資訊（{e}），疑似下市或代碼變更"
