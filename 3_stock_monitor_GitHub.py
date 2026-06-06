@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '05282305'
+SCRIPT_VERSION = '06061213'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1607,6 +1607,82 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 # ============================================================
 # 【１１-1．虛擬基金專屬掃描（合成模式）- 3.0 正式版】
 # ============================================================
+def check_overnight_extreme_move():
+    """✅ v06061213：台指夜盤極端異動警報
+    監控EWT（台灣ETF，NYSE 21:30~04:00台灣時間）作為台指近全代理
+    EWT跌幅 > 2.2%（≈台指1000點）→ 立即發Gmail警報
+    不受notified去重限制（每天每個方向只發一次）
+    """
+    try:
+        import yfinance as _yf
+        from datetime import datetime as _dt, timedelta as _tdelta
+        import pytz as _pytz
+
+        _tz = _pytz.timezone('Asia/Taipei')
+        _now = _dt.now(_tz)
+        _today_str = _now.strftime('%Y-%m-%d')
+
+        # 使用EWT作為台指近全代理（MSCI Taiwan ETF，NYSE交易）
+        _ewt = _yf.download('EWT', period='3d', interval='30m', progress=False)
+        if _ewt is None or len(_ewt) < 10:
+            return
+
+        # 取最新收盤和前一美股交易日收盤
+        _cur_price = float(_ewt['Close'].iloc[-1])
+        # 找前一交易日最後收盤（EWT US收盤 = 台灣時間04:00）
+        _prev_close = float(_ewt['Close'].iloc[-20]) if len(_ewt) >= 20 else float(_ewt['Close'].iloc[0])
+
+        _chg_pct = (_cur_price - _prev_close) / _prev_close * 100
+        _twii_base = 45000  # 台指基準點（可隨市況調整）
+        _est_points = abs(_chg_pct / 100 * _twii_base)
+
+        print(f"  📊 EWT即時監控：{_cur_price:.2f}（前收{_prev_close:.2f}，變化{_chg_pct:+.2f}%，估台指{_est_points:+.0f}點）")
+
+        # 閾值：1000點（≈ 2.22%）
+        _threshold_pts = 1000
+        _threshold_pct = _threshold_pts / _twii_base * 100  # ≈ 2.22%
+
+        if abs(_chg_pct) < _threshold_pct:
+            return  # 未達閾值，不通知
+
+        # 確認今日此方向是否已通知過
+        _direction = 'DOWN' if _chg_pct < 0 else 'UP'
+        _alert_key = f"TWII_EXTREME_{_direction}_{_today_str}"
+
+        _today_notified = notified.get(_today_str, [])
+        if _alert_key in _today_notified:
+            print(f"  🔕 台指夜盤極端異動今日已通知過（{_direction}），跳過")
+            return
+
+        # 發送警報
+        _emoji = "🔻" if _direction == 'DOWN' else "🚀"
+        _action = "暴跌！考慮買進Put選擇權" if _direction == 'DOWN' else "急漲！考慮買進Call選擇權"
+        _arr = '↘' if _direction=='DOWN' else '↗'
+        _subject = f'💻【本機】{_emoji}台指夜盤極端異動！估計{_arr}{int(_est_points)}點({_chg_pct:+.1f}%)'
+        _lines = [
+            '⚠️ 台指近全夜盤極端異動警報 ⚠️', '='*35,
+            'EWT代理（iShares MSCI Taiwan ETF）',
+            f'EWT目前：{_cur_price:.2f}  前收：{_prev_close:.2f}',
+            f'變化幅度：{_chg_pct:+.2f}%  估計台指：{_arr}{int(_est_points):,}點',
+            '='*35,
+            f'💡 建議：{_action}',
+            '⚠️ 嚴禁用於當沖或隔日沖',
+            f'掃描時間：{_now.strftime("%Y/%m/%d %H:%M")}'
+        ]
+        _body = '\n'.join(_lines)
+        send_gmail(_subject, _body)
+
+        # 記錄已通知
+        if _today_str not in notified:
+            notified[_today_str] = []
+        notified[_today_str].append(_alert_key)
+        save_notified(notified)
+        print(f"  ✅ 台指夜盤極端異動警報已發送！EWT {_chg_pct:+.2f}%，估台指{int(_est_points):,}點")
+
+    except Exception as _e:
+        print(f"  ⚠️ check_overnight_extreme_move異常（非下市）：{str(_e)[:60]}")
+
+
 def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
     global buy_signals, sell_signals
     try:
@@ -2482,6 +2558,9 @@ def main_task():
     elif 'US' not in active_markets:
         print('\n📊 美股：非交易時段，跳過')
     else:
+        # ✅ v06061213：每次夜盤掃描前先檢查台指近全極端異動
+        print('\n🔍 檢查台指夜盤極端異動（EWT代理）...')
+        check_overnight_extreme_move()
         # 🔵 美股大盤守門員（A/B/C/D多空全條件）
         print('\n🔍 正在檢查道瓊指數位階 (^DJI)...')
         _dji_mkt = analyse_market_index('^DJI', '道瓊')
