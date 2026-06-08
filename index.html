@@ -54,7 +54,7 @@
     </script>
     <style>
         /* ── 響應式基準：手機16px，筆電14px ── */
-        html { font-size: 16px; }
+        html { font-size: 18px; }
         /* 手機、平板、筆電統一16px，確保全裝置清晰易讀 */
 
         body { background-color: #f0e8d8; font-family: 'Noto Sans TC', sans-serif; -webkit-text-size-adjust: 100%; }
@@ -62,15 +62,15 @@
 
         /* ── 全裝置：登入卡片字體（手機+筆電統一放大版）── */
         #auth-card { padding: 1.61rem 1.41rem; }
-        #auth-card h2 { font-size: 1.17rem; line-height: 1.4; }
-        #auth-card p { font-size: 0.9rem; }
-        #auth-card input { font-size: 1.06rem; padding: 0.76rem 1.01rem; }
-        #auth-card button { font-size: 1rem; padding: 0.76rem 1.01rem; }
-        #auth-card label { font-size: 0.85rem; }
+        #auth-card h2 { font-size: 1.27rem; line-height: 1.4; }
+        #auth-card p { font-size: 1rem; }
+        #auth-card input { font-size: 1.16rem; padding: 0.76rem 1.01rem; }
+        #auth-card button { font-size: 1.1rem; padding: 0.76rem 1.01rem; }
+        #auth-card label { font-size: 0.95rem; }
         /* 底部Tab文字 */
-        #tab-bar span { font-size: 0.72rem; }
+        #tab-bar span { font-size: 0.82rem; }
         /* 診斷卡片RSI文字 */
-        .diag-rsi { font-size: 0.75rem; }
+        .diag-rsi { font-size: 0.85rem; }
         #security-overlay {
             backdrop-filter: blur(25px);
             background: rgba(42, 16, 0, 0.97);
@@ -106,7 +106,7 @@
         .otp-input {
             letter-spacing: 0.5em;
             text-align: center;
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: 900;
         }
         .divider {
@@ -114,7 +114,7 @@
             align-items: center;
             gap: 12px;
             color: #94a3b8;
-            font-size: 0.85rem;
+            font-size: 0.95rem;
             font-weight: 900;
             letter-spacing: 0.1em;
         }
@@ -214,12 +214,12 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v05200848</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v06081825</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
     </nav>
-    <div style="position:fixed;top:64px;left:0;right:0;z-index:49;background:linear-gradient(90deg,#b91c1c,#c2410c);color:#fff;text-align:center;padding:6px 12px;font-size:11px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.18);">⚠️&nbsp;本系統訊號嚴禁用於當沖或隔日沖等短期交易！訊號僅供中長期投資參考，投資有風險。&nbsp;⚠️</div>
+    <div style="position:fixed;top:64px;left:0;right:0;z-index:49;background:linear-gradient(90deg,#b91c1c,#c2410c);color:#fff;text-align:center;padding:6px 12px;font-size:13px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.18);">⚠️&nbsp;本系統訊號嚴禁用於當沖或隔日沖等短期交易！訊號僅供中長期投資參考，投資有風險。&nbsp;⚠️</div>
 
     <main id="main-content" class="hide pt-36 pb-32 px-4 max-w-4xl mx-auto">
         <!-- 待買觀察清單頁面 -->
@@ -269,7 +269,7 @@
                         <span style="color:#1a5a8a; font-weight:900;">AGG</span>（全球綜合債券ETF，參考：富邦人壽FR04富蘭克林全球債券，高相關）<br>
                         <span style="color:#1a5a8a; font-weight:900;">HYG</span>（高收益債ETF，參考：富邦人壽BAHY霸菱成熟及新興市場，<b>極高相關</b>）<br>
                         <span style="color:#1a5a8a; font-weight:900;">ILF</span>（拉丁美洲40 ETF，參考：富邦人壽FRE3富蘭克林拉丁美洲，中高相關）<br>
-                        <span style="color:#7a6a00; font-size:11px;">⚠️ 以上為追蹤相同標的的參考ETF，非保單基金本身，僅供進出場輔助判斷</span>
+                        <span style="color:#7a6a00; font-size:13px;">⚠️ 以上為追蹤相同標的的參考ETF，非保單基金本身，僅供進出場輔助判斷</span>
                     </div>
                     <!-- 虛擬幣提示 -->
                     <div id="wl-crypto-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
@@ -293,7 +293,7 @@
                         <span style="color:#1a5a8a; font-weight:900;">ABT</span>（雅培）　
                         <span style="color:#1a5a8a; font-weight:900;">PG</span>（寶僑）　
                         <span style="color:#1a5a8a; font-weight:900;">SPY</span>（標普500 ETF）<br>
-                        <span style="color:#7a3a00; font-size:11px;">⚠️ 未出現的美股代碼，可參考 Yahoo股市 的「熱門美股」頁面查詢</span>
+                        <span style="color:#7a3a00; font-size:13px;">⚠️ 未出現的美股代碼，可參考 Yahoo股市 的「熱門美股」頁面查詢</span>
                     </div>
                     <!-- 外匯提示 -->
                     <div id="wl-fx-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
@@ -440,7 +440,7 @@
                         <span style="color:#1a5a8a; font-weight:900;">AGG</span>（全球綜合債券ETF，參考：富邦人壽FR04富蘭克林全球債券，高相關）<br>
                         <span style="color:#1a5a8a; font-weight:900;">HYG</span>（高收益債ETF，參考：富邦人壽BAHY霸菱成熟及新興市場，<b>極高相關</b>）<br>
                         <span style="color:#1a5a8a; font-weight:900;">ILF</span>（拉丁美洲40 ETF，參考：富邦人壽FRE3富蘭克林拉丁美洲，中高相關）<br>
-                        <span style="color:#7a6a00; font-size:11px;">⚠️ 以上為追蹤相同標的的參考ETF，非保單基金本身，僅供進出場輔助判斷</span>
+                        <span style="color:#7a6a00; font-size:13px;">⚠️ 以上為追蹤相同標的的參考ETF，非保單基金本身，僅供進出場輔助判斷</span>
                     </div>
                     <!-- 持股清單：虛擬幣提示 -->
                     <div id="st-crypto-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0f4ff; color:#1a2a6c; border:1px solid #6c8ef0;">
@@ -463,7 +463,7 @@
                         <span style="color:#1a5a8a; font-weight:900;">ABT</span>（雅培）　
                         <span style="color:#1a5a8a; font-weight:900;">PG</span>（寶僑）　
                         <span style="color:#1a5a8a; font-weight:900;">SPY</span>（標普500 ETF）<br>
-                        <span style="color:#7a3a00; font-size:11px;">⚠️ 未出現的美股代碼，可參考 Yahoo股市 的「熱門美股」頁面查詢</span>
+                        <span style="color:#7a3a00; font-size:13px;">⚠️ 未出現的美股代碼，可參考 Yahoo股市 的「熱門美股」頁面查詢</span>
                     </div>
                     <!-- 持股清單：外匯提示 -->
                     <div id="st-fx-hint" class="hide text-sm font-black rounded-xl px-4 py-2" style="background:#f0fff4; color:#1a4a2a; border:1px solid #6cd47e;">
@@ -1042,7 +1042,7 @@
 
         // EmailJS 初始化
         emailjs.init('5dk4HoCBYIS7ypwiw');
-        const EMAILJS_SERVICE  = 'service_q711s3u';  // ✅ v05200848：新Service ID（舊service_knhvcfj OAuth失效）
+        const EMAILJS_SERVICE  = 'service_q711s3u';  // ✅ v06081825：新Service ID（舊service_knhvcfj OAuth失效）
         const EMAILJS_TEMPLATE        = 'template_oqm4kw9';   // OTP用
         const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';  // 買進通知用（需在EmailJS建立）
 
@@ -2466,19 +2466,19 @@
             if (mode === 'weekly') {
                 wBtn.style.background = '#2563eb'; wBtn.setAttribute('aria-checked','true');
                 wKnob.style.transform = 'translateX(28px)';
-                wLbl.textContent = 'ON'; wLbl.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                wLbl.textContent = 'ON'; wLbl.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
                 dBtn.style.background = ''; dBtn.className = dBtn.className.replace(/bg-\S+/,'bg-slate-300');
                 dBtn.setAttribute('aria-checked','false');
                 dKnob.style.transform = 'translateX(0px)';
-                dLbl.textContent = 'OFF'; dLbl.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+                dLbl.textContent = 'OFF'; dLbl.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
             } else {
                 dBtn.style.background = '#2563eb'; dBtn.setAttribute('aria-checked','true');
                 dKnob.style.transform = 'translateX(28px)';
-                dLbl.textContent = 'ON'; dLbl.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                dLbl.textContent = 'ON'; dLbl.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
                 wBtn.style.background = ''; wBtn.className = wBtn.className.replace(/bg-\S+/,'bg-slate-300');
                 wBtn.setAttribute('aria-checked','false');
                 wKnob.style.transform = 'translateX(0px)';
-                wLbl.textContent = 'OFF'; wLbl.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+                wLbl.textContent = 'OFF'; wLbl.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
             }
         };
 
@@ -2518,7 +2518,7 @@
                 btn.style.background = '#7c3aed';
                 knob.style.transform = 'translateX(28px)';
                 label.textContent = 'ON';
-                label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
                 btn.setAttribute('aria-checked','true');
                 if (lbl2) lbl2.textContent = '混合模式';
                 window.showAlert('📊 已切換混合模式（長期+中期同時掃描）　請按「啟動AI診斷」');
@@ -2527,7 +2527,7 @@
                 btn.className = btn.className.replace(/bg-\S+/,'bg-slate-300');
                 knob.style.transform = 'translateX(0px)';
                 label.textContent = 'OFF';
-                label.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#64748b;';
+                label.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#64748b;';
                 btn.setAttribute('aria-checked','false');
                 const _mode = _currentScanMode === 'daily' ? '中期投資' : '長期投資';
                 if (lbl2) lbl2.textContent = _mode;
@@ -2633,14 +2633,14 @@
             if (_futuresHoldingManual) {
                 btn.style.backgroundColor = '#dc2626';  // red-600
                 knob.style.transform = 'translateX(28px)';
-                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
                 btn.setAttribute('aria-checked','true');
                 window.showAlert('🔴 多方持倉中：深夜01~05仍會監控平倉條件');
             } else {
                 btn.style.backgroundColor = '';
                 btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
                 knob.style.transform = 'translateX(0px)';
-                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
                 btn.setAttribute('aria-checked','false');
                 window.showAlert('⬜ 已清除持倉標記');
             }
@@ -2669,7 +2669,7 @@
                     if (btn) {
                         btn.style.backgroundColor = '#dc2626';
                         knob.style.transform = 'translateX(28px)';
-                        label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                        label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
                         btn.setAttribute('aria-checked','true');
                     }
                 }
@@ -2712,20 +2712,20 @@
             if (_futuresShortManual) {
                 btn.style.backgroundColor = '#2563eb';  // blue-600
                 knob.style.transform = 'translateX(28px)';
-                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:9px;font-weight:900;color:#fff;';
+                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
                 btn.setAttribute('aria-checked','true');
                 // 空倉時自動清除多倉
                 _futuresHoldingManual = false;
                 const _hb=document.getElementById('btn-futures-holding');
                 const _hk=document.getElementById('holding-knob');
                 const _hl=document.getElementById('holding-label');
-                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
+                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
                 window.showAlert('🔵 空方持倉中：深夜01~05仍會監控平空回補條件');
             } else {
                 btn.style.backgroundColor = '';
                 btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
                 knob.style.transform = 'translateX(0px)';
-                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;';
+                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
                 btn.setAttribute('aria-checked','false');
                 window.showAlert('⬜ 已清除空方持倉標記');
             }
@@ -2977,7 +2977,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 const _hb = document.getElementById('btn-futures-holding');
                                 const _hk = document.getElementById('holding-knob');
                                 const _hl = document.getElementById('holding-label');
-                                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
+                                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
                                 _updateNightModeHint();
                             } catch(e) {}
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
@@ -3031,7 +3031,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 const _sb=document.getElementById('btn-futures-short');
                                 const _sk=document.getElementById('short-knob');
                                 const _sl=document.getElementById('short-label');
-                                if (_sb) { _sb.style.backgroundColor=''; _sk.style.transform='translateX(0px)'; _sl.textContent='OFF'; _sl.style.cssText='position:absolute;right:6px;font-size:9px;font-weight:900;color:#94a3b8;'; _sb.setAttribute('aria-checked','false'); }
+                                if (_sb) { _sb.style.backgroundColor=''; _sk.style.transform='translateX(0px)'; _sl.textContent='OFF'; _sl.style.cssText='position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;'; _sb.setAttribute('aria-checked','false'); }
                             } catch(e) {}
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
@@ -3452,12 +3452,12 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     var disp=sigs.map(function(x){return x.code;}).join('\n');
                     return '<div style="margin-bottom:8px;padding:10px;border-radius:10px;background:#0d1b2a;border:1px solid '+col+'44;">'
                         +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
-                        +'<span style="color:'+col+';font-size:12px;font-weight:900;">'+lbl+'，共計'+sigs.length+'支：</span>'
-                        +'<button style="font-size:11px;padding:2px 8px;border-radius:6px;background:'+col+'22;color:'+col+';border:1px solid '+col+'55;cursor:pointer;"'
+                        +'<span style="color:'+col+';font-size:14px;font-weight:900;">'+lbl+'，共計'+sigs.length+'支：</span>'
+                        +'<button style="font-size:13px;padding:2px 8px;border-radius:6px;background:'+col+'22;color:'+col+';border:1px solid '+col+'55;cursor:pointer;"'
                         +' onclick="(function(btn){var c=btn.getAttribute(\'data-c\').split(\'|\').join(\'\\n\');navigator.clipboard.writeText(c);btn.textContent=\'已複製\';setTimeout(function(){btn.textContent=\'複製代碼\';},2000);})(this);"'
                         +' data-c="'+codes+'">複製代碼</button>'
                         +'</div>'
-                        +'<pre style="color:#e8f4ff;font-size:13px;line-height:2;white-space:pre;">'+disp+'</pre>'
+                        +'<pre style="color:#e8f4ff;font-size:15px;line-height:2;white-space:pre;">'+disp+'</pre>'
                         +'</div>';
                 }
                 var html=mkGrp('▲ 做多進場','#4adc8a',buySignals)
@@ -3843,10 +3843,10 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         const label = isMe ? `👤 我（${email}）` : `👥 ${email}`;
                         const col = _colors[i % _colors.length];
                         const lastT = _lastMap[email] || '';
-                        return `<span style="font-size:12px;font-weight:700;color:${col};">${label}：${cnt} 次　最後登入：${lastT}</span>`;
+                        return `<span style="font-size:14px;font-weight:700;color:${col};">${label}：${cnt} 次　最後登入：${lastT}</span>`;
                     }).join('');
                 const _statHtml = `<div style="background:#f0e8ff;border:1.5px solid #c4a0e0;border-radius:0.75rem;padding:0.6rem 0.8rem;margin-bottom:0.5rem;display:flex;gap:0.75rem 1.5rem;flex-wrap:wrap;">
-                    <span style="font-size:12px;font-weight:900;color:#3a1060;width:100%;">📊 各帳號成功登入次數（200筆內）</span>
+                    <span style="font-size:14px;font-weight:900;color:#3a1060;width:100%;">📊 各帳號成功登入次數（200筆內）</span>
                     ${_statRows}
                 </div>`;
                 logList.innerHTML = _statHtml + logs.map(l => {
@@ -3854,15 +3854,15 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     const icon  = l.success ? '✅ 成功' : (isBlocked ? '🚫 黑名單' : '❌ 失敗');
                     const bg    = l.success ? '#f0fff4' : (isBlocked ? '#fff8e8' : '#fff0f0');
                     const bdr   = l.success ? '#6cd47e' : (isBlocked ? '#e8a020' : '#e88888');
-                    const methodTag = l.method ? `<span style="background:#e0d0f0;color:#3a1060;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:900;">${l.method}</span>` : '';
-                    const reasonTag = (l.reason && !isBlocked) ? `<span style="color:#8a4040;font-size:10px;">(${l.reason})</span>` : '';
+                    const methodTag = l.method ? `<span style="background:#e0d0f0;color:#3a1060;padding:1px 6px;border-radius:8px;font-size:12px;font-weight:900;">${l.method}</span>` : '';
+                    const reasonTag = (l.reason && !isBlocked) ? `<span style="color:#8a4040;font-size:12px;">(${l.reason})</span>` : '';
                     return `<div style="background:${bg};border:1px solid ${bdr};border-radius:0.75rem;padding:0.6rem 0.8rem;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-                            <span style="font-weight:900;font-size:12px;">${icon}</span>
-                            <span style="color:#888;font-size:10px;">${l.time}</span>
+                            <span style="font-weight:900;font-size:14px;">${icon}</span>
+                            <span style="color:#888;font-size:12px;">${l.time}</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="color:#1a1060;font-weight:700;font-size:12px;">🔵 ${l.email}</span>
+                            <span style="color:#1a1060;font-weight:700;font-size:14px;">🔵 ${l.email}</span>
                             ${methodTag}${reasonTag}
                         </div>
                     </div>`;
