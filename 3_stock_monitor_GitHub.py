@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06061213'
+SCRIPT_VERSION = '06081336'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1251,7 +1251,7 @@ def analyse_market_index(ticker, label):
       'rsi_w'   : float → 週K RSI
       'rsi_d'   : float → 日K RSI
     """
-    result = {'bull_abc':False,'bull_d':False,'bear_abc':False,'bear_d':False,'warn':False,'rsi_w':0,'rsi_d':0}
+    result = {'bull_abc':False,'bull_d':False,'bear_abc':False,'bear_d':False,'warn':False,'rsi_mo':0,'rsi_wk':0,'rsi_w':0,'rsi_d':0,'macd_mo':'?','macd_wk':'?','macd_d':'?'}
     try:
         # ✅ v05192313：月K+週K+日K三週期全判斷
         df_w = yf.download(ticker, period='5y', interval='1mo', progress=False)  # 月K
@@ -1265,7 +1265,16 @@ def analyse_market_index(ticker, label):
         _ok_wk,_cdD_wk  = check_buy_precondition(df_wk) if df_wk is not None else (False,False)
         _ok_wks,_cdDs_wk= check_short_precondition(df_wk) if df_wk is not None else (False,False)
         last_w = df_w.iloc[-1]; prev_w = df_w.iloc[-2]
-        result['rsi_w'] = float(last_w['rsi14'])
+        result['rsi_w']  = float(last_w['rsi14'])  # df_w=月K（舊相容key）
+        result['rsi_mo'] = float(last_w['rsi14'])  # 月K RSI（正確標示）
+        # 月K MACD方向
+        _macd_mo_up = float(last_w.get('macd_hist',0)) > float(prev_w.get('macd_hist',0))
+        result['macd_mo'] = '↑' if _macd_mo_up else '↓'
+        # 週K RSI和MACD（df_wk）
+        if df_wk is not None and len(df_wk)>=2:
+            _lw = df_wk.iloc[-1]; _pw = df_wk.iloc[-2]
+            result['rsi_wk'] = float(_lw.get('rsi14', result['rsi_d']))
+            result['macd_wk'] = '↑' if float(_lw.get('macd_hist',0))>float(_pw.get('macd_hist',0)) else '↓'
 
         # 日K
         df_d = yf.download(ticker, period='1y', interval='1d', progress=False)
@@ -2979,7 +2988,10 @@ def main_task():
     # ✅ v05200928：台股大盤位階判定移到底部（不用往上翻）
     if '_tse_mkt' in dir() and _tse_mkt:
         _flags = ' / '.join(_tse_mkt.get('flags',['中性觀望']))
-        print(f"\n🔍 台股大盤位階：{_flags}（週K RSI:{_tse_mkt.get('rsi_w',0):.1f} 日K RSI:{_tse_mkt.get('rsi_d',0):.1f}）")
+        print(f"\n🔍 台股大盤位階：{_flags}")
+    print(f"   月K RSI:{_tse_mkt.get('rsi_mo',_tse_mkt.get('rsi_w',0)):.1f} MACD{_tse_mkt.get('macd_mo','?')}  "
+          f"週K RSI:{_tse_mkt.get('rsi_wk',0):.1f} MACD{_tse_mkt.get('macd_wk','?')}  "
+          f"日K RSI:{_tse_mkt.get('rsi_d',0):.1f} MACD{_tse_mkt.get('macd_d','?')}")
     _print_scan_summary(buy_signals, sell_signals)
 
 # =====================
