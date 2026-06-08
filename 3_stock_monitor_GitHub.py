@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06081336'
+SCRIPT_VERSION = '06081833'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1692,6 +1692,115 @@ def check_overnight_extreme_move():
         print(f"  ⚠️ check_overnight_extreme_move異常（非下市）：{str(_e)[:60]}")
 
 
+def scan_limit_up():
+    """✅ v06081833：漲停追蹤課
+    每日收盤後執行一次，找出當天漲停(+10%)的台股
+    對每支漲停股票檢查月K/週K是否符合買進條件（A/B/C/D/E/F）
+    若通過 → 再看日K → 通過則Gmail通知
+    """
+    try:
+        print("\n📈 漲停追蹤課：掃描今日漲停股票...")
+        import yfinance as _yf
+        from datetime import datetime as _dt
+        import pytz as _pytz
+
+        _tz = _pytz.timezone('Asia/Taipei')
+        _now = _dt.now(_tz)
+        _today_str = _now.strftime('%Y-%m-%d')
+
+        # 取預篩清單（避免掃全部1827支）
+        _tw_codes = _tw_prescreened if _tw_prescreened else []
+        if not _tw_codes:
+            print("  ℹ️ 預篩清單為空，跳過漲停追蹤")
+            return
+
+        _limit_up = []
+        print(f"  掃描 {len(_tw_codes)} 支預篩台股是否漲停...")
+
+        for _ticker in _tw_codes[:50]:  # 限制最多50支，避免API過載
+            try:
+                _info = _yf.Ticker(_ticker).fast_info
+                _prev = getattr(_info, 'previous_close', None)
+                _last = getattr(_info, 'last_price', None)
+                if _prev and _last and _prev > 0:
+                    _chg = (_last - _prev) / _prev
+                    if _chg >= 0.0995:  # 漲停 ≈ +10%
+                        _limit_up.append((_ticker, _chg * 100, _last))
+                        print(f"  🔥 漲停：{_ticker} +{_chg*100:.1f}%")
+            except:
+                pass
+
+        if not _limit_up:
+            print("  ℹ️ 今日無漲停股票（預篩清單內）")
+            return
+
+        print(f"  共 {len(_limit_up)} 支漲停，開始月K/週K策略檢查...")
+        _buy_candidates = []
+
+        for _ticker, _chg_pct, _price in _limit_up:
+            try:
+                # 月K第一道
+                _df_mo = calc_indicators(
+                    _yf.download(_ticker, period='5y', interval='1mo', progress=False))
+                _df_wk = calc_indicators(
+                    _yf.download(_ticker, period='2y', interval='1wk', progress=False))
+                _df_dk = calc_indicators(
+                    _yf.download(_ticker, period='1y', interval='1d', progress=False))
+
+                _ok_mo = (_df_mo is not None and
+                    (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_mo, n=3) or
+                     check_condE_long(_df_mo) or check_buy_eleader(_df_mo) is not None))
+                _ok_wk = (_df_wk is not None and
+                    (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_wk, n=3) or
+                     check_condE_long(_df_wk) or check_buy_eleader(_df_wk) is not None))
+
+                if not (_ok_mo or _ok_wk):
+                    continue  # 月K/週K都沒有買進訊號，跳過
+
+                # 日K第二道確認
+                _ok_dk = (_df_dk is not None and
+                    (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_dk, n=3) or
+                     check_condE_long(_df_dk)))
+
+                _period = '月K+週K' if (_ok_mo and _ok_wk) else ('月K' if _ok_mo else '週K')
+                _buy_candidates.append((_ticker, _chg_pct, _price, _period, _ok_dk))
+                print(f"  ✅ {_ticker} 漲停+{_chg_pct:.1f}% | {_period}通過 | 日K={'✅' if _ok_dk else '❌'}")
+
+            except Exception as _e:
+                print(f"  ⚠️ {_ticker} 漲停分析異常：{str(_e)[:50]}")
+
+        if not _buy_candidates:
+            print("  ℹ️ 漲停股票均未符合月K/週K買進條件")
+            return
+
+        # Gmail通知
+        _notif_key = f"LIMIT_UP_{_today_str}"
+        _today_notified = notified.get(_today_str, [])
+        if _notif_key in _today_notified:
+            print("  🔕 今日漲停追蹤已通知過，跳過")
+            return
+
+        _lines = [f"📈 今日漲停股票買進候選（{_now.strftime('%Y/%m/%d')}）", '='*35]
+        for _t, _c, _p, _per, _dk in _buy_candidates:
+            _dk_str = '日K✅' if _dk else '日K尚未符合'
+            _lines.append(f"  {_t}  漲停+{_c:.1f}%  收{_p:.2f}  {_per}買進訊號  {_dk_str}")
+        _lines += ['='*35,
+                   '⚠️ 漲停股需確認隔日開盤是否繼續，請謹慎進場',
+                   '⚠️ 嚴禁用於當沖或隔日沖']
+
+        _subject = f"💻【本機】📈漲停追蹤：{len(_buy_candidates)}支符合月K/週K買進條件"
+        send_gmail(_subject, '\n'.join(_lines))
+
+        if _today_str not in notified:
+            notified[_today_str] = []
+        notified[_today_str].append(_notif_key)
+        save_notified(notified)
+        print(f"  ✅ 漲停追蹤Gmail已發送！{len(_buy_candidates)}支候選")
+
+    except Exception as _e:
+        print(f"  ⚠️ scan_limit_up異常：{str(_e)[:60]}")
+
+
 def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
     global buy_signals, sell_signals
     try:
@@ -2616,6 +2725,10 @@ def main_task():
                     delist_signals.append(('美股', ticker, result[0], result[1]))
             time.sleep(0.1)
 
+        # ✅ v06081833：台股收盤後執行漲停追蹤（14:00後，每日一次）
+        _scan_hour = datetime.now().hour
+        if SCAN_TYPE in ('tw','mixed') and _scan_hour >= 14:
+            scan_limit_up()
         # 🔥 正確位置：美股「所有股票」掃描完後，才執行「一次」基金追蹤
         # 確保此行與 for 垂直對齊（不縮排進去）
         scan_synthetic_fund("SPY / QQQ / HYG三合一追蹤【安聯月配息基金】(合成代標)")
