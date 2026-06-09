@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06100131'
+SCRIPT_VERSION = '06100610'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -582,6 +582,18 @@ def load_notified():
             print("⚠️ 通知紀錄檔損壞，已重置")
     return {}
 
+def _normalize_df(df):
+    """✅ v06100600：yfinance新版MultiIndex攤平，確保欄位名稱正常"""
+    if df is None or len(df)==0: return df
+    import pandas as _pd
+    try:
+        if isinstance(df.columns, _pd.MultiIndex):
+            df = df.copy()
+            df.columns = df.columns.get_level_values(0)
+        return df
+    except: return df
+
+
 def _safe_float(val):
     """✅ v06100131：安全轉float，處理yfinance新版回傳Series的情況"""
     import pandas as _pd
@@ -597,8 +609,8 @@ def _get_period_label(mode_label):
     """✅ v05280800：月K/週K轉換為家人親友可理解的長期/中期（不洩漏技術細節）"""
     ml = str(mode_label or '')
     if '月K' in ml and '週K' in ml: return '長期+中期投資'
-    if '月K' in ml: return '長期投資'
-    if '週K' in ml: return '中期投資'
+    if '月K' in ml: return '長期投資'  # 月K觸發→長期投資
+    if '週K' in ml: return '中期投資'  # 週K觸發→中期投資
     return '長期投資'  # 預設長期投資
 
 
@@ -1265,14 +1277,14 @@ def analyse_market_index(ticker, label):
     result = {'bull_abc':False,'bull_d':False,'bear_abc':False,'bear_d':False,'warn':False,'rsi_mo':0,'rsi_wk':0,'rsi_w':0,'rsi_d':0,'macd_mo':'?','macd_wk':'?','macd_d':'?'}
     try:
         # ✅ v05192313：月K+週K+日K三週期全判斷
-        df_w = yf.download(ticker, period='5y', interval='1mo', progress=False)  # 月K
-        df_wk = yf.download(ticker, period='2y', interval='1wk', progress=False)  # 週K
+        df_w = _normalize_df(yf.download(ticker, period='5y', interval='1mo', progress=False))  # 月K
+        df_wk = _normalize_df(yf.download(ticker, period='2y', interval='1wk', progress=False))  # 週K
         df_wk = calc_indicators(df_wk) if df_wk is not None and len(df_wk)>=20 else None
         if df_w is None or len(df_w) < 30: return result
         # ✅ v06091344：即時5m補充月K/週K最後一根收盤（不改interval）
         _rt = None
         try:
-            _rt = yf.download(ticker, period='1d', interval='5m', progress=False)
+            _rt = _normalize_df(yf.download(ticker, period='1d', interval='5m', progress=False))
         except: pass
         _cur_price = float(_rt['Close'].iloc[-1]) if _rt is not None and len(_rt)>0 else None
         if _cur_price:
@@ -1300,7 +1312,7 @@ def analyse_market_index(ticker, label):
 
         # 日K
         # ✅ v06091336：日K改用1h即時數據（盤中反映當日走勢），不再只看昨日收盤
-        df_d = yf.download(ticker, period='60d', interval='1h', progress=False)
+        df_d = _normalize_df(yf.download(ticker, period='60d', interval='1h', progress=False))
         if df_d is not None and len(df_d) >= 30:
             df_d = calc_indicators(df_d)
             ok_d, condD_bull_d = check_buy_precondition(df_d, is_weekly=False)
@@ -1480,7 +1492,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 if not _is_short_ok and check_condE_short(_df1st):
                     _is_short_ok, _condD_short = True, False
             else:
-                # 週K模式第一道：用週K 3根（原設計）
+                # ✅ v06100610：月K模式第一道：用月K(df_w,1mo)，非週K！
                 _is_long_ok, _condD_long   = check_buy_precondition(df_w, is_weekly=True)
                 _is_short_ok, _condD_short = check_short_precondition(df_w, is_weekly=True)
                 # ✅ 05100733：條件E OR 條件A（週K模式）
@@ -1587,7 +1599,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         if cache_key in five_min_cache and (now_ts - five_min_cache[cache_key]['ts'] < 300):
             df_5m = five_min_cache[cache_key]['df']
         else:
-            df_5m = yf.download(ticker, period='5d', interval='5m', progress=False)
+            df_5m = _normalize_df(yf.download(ticker, period='5d', interval='5m', progress=False))
             if df_5m is not None and not df_5m.empty and len(df_5m) >= 10:
                 df_5m['rsi14'] = ta.rsi(df_5m['Close'].squeeze(), length=14)
                 _macd_5m = ta.macd(df_5m['Close'].squeeze(), fast=12, slow=26, signal=9)
@@ -1832,18 +1844,18 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
     try:
         print(f"\n🚀 正在啟動合成追蹤：{fund_name}...")
         # 1. 週K（第一道：位階門檻）
-        s_w = yf.download("SPY", period='2y', interval='1wk', progress=False)
-        q_w = yf.download("QQQ", period='2y', interval='1wk', progress=False)
-        h_w = yf.download("HYG", period='2y', interval='1wk', progress=False)
+        s_w = _normalize_df(yf.download("SPY", period='2y', interval='1wk', progress=False))
+        q_w = _normalize_df(yf.download("QQQ", period='2y', interval='1wk', progress=False))
+        h_w = _normalize_df(yf.download("HYG", period='2y', interval='1wk', progress=False))
         df_w = calc_indicators(build_fund_proxy_df(s_w, q_w, h_w))
         if df_w is None or not check_buy_precondition(df_w, is_weekly=True):
             print(f"ℹ️ {fund_name}:週K位階尚未符合觸發買進條件")
             return
 
         # 2. 日K（第二道：eLeader 25條件）
-        s_d = yf.download("SPY", period='1y', interval='1d', progress=False)
-        q_d = yf.download("QQQ", period='1y', interval='1d', progress=False)
-        h_d = yf.download("HYG", period='1y', interval='1d', progress=False)
+        s_d = _normalize_df(yf.download("SPY", period='1y', interval='1d', progress=False))
+        q_d = _normalize_df(yf.download("QQQ", period='1y', interval='1d', progress=False))
+        h_d = _normalize_df(yf.download("HYG", period='1y', interval='1d', progress=False))
         df_d = calc_indicators(build_fund_proxy_df(s_d, q_d, h_d))
 
         # ❌ 基金不需要5分K（每日公布一次淨值，5分K無意義）
@@ -2498,17 +2510,17 @@ def read_tw_prescreened():
         return None
 
 def scan_stock_mixed(ticker, is_holding=False):
-    """混合模式：週K三道 OR 日K三道，任一通過即觸發"""
+    """混合模式：月K第一道 OR 週K第一道（任一通過）+ 日K第二道"""  # v06100610：修正
     global SCAN_MODE
     global _wk_passed_1st
-    # ✅ 週K先跑（長期投資），先清旗標
+    # ✅ 月K先跑（長期投資），先清旗標  # v06100610：修正錯誤註解
     _wk_passed_1st = False
     SCAN_MODE = 'weekly'
     r_w = scan_stock(ticker, is_holding, _mode_label='月K')
     SCAN_MODE = 'mixed'
     if r_w and r_w[0] in ('BUY', 'SHORT'):
-        return r_w + ('長期投資',)
-    # ✅ 日K再跑（中期投資），用旗標判斷週K是否也通過第一道
+        return r_w + ('長期投資(月K)',)  # ✅ v06100610：明確標示月K觸發
+    # ✅ 週K再跑（中期投資），用旗標判斷月K是否也通過第一道  # v06100610：修正
     _day_label = '月K+週K' if _wk_passed_1st else '週K'
     SCAN_MODE = 'daily'
     r_d = scan_stock(ticker, is_holding, _mode_label=_day_label)
@@ -2570,11 +2582,12 @@ def main_task():
     else:
         # 🟢 台股大盤守門員（A/B/C/D/E多空全條件，移到底部顯示）
         _tse_mkt = analyse_market_index('^TWII', '台股')
-        _tw_market_bull_abc = _tse_mkt['bull_abc']
-        _tw_market_bull_d   = _tse_mkt['bull_d']
-        _tw_market_bear_abc = _tse_mkt['bear_abc']
-        _tw_market_bear_d   = _tse_mkt['bear_d']
-        _tw_market_warn     = _tse_mkt['warn']
+        # ✅ v06100600：_tse_mkt可能為None（美股夜間掃描），加None保護
+        _tw_market_bull_abc = _tse_mkt.get('bull_abc', False) if _tse_mkt else False
+        _tw_market_bull_d   = _tse_mkt.get('bull_d',   False) if _tse_mkt else False
+        _tw_market_bear_abc = _tse_mkt.get('bear_abc', False) if _tse_mkt else False
+        _tw_market_bear_d   = _tse_mkt.get('bear_d',   False) if _tse_mkt else False
+        _tw_market_warn     = _tse_mkt.get('warn',     False) if _tse_mkt else False
 
         # --- 台股清單抓取與上市櫃區分邏輯 ---
         try:
@@ -2921,7 +2934,7 @@ def main_task():
                 # ── 第三道：5分K 54根條件A/B ────────────────
                 # ✅【夜盤保留】主力以夜盤為主戰場，不剔除夜盤
                 # period='5d' 確保足夠近期夜盤+日盤K棒（約1000+根）
-                df5 = yf.download(ticker, period='5d', interval='5m', progress=False)
+                df5 = _normalize_df(yf.download(ticker, period='5d', interval='5m', progress=False))
                 if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
                     print(f'  ⚠️ {ticker} 5分K資料不足（需>={BUY_LOOKBACK_5MK+2}根），跳過')
                     continue
@@ -2973,7 +2986,7 @@ def main_task():
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
                 # ── 日K位階參考（印出但不擋住掃描）──────────────
                 try:
-                    df_d5 = yf.download(ticker, period='10d', interval='1d', progress=False)
+                    df_d5 = _normalize_df(yf.download(ticker, period='10d', interval='1d', progress=False))
                     if df_d5 is not None and not df_d5.empty and len(df_d5) >= 5:
                         df_d5 = calc_indicators(df_d5)
                         if df_d5 is not None:
