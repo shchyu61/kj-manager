@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06081833'
+SCRIPT_VERSION = '06082350'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -2542,7 +2542,8 @@ def main_task():
         print('\n📊 台股：非交易時段，跳過')
     else:
         # 🟢 台股大盤守門員（A/B/C/D/E多空全條件，移到底部顯示）
-        _tse_mkt = analyse_market_index('^TWII', '台股')  # ✅ v05200928 執行但結果移到底部顯示
+        _tse_mkt = None  # ✅ v06082350：預先初始化，避免UnboundLocalError
+        _tse_mkt = analyse_market_index('^TWII', '台股')
         _tw_market_bull_abc = _tse_mkt['bull_abc']
         _tw_market_bull_d   = _tse_mkt['bull_d']
         _tw_market_bear_abc = _tse_mkt['bear_abc']
@@ -3099,7 +3100,7 @@ def main_task():
     _export_scan_results(buy_signals, sell_signals, now_str)
     # ✅ v05171047：底部統整大盤位階和符合策略股票清單
     # ✅ v05200928：台股大盤位階判定移到底部（不用往上翻）
-    if '_tse_mkt' in dir() and _tse_mkt:
+    if _tse_mkt is not None and _tse_mkt:
         _flags = ' / '.join(_tse_mkt.get('flags',['中性觀望']))
         print(f"\n🔍 台股大盤位階：{_flags}")
     print(f"   月K RSI:{_tse_mkt.get('rsi_mo',_tse_mkt.get('rsi_w',0)):.1f} MACD{_tse_mkt.get('macd_mo','?')}  "

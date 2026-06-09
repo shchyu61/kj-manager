@@ -68,7 +68,7 @@
         #auth-card button { font-size: 1.1rem; padding: 0.76rem 1.01rem; }
         #auth-card label { font-size: 0.95rem; }
         /* 底部Tab文字 */
-        #tab-bar span { font-size: 0.82rem; }
+        #tab-bar span { font-size: 0.92rem; }
         /* 診斷卡片RSI文字 */
         .diag-rsi { font-size: 0.85rem; }
         #security-overlay {
@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">Pro</span>管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v06081825</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v06090756</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1042,7 +1042,7 @@
 
         // EmailJS 初始化
         emailjs.init('5dk4HoCBYIS7ypwiw');
-        const EMAILJS_SERVICE  = 'service_q711s3u';  // ✅ v06081825：新Service ID（舊service_knhvcfj OAuth失效）
+        const EMAILJS_SERVICE  = 'service_q711s3u';  // ✅ v06090756：新Service ID（舊service_knhvcfj OAuth失效）
         const EMAILJS_TEMPLATE        = 'template_oqm4kw9';   // OTP用
         const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';  // 買進通知用（需在EmailJS建立）
 
@@ -2466,19 +2466,19 @@
             if (mode === 'weekly') {
                 wBtn.style.background = '#2563eb'; wBtn.setAttribute('aria-checked','true');
                 wKnob.style.transform = 'translateX(28px)';
-                wLbl.textContent = 'ON'; wLbl.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
+                wLbl.textContent = 'ON'; wLbl.style.cssText = 'position:absolute;left:6px;font-size:13px;font-weight:900;color:#fff;';
                 dBtn.style.background = ''; dBtn.className = dBtn.className.replace(/bg-\S+/,'bg-slate-300');
                 dBtn.setAttribute('aria-checked','false');
                 dKnob.style.transform = 'translateX(0px)';
-                dLbl.textContent = 'OFF'; dLbl.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
+                dLbl.textContent = 'OFF'; dLbl.style.cssText = 'position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;';
             } else {
                 dBtn.style.background = '#2563eb'; dBtn.setAttribute('aria-checked','true');
                 dKnob.style.transform = 'translateX(28px)';
-                dLbl.textContent = 'ON'; dLbl.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
+                dLbl.textContent = 'ON'; dLbl.style.cssText = 'position:absolute;left:6px;font-size:13px;font-weight:900;color:#fff;';
                 wBtn.style.background = ''; wBtn.className = wBtn.className.replace(/bg-\S+/,'bg-slate-300');
                 wBtn.setAttribute('aria-checked','false');
                 wKnob.style.transform = 'translateX(0px)';
-                wLbl.textContent = 'OFF'; wLbl.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
+                wLbl.textContent = 'OFF'; wLbl.style.cssText = 'position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;';
             }
         };
 
@@ -2518,7 +2518,7 @@
                 btn.style.background = '#7c3aed';
                 knob.style.transform = 'translateX(28px)';
                 label.textContent = 'ON';
-                label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
+                label.style.cssText = 'position:absolute;left:6px;font-size:13px;font-weight:900;color:#fff;';
                 btn.setAttribute('aria-checked','true');
                 if (lbl2) lbl2.textContent = '混合模式';
                 window.showAlert('📊 已切換混合模式（長期+中期同時掃描）　請按「啟動AI診斷」');
@@ -2527,7 +2527,7 @@
                 btn.className = btn.className.replace(/bg-\S+/,'bg-slate-300');
                 knob.style.transform = 'translateX(0px)';
                 label.textContent = 'OFF';
-                label.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#64748b;';
+                label.style.cssText = 'position:absolute;right:6px;font-size:13px;font-weight:900;color:#64748b;';
                 btn.setAttribute('aria-checked','false');
                 const _mode = _currentScanMode === 'daily' ? '中期投資' : '長期投資';
                 if (lbl2) lbl2.textContent = _mode;
@@ -2633,14 +2633,14 @@
             if (_futuresHoldingManual) {
                 btn.style.backgroundColor = '#dc2626';  // red-600
                 knob.style.transform = 'translateX(28px)';
-                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
+                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:13px;font-weight:900;color:#fff;';
                 btn.setAttribute('aria-checked','true');
                 window.showAlert('🔴 多方持倉中：深夜01~05仍會監控平倉條件');
             } else {
                 btn.style.backgroundColor = '';
                 btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
                 knob.style.transform = 'translateX(0px)';
-                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
+                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;';
                 btn.setAttribute('aria-checked','false');
                 window.showAlert('⬜ 已清除持倉標記');
             }
@@ -2669,7 +2669,7 @@
                     if (btn) {
                         btn.style.backgroundColor = '#dc2626';
                         knob.style.transform = 'translateX(28px)';
-                        label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
+                        label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:13px;font-weight:900;color:#fff;';
                         btn.setAttribute('aria-checked','true');
                     }
                 }
@@ -2712,20 +2712,20 @@
             if (_futuresShortManual) {
                 btn.style.backgroundColor = '#2563eb';  // blue-600
                 knob.style.transform = 'translateX(28px)';
-                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:11px;font-weight:900;color:#fff;';
+                label.textContent = 'ON'; label.style.cssText = 'position:absolute;left:6px;font-size:13px;font-weight:900;color:#fff;';
                 btn.setAttribute('aria-checked','true');
                 // 空倉時自動清除多倉
                 _futuresHoldingManual = false;
                 const _hb=document.getElementById('btn-futures-holding');
                 const _hk=document.getElementById('holding-knob');
                 const _hl=document.getElementById('holding-label');
-                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
+                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
                 window.showAlert('🔵 空方持倉中：深夜01~05仍會監控平空回補條件');
             } else {
                 btn.style.backgroundColor = '';
                 btn.className = btn.className.replace(/bg-\S+/, 'bg-slate-300');
                 knob.style.transform = 'translateX(0px)';
-                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;';
+                label.textContent = 'OFF'; label.style.cssText = 'position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;';
                 btn.setAttribute('aria-checked','false');
                 window.showAlert('⬜ 已清除空方持倉標記');
             }
@@ -2977,7 +2977,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 const _hb = document.getElementById('btn-futures-holding');
                                 const _hk = document.getElementById('holding-knob');
                                 const _hl = document.getElementById('holding-label');
-                                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
+                                if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
                                 _updateNightModeHint();
                             } catch(e) {}
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
@@ -3031,7 +3031,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 const _sb=document.getElementById('btn-futures-short');
                                 const _sk=document.getElementById('short-knob');
                                 const _sl=document.getElementById('short-label');
-                                if (_sb) { _sb.style.backgroundColor=''; _sk.style.transform='translateX(0px)'; _sl.textContent='OFF'; _sl.style.cssText='position:absolute;right:6px;font-size:11px;font-weight:900;color:#94a3b8;'; _sb.setAttribute('aria-checked','false'); }
+                                if (_sb) { _sb.style.backgroundColor=''; _sk.style.transform='translateX(0px)'; _sl.textContent='OFF'; _sl.style.cssText='position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;'; _sb.setAttribute('aria-checked','false'); }
                             } catch(e) {}
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
