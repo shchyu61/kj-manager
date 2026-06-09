@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06082350'
+SCRIPT_VERSION = '06091344'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1258,7 +1258,18 @@ def analyse_market_index(ticker, label):
         df_wk = yf.download(ticker, period='2y', interval='1wk', progress=False)  # 週K
         df_wk = calc_indicators(df_wk) if df_wk is not None and len(df_wk)>=20 else None
         if df_w is None or len(df_w) < 30: return result
-        df_w = calc_indicators(df_w)
+        # ✅ v06091344：即時5m補充月K/週K最後一根收盤（不改interval）
+        _rt = None
+        try:
+            _rt = yf.download(ticker, period='1d', interval='5m', progress=False)
+        except: pass
+        _cur_price = float(_rt['Close'].iloc[-1]) if _rt is not None and len(_rt)>0 else None
+        if _cur_price:
+            for _df_ref in [df_w, df_wk]:
+                if _df_ref is not None and len(_df_ref)>0:
+                    try: _df_ref.iloc[-1, _df_ref.columns.get_loc('Close')] = _cur_price
+                    except: pass
+        df_w  = calc_indicators(df_w)
         ok_w, condD_bull_w  = check_buy_precondition(df_w, is_weekly=True)
         ok_ws,condD_bear_w  = check_short_precondition(df_w, is_weekly=True)
         # 週K額外判斷
@@ -1277,12 +1288,16 @@ def analyse_market_index(ticker, label):
             result['macd_wk'] = '↑' if float(_lw.get('macd_hist',0))>float(_pw.get('macd_hist',0)) else '↓'
 
         # 日K
-        df_d = yf.download(ticker, period='1y', interval='1d', progress=False)
+        # ✅ v06091336：日K改用1h即時數據（盤中反映當日走勢），不再只看昨日收盤
+        df_d = yf.download(ticker, period='60d', interval='1h', progress=False)
         if df_d is not None and len(df_d) >= 30:
             df_d = calc_indicators(df_d)
             ok_d, condD_bull_d = check_buy_precondition(df_d, is_weekly=False)
             ok_ds, condD_bear_d = check_short_precondition(df_d, is_weekly=False)
             result['rsi_d'] = float(df_d.iloc[-1]['rsi14'])
+            if len(df_d) >= 2:
+                _ld = df_d.iloc[-1]; _pd = df_d.iloc[-2]
+                result['macd_d'] = '↑' if float(_ld.get('macd_hist',0)) > float(_pd.get('macd_hist',0)) else '↓'
         else:
             ok_d = ok_ds = condD_bull_d = condD_bear_d = False
 
