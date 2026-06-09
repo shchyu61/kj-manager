@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06091344'
+SCRIPT_VERSION = '06100131'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -581,6 +581,17 @@ def load_notified():
         except:
             print("⚠️ 通知紀錄檔損壞，已重置")
     return {}
+
+def _safe_float(val):
+    """✅ v06100131：安全轉float，處理yfinance新版回傳Series的情況"""
+    import pandas as _pd
+    if isinstance(val, _pd.Series):
+        return float(val.iloc[0]) if len(val)>0 else 0.0
+    if isinstance(val, _pd.DataFrame):
+        return float(val.iloc[0,0]) if val.size>0 else 0.0
+    try: return float(val)
+    except: return 0.0
+
 
 def _get_period_label(mode_label):
     """✅ v05280800：月K/週K轉換為家人親友可理解的長期/中期（不洩漏技術細節）"""
@@ -1276,10 +1287,10 @@ def analyse_market_index(ticker, label):
         _ok_wk,_cdD_wk  = check_buy_precondition(df_wk) if df_wk is not None else (False,False)
         _ok_wks,_cdDs_wk= check_short_precondition(df_wk) if df_wk is not None else (False,False)
         last_w = df_w.iloc[-1]; prev_w = df_w.iloc[-2]
-        result['rsi_w']  = float(last_w['rsi14'])  # df_w=月K（舊相容key）
-        result['rsi_mo'] = float(last_w['rsi14'])  # 月K RSI（正確標示）
+        result['rsi_w']  = _safe_float(last_w['rsi14'])  # df_w=月K（舊相容key）
+        result['rsi_mo'] = _safe_float(last_w['rsi14'])  # 月K RSI（正確標示）
         # 月K MACD方向
-        _macd_mo_up = float(last_w.get('macd_hist',0)) > float(prev_w.get('macd_hist',0))
+        _macd_mo_up = _safe_float(last_w.get('macd_hist',0)) > _safe_float(prev_w.get('macd_hist',0))
         result['macd_mo'] = '↑' if _macd_mo_up else '↓'
         # 週K RSI和MACD（df_wk）
         if df_wk is not None and len(df_wk)>=2:
@@ -1294,7 +1305,7 @@ def analyse_market_index(ticker, label):
             df_d = calc_indicators(df_d)
             ok_d, condD_bull_d = check_buy_precondition(df_d, is_weekly=False)
             ok_ds, condD_bear_d = check_short_precondition(df_d, is_weekly=False)
-            result['rsi_d'] = float(df_d.iloc[-1]['rsi14'])
+            result['rsi_d'] = _safe_float(df_d.iloc[-1]['rsi14'])
             if len(df_d) >= 2:
                 _ld = df_d.iloc[-1]; _pd = df_d.iloc[-2]
                 result['macd_d'] = '↑' if float(_ld.get('macd_hist',0)) > float(_pd.get('macd_hist',0)) else '↓'
@@ -1317,7 +1328,7 @@ def analyse_market_index(ticker, label):
         # 空頭條件D：月K或日K空頭條件D
         result['bear_d']   = condD_bear_w or condD_bear_d
         # 下彎警告：RSI↓ AND MACD柱↓（兩個都下彎才警告）
-        rsi_down  = float(last_w['rsi14']) < float(prev_w['rsi14'])
+        rsi_down  = _safe_float(last_w['rsi14']) < float(prev_w['rsi14'])
         macd_down = float(last_w['macd_hist']) < float(prev_w['macd_hist'])
         result['warn'] = rsi_down and macd_down and not ok_w and not ok_ws
 
@@ -2551,13 +2562,13 @@ def main_task():
 # ============================================================
     # ── 台股掃描 ──────────────────────────────────
     tw_list = []
+    _tse_mkt = None  # ✅ v06100131：移至最頂部，無論台股/美股時段都已初始化
     if TEST_MODE == '5mk':
         print('\n📊 台股：期貨5分K模式，跳過台股掃描')
     elif 'TW' not in active_markets:
         print('\n📊 台股：非交易時段，跳過')
     else:
         # 🟢 台股大盤守門員（A/B/C/D/E多空全條件，移到底部顯示）
-        _tse_mkt = None  # ✅ v06082350：預先初始化，避免UnboundLocalError
         _tse_mkt = analyse_market_index('^TWII', '台股')
         _tw_market_bull_abc = _tse_mkt['bull_abc']
         _tw_market_bull_d   = _tse_mkt['bull_d']
