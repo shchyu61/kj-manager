@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06100610'
+SCRIPT_VERSION = '06110738'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1675,9 +1675,9 @@ def check_overnight_extreme_move():
             return
 
         # 取最新收盤和前一美股交易日收盤
-        _cur_price = float(_ewt['Close'].iloc[-1])
+        _cur_price = _safe_float(_ewt['Close'].iloc[-1])
         # 找前一交易日最後收盤（EWT US收盤 = 台灣時間04:00）
-        _prev_close = float(_ewt['Close'].iloc[-20]) if len(_ewt) >= 20 else float(_ewt['Close'].iloc[0])
+        _prev_close = _safe_float(_ewt['Close'].iloc[-20]) if len(_ewt) >= 20 else _safe_float(_ewt['Close'].iloc[0])
 
         _chg_pct = (_cur_price - _prev_close) / _prev_close * 100
         _twii_base = 45000  # 台指基準點（可隨市況調整）
@@ -3142,9 +3142,9 @@ def main_task():
     if _tse_mkt is not None and _tse_mkt:
         _flags = ' / '.join(_tse_mkt.get('flags',['中性觀望']))
         print(f"\n🔍 台股大盤位階：{_flags}")
-    print(f"   月K RSI:{_tse_mkt.get('rsi_mo',_tse_mkt.get('rsi_w',0)):.1f} MACD{_tse_mkt.get('macd_mo','?')}  "
-          f"週K RSI:{_tse_mkt.get('rsi_wk',0):.1f} MACD{_tse_mkt.get('macd_wk','?')}  "
-          f"日K RSI:{_tse_mkt.get('rsi_d',0):.1f} MACD{_tse_mkt.get('macd_d','?')}")
+        print(f"   月K RSI:{_tse_mkt.get('rsi_mo',_tse_mkt.get('rsi_w',0)):.1f} MACD{_tse_mkt.get('macd_mo','?')}  "
+              f"週K RSI:{_tse_mkt.get('rsi_wk',0):.1f} MACD{_tse_mkt.get('macd_wk','?')}  "
+              f"日K RSI:{_tse_mkt.get('rsi_d',0):.1f} MACD{_tse_mkt.get('macd_d','?')}")
     _print_scan_summary(buy_signals, sell_signals)
 
 # =====================
