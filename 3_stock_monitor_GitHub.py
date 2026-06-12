@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06110738'
+SCRIPT_VERSION = '06130522'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1654,6 +1654,61 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 # ============================================================
 # 【１１-1．虛擬基金專屬掃描（合成模式）- 3.0 正式版】
 # ============================================================
+def check_tw_daytime_extreme(tse_mkt_result):
+    """✅ v06130522：台股白天大盤極端異動警報
+    台股收盤後顯示，若當日^TWII漲跌超過1000點 → Gmail通知
+    """
+    try:
+        import yfinance as _yf
+        from datetime import datetime as _dt
+        import pytz as _pytz
+        _tz = _pytz.timezone('Asia/Taipei')
+        _now = _dt.now(_tz)
+        _today_str = _now.strftime('%Y-%m-%d')
+
+        # 取^TWII今日漲跌
+        _twii = _normalize_df(_yf.download('^TWII', period='2d', interval='1d', progress=False))
+        if _twii is None or len(_twii) < 2: return
+        _twii = calc_indicators(_twii)
+        _cur  = _safe_float(_twii['Close'].iloc[-1])
+        _prev = _safe_float(_twii['Close'].iloc[-2])
+        if _prev <= 0: return
+        _chg_pts = _cur - _prev
+        _chg_pct = _chg_pts / _prev * 100
+
+        print(f"  📊 台股大盤今日：{_cur:.0f}（前收{_prev:.0f}，漲跌{_chg_pts:+.0f}點，{_chg_pct:+.2f}%）")
+        if abs(_chg_pts) < 1000: return  # 未達閾值
+
+        _direction = 'DOWN' if _chg_pts < 0 else 'UP'
+        _alert_key = f"TWII_DAYTIME_{_direction}_{_today_str}"
+        _today_notified = notified.get(_today_str, [])
+        if _alert_key in _today_notified:
+            print(f"  🔕 台股白天極端異動今日已通知（{_direction}），跳過")
+            return
+
+        _emoji = "🔻" if _direction == 'DOWN' else "🚀"
+        _action = "暴跌！考慮台股期貨做空或buy put" if _direction == 'DOWN' else "急漲！考慮台股期貨做多或buy call"
+        _arr = '↘' if _direction == 'DOWN' else '↗'
+        _subject = f'💻【本機】{_emoji}台股白天極端異動！{_arr}{int(abs(_chg_pts))}點({_chg_pct:+.1f}%)'
+        _lines = [
+            f'⚠️ 台股白天大盤極端異動（台灣時間）',
+            '='*35,
+            f'今日^TWII：{_cur:.0f}（前收{_prev:.0f}）',
+            f'漲跌幅：{_arr}{int(abs(_chg_pts)):,}點（{_chg_pct:+.2f}%）',
+            '='*35,
+            f'💡 建議：{_action}',
+            '⚠️ 嚴禁用於當沖或隔日沖',
+            f'掃描時間：{_now.strftime("%Y/%m/%d %H:%M")}'
+        ]
+        send_gmail(_subject, '\n'.join(_lines))
+        if _today_str not in notified: notified[_today_str] = []
+        notified[_today_str].append(_alert_key)
+        save_notified(notified)
+        print(f"  ✅ 台股白天極端異動Gmail已發送！{_chg_pts:+.0f}點")
+    except Exception as _e:
+        print(f"  ⚠️ check_tw_daytime_extreme異常：{str(_e)[:60]}")
+
+
 def check_overnight_extreme_move():
     """✅ v06061213：台指夜盤極端異動警報
     監控EWT（台灣ETF，NYSE 21:30~04:00台灣時間）作為台指近全代理
@@ -1696,6 +1751,11 @@ def check_overnight_extreme_move():
         _direction = 'DOWN' if _chg_pct < 0 else 'UP'
         _alert_key = f"TWII_EXTREME_{_direction}_{_today_str}"
 
+        # ✅ v06130522：發送前強制重載Firebase，防止重複通知
+        try:
+            _fb_reload = load_notified_firebase()
+            if _fb_reload: notified.update(_fb_reload)
+        except: pass
         _today_notified = notified.get(_today_str, [])
         if _alert_key in _today_notified:
             print(f"  🔕 台指夜盤極端異動今日已通知過（{_direction}），跳過")
@@ -2716,9 +2776,8 @@ def main_task():
     elif 'US' not in active_markets:
         print('\n📊 美股：非交易時段，跳過')
     else:
-        # ✅ v06061213：每次夜盤掃描前先檢查台指近全極端異動
-        print('\n🔍 檢查台指夜盤極端異動（EWT代理）...')
-        check_overnight_extreme_move()
+        # ✅ v06130522：EWT檢查移到底部（不需往上翻）
+        # check_overnight_extreme_move() → 已移至底部統整區
         # 🔵 美股大盤守門員（A/B/C/D多空全條件）
         print('\n🔍 正在檢查道瓊指數位階 (^DJI)...')
         _dji_mkt = analyse_market_index('^DJI', '道瓊')
@@ -3145,6 +3204,12 @@ def main_task():
         print(f"   月K RSI:{_tse_mkt.get('rsi_mo',_tse_mkt.get('rsi_w',0)):.1f} MACD{_tse_mkt.get('macd_mo','?')}  "
               f"週K RSI:{_tse_mkt.get('rsi_wk',0):.1f} MACD{_tse_mkt.get('macd_wk','?')}  "
               f"日K RSI:{_tse_mkt.get('rsi_d',0):.1f} MACD{_tse_mkt.get('macd_d','?')}")
+    # ✅ v06130522：極端異動警報移到底部（不需往上翻）
+    if 'US' in active_markets or 'CRYPTO' in active_markets:
+        print('\n🔍 檢查台指夜盤極端異動（EWT代理）...')
+        check_overnight_extreme_move()
+    if 'TW' in active_markets and _tse_mkt is not None:
+        check_tw_daytime_extreme(_tse_mkt)
     _print_scan_summary(buy_signals, sell_signals)
 
 # =====================
