@@ -558,12 +558,82 @@ def save_notified_firebase(data):
         token = credentials.token
         url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/notified_log")
-        payload = {"fields": {"data": {"stringValue": json.dumps(data, ensure_ascii=False)}}}
-        _req.patch(url, json=payload,
-                   headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                   timeout=10)
+        _headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        for _attempt in range(3):  # ✅ v06131404：讀取-合併-帶precondition寫回，避免並行整份覆寫互相洗掉key
+            _r = _req.get(url, headers=_headers, timeout=10)
+            if _r.status_code == 200:
+                _doc = _r.json()
+                _update_time = _doc.get('updateTime')
+                _remote = json.loads(_doc.get('fields', {}).get('data', {}).get('stringValue', '{}'))
+                _precond = f"?currentDocument.updateTime={_update_time}" if _update_time else ""
+            elif _r.status_code == 404:
+                _remote = {}
+                _precond = "?currentDocument.exists=false"
+            else:
+                return  # 讀取異常 → 放棄本次寫入，不覆寫遠端
+            # 以遠端為底，逐日聯集本地key（雙方的key都不會被洗掉）
+            _merged = dict(_remote)
+            for _day, _keys in (data or {}).items():
+                _base = list(_merged.get(_day, []))
+                for _k in _keys:
+                    if _k not in _base:
+                        _base.append(_k)
+                _merged[_day] = _base
+            _payload = {"fields": {"data": {"stringValue": json.dumps(_merged, ensure_ascii=False)}}}
+            _pr = _req.patch(url + _precond, json=_payload, headers=_headers, timeout=10)
+            if _pr.status_code == 200:
+                return
+            # 非200 = 期間被其他機器/排程工作搶寫 → 重讀重試
     except Exception as e:
         print(f"  ⚠️ Firebase notified 寫入失敗：{e}")
+
+def _claim_alert_firebase(alert_key, today_str):
+    """✅ v06131103：Firebase原子佔位（樂觀並行控制 updateTime precondition）。
+    跨多台機器(本機A/B/... + GitHub Actions)防重複通知，與機器數量無關。
+    回傳：True=本機成功佔位(可發送)；False=已被佔位或佔位衝突(不發送)；None=無憑證或讀取失敗(交呼叫端走本地後援)。
+    """
+    try:
+        import json, os
+        import requests as _req
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            return None
+        cred = json.loads(cred_json)
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        credentials = _sa.Credentials.from_service_account_info(
+            cred, scopes=['https://www.googleapis.com/auth/datastore'])
+        credentials.refresh(_gtr.Request())
+        token = credentials.token
+        url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+               f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/notified_log")
+        _headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        for _attempt in range(3):  # 最多嘗試3次（處理並行衝突）
+            _r = _req.get(url, headers=_headers, timeout=10)
+            if _r.status_code == 200:
+                _doc = _r.json()
+                _update_time = _doc.get('updateTime')
+                _data = json.loads(_doc.get('fields', {}).get('data', {}).get('stringValue', '{}'))
+                _precond = f"?currentDocument.updateTime={_update_time}" if _update_time else ""
+            elif _r.status_code == 404:
+                _data = {}
+                _precond = "?currentDocument.exists=false"
+            else:
+                return None  # 讀取異常 → 交呼叫端走本地後援
+            # 已被佔位 → 不發送
+            if alert_key in _data.get(today_str, []):
+                return False
+            # 嘗試原子寫入（precondition 失敗代表期間被其他機器搶先）
+            _data.setdefault(today_str, []).append(alert_key)
+            _payload = {"fields": {"data": {"stringValue": json.dumps(_data, ensure_ascii=False)}}}
+            _pr = _req.patch(url + _precond, json=_payload, headers=_headers, timeout=10)
+            if _pr.status_code == 200:
+                return True   # 佔位成功 → 由本機發送
+            # 非200 = 並行衝突 → 重讀重試
+        return False  # 重試後仍衝突 → 視為他機已佔位，保守不重複發送
+    except Exception as _e:
+        print(f"  ⚠️ _claim_alert_firebase異常：{str(_e)[:60]}")
+        return None
 
 def load_notified():
     """✅ v05280750：本機版和GitHub都優先用Firebase（共享狀態防重複通知）"""
@@ -1689,7 +1759,7 @@ def check_tw_daytime_extreme(tse_mkt_result):
         _emoji = "🔻" if _direction == 'DOWN' else "🚀"
         _action = "暴跌！考慮台股期貨做空或buy put" if _direction == 'DOWN' else "急漲！考慮台股期貨做多或buy call"
         _arr = '↘' if _direction == 'DOWN' else '↗'
-        _subject = f'💻【本機】{_emoji}台股白天極端異動！{_arr}{int(abs(_chg_pts))}點({_chg_pct:+.1f}%)'
+        _subject = f'☁️【雲端】{_emoji}台股白天極端異動！{_arr}{int(abs(_chg_pts))}點({_chg_pct:+.1f}%)'
         _lines = [
             f'⚠️ 台股白天大盤極端異動（台灣時間）',
             '='*35,
@@ -1751,21 +1821,28 @@ def check_overnight_extreme_move():
         _direction = 'DOWN' if _chg_pct < 0 else 'UP'
         _alert_key = f"TWII_EXTREME_{_direction}_{_today_str}"
 
-        # ✅ v06130522：發送前強制重載Firebase，防止重複通知
-        try:
-            _fb_reload = load_notified_firebase()
-            if _fb_reload: notified.update(_fb_reload)
-        except: pass
-        _today_notified = notified.get(_today_str, [])
-        if _alert_key in _today_notified:
-            print(f"  🔕 台指夜盤極端異動今日已通知過（{_direction}），跳過")
+        # ✅ v06131103：Firebase原子佔位（樂觀並行控制，跨多台機器一勞永逸防重複）
+        _claim = _claim_alert_firebase(_alert_key, _today_str)
+        if _claim is False:
+            print(f"  🔕 台指夜盤極端異動已被其他機器佔位/今日已通知（{_direction}），跳過")
             return
+        if _claim is None:
+            # 後援：Firebase不可用時退回本地檢查（行為同舊版，至少不漏報）
+            try:
+                _fb_reload = load_notified_firebase()
+                if _fb_reload: notified.update(_fb_reload)
+            except: pass
+            _today_notified = notified.get(_today_str, [])
+            if _alert_key in _today_notified:
+                print(f"  🔕 台指夜盤極端異動今日已通知過（{_direction}），跳過")
+                return
+        # _claim is True → 已成功原子佔位，續發送
 
         # 發送警報
         _emoji = "🔻" if _direction == 'DOWN' else "🚀"
         _action = "暴跌！考慮買進Put選擇權" if _direction == 'DOWN' else "急漲！考慮買進Call選擇權"
         _arr = '↘' if _direction=='DOWN' else '↗'
-        _subject = f'💻【本機】{_emoji}台指夜盤極端異動！估計{_arr}{int(_est_points)}點({_chg_pct:+.1f}%)'
+        _subject = f'☁️【雲端】{_emoji}台指夜盤極端異動！估計{_arr}{int(_est_points)}點({_chg_pct:+.1f}%)'
         _lines = [
             '⚠️ 台指近全夜盤極端異動警報 ⚠️', '='*35,
             'EWT代理（iShares MSCI Taiwan ETF）',
@@ -1779,11 +1856,13 @@ def check_overnight_extreme_move():
         _body = '\n'.join(_lines)
         send_gmail(_subject, _body)
 
-        # 記錄已通知
+        # 記錄已通知（記憶體同步；佔位成功時Firebase已寫入，僅後援模式才寫回）
         if _today_str not in notified:
             notified[_today_str] = []
-        notified[_today_str].append(_alert_key)
-        save_notified(notified)
+        if _alert_key not in notified[_today_str]:
+            notified[_today_str].append(_alert_key)
+        if _claim is None:
+            save_notified(notified)  # 僅後援模式需寫回，避免重複patch Firebase
         print(f"  ✅ 台指夜盤極端異動警報已發送！EWT {_chg_pct:+.2f}%，估台指{int(_est_points):,}點")
 
     except Exception as _e:
@@ -1886,7 +1965,7 @@ def scan_limit_up():
                    '⚠️ 漲停股需確認隔日開盤是否繼續，請謹慎進場',
                    '⚠️ 嚴禁用於當沖或隔日沖']
 
-        _subject = f"💻【本機】📈漲停追蹤：{len(_buy_candidates)}支符合月K/週K買進條件"
+        _subject = f"☁️【雲端】📈漲停追蹤：{len(_buy_candidates)}支符合月K/週K買進條件"
         send_gmail(_subject, '\n'.join(_lines))
 
         if _today_str not in notified:
@@ -1951,7 +2030,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
                     f"RSI轉折：{r_prev:.1f} → {r_now:.1f}\n"
                     f"⚠️ 嚴禁用於當沖或隔日沖\n"
                 )
-                send_gmail(f"💻【本機】🔔【{_get_period_label("月K")}】基金買進訊號：{fund_name}", msg_body)
+                send_gmail(f"☁️【雲端】🔔【{_get_period_label("月K")}】基金買進訊號：{fund_name}", msg_body)
                 print(f"✅ {fund_name} 已發送觸發買進訊號，已加入今日彙整清單！")
         else:
             print(f"ℹ️ {fund_name}：目前尚未共振達標。")
@@ -3091,14 +3170,14 @@ def main_task():
                         _in_opt_window = (_wd_now in (2,4)) and (9*60+5 <= _hour_now*60+_min_now <= 10*60+45)
                         _opt_hint = get_weekly_option_hint(close, 'buy') if _in_opt_window else ""
                         msg = (
-                            f"💻【本機】⭐【期貨5分K買進訊號】⭐\n"
+                            f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"
                             f"時間：{now_str_f}"
                             + _opt_hint
                         )
-                        _ok = send_gmail(f"💻【本機】⭐期貨5分K買進 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K買進訊號{'已發送' if _ok else '發送失敗'}")
                         # ✅ 方案A：買進訊號發出 → 記錄持倉狀態
                         _futures_is_holding = True
@@ -3119,14 +3198,14 @@ def main_task():
                         _in_opt_window2 = (_wd_now2 in (2,4)) and (9*60+5 <= _hour_now2*60+_min_now2 <= 10*60+45)
                         _opt_hint2 = get_weekly_option_hint(close, 'sell') if _in_opt_window2 else ""
                         msg = (
-                            f"💻【本機】🔔【期貨5分K平倉訊號】🔔\n"
+                            f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林上緣：{boll_top:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
                             f"時間：{now_str_f}"
                             + _opt_hint2
                         )
-                        _ok = send_gmail(f"💻【本機】🔔期貨5分K平倉 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K平倉訊號{'已發送' if _ok else '發送失敗'}")
                         # ✅ 方案A：平倉訊號發出 → 清除持倉狀態
                         _futures_is_holding = False
@@ -3141,13 +3220,13 @@ def main_task():
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         msg = (
-                            f"💻【本機】🔻【期貨5分K做空訊號】🔻\n"
+                            f"☁️【雲端】🔻【期貨5分K做空訊號】🔻\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林上軌：{boll_top:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
                             f"時間：{now_str_f}"
                         )
-                        _ok = send_gmail(f"💻【本機】🔻期貨5分K做空 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short   = True
                         _futures_is_holding = False  # 做空時清除多倉
@@ -3163,13 +3242,13 @@ def main_task():
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         msg = (
-                            f"💻【本機】🟢【期貨5分K平空回補】🟢\n"
+                            f"☁️【雲端】🟢【期貨5分K平空回補】🟢\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林下軌：{boll_bot:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"
                             f"時間：{now_str_f}"
                         )
-                        _ok = send_gmail(f"💻【本機】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short = False
                         print(f"  📌 空倉狀態已清除：is_futures_short=False")
@@ -3256,7 +3335,7 @@ def main_task():
                         f"{'─'*30}\n"
                     )
 
-            subject = f"💻【本機】❌下市警報 {len(hold_list)}支持有須出清/{len(watch_list)}支觀察 - {now_str}"
+            subject = f"☁️【雲端】❌下市警報 {len(hold_list)}支持有須出清/{len(watch_list)}支觀察 - {now_str}"
             send_gmail(subject, body)
             save_notified(notified)
             print(f"  ❌ 下市警報已發送：持有{len(hold_list)}支 / 觀察{len(watch_list)}支")
@@ -3292,7 +3371,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"💻【本機】⭐【{_get_period_label(_signal_label)}】做多進場 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】⭐【{_get_period_label(_signal_label)}】做多進場 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
             # ✅ 05111049：寫入買進訊號到Firebase供網頁版T+2追蹤
             for _s in filtered:
@@ -3330,7 +3409,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"💻【本機】🔔【{_get_period_label(_signal_label)}】出場訊號 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】🔔【{_get_period_label(_signal_label)}】出場訊號 {len(filtered)}支 - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
