@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06160503'
+SCRIPT_VERSION = '06160529'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1740,6 +1740,7 @@ def check_tw_daytime_extreme(tse_mkt_result):
         _twii = _normalize_df(_yf.download('^TWII', period='2d', interval='1d', progress=False))
         if _twii is None or len(_twii) < 2: return
         _twii = calc_indicators(_twii)
+        if _twii is None or len(_twii) < 2: return   # ✅ v06160529止血：calc_indicators回None時防NoneType subscript
         _cur  = _safe_float(_twii['Close'].iloc[-1])
         _prev = _safe_float(_twii['Close'].iloc[-2])
         if _prev <= 0: return
