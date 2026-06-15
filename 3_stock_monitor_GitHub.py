@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06130522'
+SCRIPT_VERSION = '06160503'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -3110,6 +3110,9 @@ def main_task():
                 _5mk_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
                 _5mk_macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
                 _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and macd_rising
+                # ✅ v06160503修復：near_lower/near_upper 原定義在使用之後(use-before-def)，上移至此
+                near_lower   = close  <= boll_bot * BUY_BOLL_TOLERANCE
+                near_upper   = close  >= boll_top * 1.00
                 # ✅ v05192313：5分K進場加入條件D（追高/追空）
                 _5mk_cond_D_long  = getattr(df5.iloc[-1],'rsi14',0) > getattr(df5.iloc[-2],'rsi14',0) and near_upper
                 _5mk_cond_D_short = getattr(df5.iloc[-1],'rsi14',0) < getattr(df5.iloc[-2],'rsi14',0) and near_lower
@@ -3118,9 +3121,6 @@ def main_task():
                 _5mk_cond_F_long = check_buy_eleader(df5) is not None if df5 is not None else False
                 _5mk_buy = (_5mk_cond_A or _5mk_cond_B or _5mk_cond_D_long or
                             _5mk_cond_E_long or _5mk_cond_F_long) and rsi_now > BUY_RSI_MIN
-
-                near_lower   = close  <= boll_bot * BUY_BOLL_TOLERANCE
-                near_upper   = close  >= boll_top * 1.00
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
                 # ── 日K位階參考（印出但不擋住掃描）──────────────
                 try:
@@ -3343,6 +3343,9 @@ def main_task():
 # =====================
 # 買進通知
 # =====================
+    # ✅ v06160503修復：補定義 _signal_label（原版未定義→買賣通知主旨會NameError）
+    #    依SCAN_MODE決定K別，與內文_ml預設邏輯一致；_get_period_label再轉長期/中期投資
+    _signal_label = '週K' if SCAN_MODE == 'daily' else '月K'
     if buy_signals:
         filtered = []
 
