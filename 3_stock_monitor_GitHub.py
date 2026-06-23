@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06232354'
+SCRIPT_VERSION = '06240532'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -678,6 +678,12 @@ def _safe_float(val):
     except: return 0.0
 
 
+# ✅ (點1-B 06240532) 負荷哨兵：監測5m抓取失敗率與掃描耗時，超門檻寄Gmail警報
+LOAD_SENTINEL = True       # 負荷哨兵總開關
+LOAD_FAIL_PCT = 0.30       # 5m抓取失敗率門檻（>30%視為yfinance限流/負荷過重）
+LOAD_MAX_MIN  = 25         # 單輪掃描耗時門檻（分鐘）
+_load_stats   = {'fetch_total': 0, 'fetch_fail': 0, 'scan_start': None}
+
 def _get_rt_price(ticker, cache=None):
     """✅ (點1) 取個股即時現價（5m最後一根Close），每ticker每輪只抿一次。失敗回None。"""
     if cache is not None and ticker in cache:
@@ -692,6 +698,23 @@ def _get_rt_price(ticker, cache=None):
     if cache is not None:
         cache[ticker] = px
     return px
+
+def _patch_ref_realtime(df, px):
+    """✅ (點1-B) 用已收完5m現價覆蓋ref_df最後一根並重算布林/RSI，供訊號顯示即時化（不改根數）。"""
+    if df is None or not px or len(df) < 20:
+        return df
+    try:
+        df.iloc[-1, df.columns.get_loc('Close')] = px
+        c = df['Close']
+        df['ma_c_20'] = c.rolling(20).mean()
+        _std20 = c.rolling(20).std()
+        df['boll_mid20'] = df['ma_c_20']
+        df['boll_top20'] = df['ma_c_20'] + 2 * _std20
+        df['boll_bot20'] = df['ma_c_20'] - 2 * _std20
+        df['rsi14'] = ta.rsi(c, length=14)
+    except Exception:
+        pass
+    return df
 
 def _patch_last_close(df, px):
     """✅ (點1) 用即時現價覆蓋df最後一根K棒收盤價（不改interval/根數）。"""
@@ -1550,7 +1573,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 
         # ── 共用：抓取週K（第一道 or 賣出判斷用）────────────────
         # ✅ (點1) 個股即時現價：盤中用５m最後一根，補更月K/週K/日K最後一根收盤
-        _rt_px = _get_rt_price(ticker, _rt_price_cache) if REALTIME_LAST_BAR else None
+        _rt_px = None   # ✅(點1-B 06240532) gate1/2不抽5m不即時(省負荷)，即時化移到gate3重用既有5m
         df_w = get_stock_data(ticker, period='5y', interval='1mo', cache=weekly_cache)  # ✅ v05170856 長期投資改月K
         if df_w is None or len(df_w) < 30: return None
         _patch_last_close(df_w, _rt_px)   # ✅ (點1) 月K最後一根即時補更
@@ -1702,7 +1725,9 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         if cache_key in five_min_cache and (now_ts - five_min_cache[cache_key]['ts'] < 300):
             df_5m = five_min_cache[cache_key]['df']
         else:
+            if LOAD_SENTINEL: _load_stats['fetch_total'] += 1
             df_5m = _normalize_df(yf.download(ticker, period='5d', interval='5m', progress=False))
+            if LOAD_SENTINEL and (df_5m is None or getattr(df_5m, 'empty', True)): _load_stats['fetch_fail'] += 1
             if df_5m is not None and not df_5m.empty and len(df_5m) >= 10:
                 df_5m['rsi14'] = ta.rsi(df_5m['Close'].squeeze(), length=14)
                 _macd_5m = ta.macd(df_5m['Close'].squeeze(), fast=12, slow=26, signal=9)
@@ -1735,6 +1760,8 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
+            if REALTIME_LAST_BAR and df_5m is not None and len(df_5m) >= 2:
+                _patch_ref_realtime(ref_df, float(df_5m['Close'].iloc[-2]))   # ✅(點1-B)穩定化即時化:用已收完前一根5m
             mode_tag = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             print(f"🔥 {ticker} 觸發【{mode_tag}三道關卡 多頭買進】，成交價：{c}")
             return ('BUY', c, float(ref_df['Low'].iloc[-1]), float(ref_df['boll_bot20'].iloc[-1]),
@@ -1745,6 +1772,8 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
+            if REALTIME_LAST_BAR and df_5m is not None and len(df_5m) >= 2:
+                _patch_ref_realtime(ref_df, float(df_5m['Close'].iloc[-2]))   # ✅(點1-B)穩定化即時化:用已收完前一根5m
             mode_tag = '中期投資' if SCAN_MODE == 'daily' else '長期投資'
             print(f"🔥 {ticker} 觸發【{mode_tag}三道關卡 空頭做空】，成交價：{c}")
             return ('SHORT', c, float(ref_df['High'].iloc[-1]), float(ref_df['boll_top20'].iloc[-1]),
@@ -2714,6 +2743,8 @@ def main_task():
     buy_signals   = []
     sell_signals  = []
     delist_signals = []
+    if LOAD_SENTINEL:
+        _load_stats['fetch_total'] = 0; _load_stats['fetch_fail'] = 0; _load_stats['scan_start'] = time.time()
 
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
@@ -3302,6 +3333,19 @@ def main_task():
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
     # ✅ v05170940：寫入掃描狀態到Firebase供網頁版「上次掃描時間」顯示
+    if LOAD_SENTINEL and _load_stats.get('scan_start'):
+        _dur_min = (time.time() - _load_stats['scan_start']) / 60.0
+        _ft = _load_stats['fetch_total']; _ff = _load_stats['fetch_fail']
+        _fr = (_ff / _ft) if _ft > 0 else 0.0
+        if _dur_min > LOAD_MAX_MIN or _fr > LOAD_FAIL_PCT:
+            try:
+                send_gmail("⚠️【負荷哨兵】掃描負荷過重警報",
+                    f"本輪掃描耗時 {_dur_min:.1f} 分、5m抓取 {_ft} 次失敗 {_ff} 次（失敗率 {_fr*100:.0f}%）。\n"
+                    f"門檻：耗時>{LOAD_MAX_MIN}分 或 失敗率>{LOAD_FAIL_PCT*100:.0f}%。\n"
+                    f"建議：若持續，將 REALTIME_LAST_BAR 設False，或降低掃描頻率。")
+                print(f"⚠️ 負荷哨兵已寄發Gmail警報（耗時{_dur_min:.1f}分/失敗率{_fr*100:.0f}%）")
+            except Exception as _e:
+                print(f"負荷哨兵寄信失敗：{_e}")
     write_scan_status_to_firebase(len(buy_signals), len(sell_signals), now_str)
     # ✅ v05171047：輸出篩選結果到CSV和JSON，方便複製代碼到eleader/三竹
     # ✅ v05171629+v05171758：集保大戶+法人大買雙重加分排序（>4支才啟用）
