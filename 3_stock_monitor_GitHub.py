@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06160529'
+SCRIPT_VERSION = '06232354'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -11,6 +11,9 @@ SCRIPT_VERSION = '06160529'
 USE_CACHE = True
 WEEKLY_REFRESH_HOUR = 8   # 每天早上更新一次月K快取（long-term）
 five_min_cache = {}  # ✅ 新增 5 分鐘 K 線快取容器
+# ✅ (點1) 06221854：個股「最後一根K棒收盤價」即時補更總開關＋現價快取
+REALTIME_LAST_BAR = True   # True=月K/週K/日K最後一根用即時５m現價覆蓋（盤中即時）；API負載過重可設False停用
+_rt_price_cache = {}        # 每ticker每輪只抿一次即時現價，避免重複API
 DELISTING_CHECK_DAYS = 1  # 每1天重新查詢（避免誤快取）（3天兼顧效能與即時性，可改1~7）
 DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 # ============================================================
@@ -675,6 +678,30 @@ def _safe_float(val):
     except: return 0.0
 
 
+def _get_rt_price(ticker, cache=None):
+    """✅ (點1) 取個股即時現價（5m最後一根Close），每ticker每輪只抿一次。失敗回None。"""
+    if cache is not None and ticker in cache:
+        return cache[ticker]
+    px = None
+    try:
+        _rt = _normalize_df(yf.download(ticker, period='1d', interval='5m', progress=False))
+        if _rt is not None and len(_rt) > 0:
+            px = float(_rt['Close'].iloc[-1])
+    except Exception:
+        px = None
+    if cache is not None:
+        cache[ticker] = px
+    return px
+
+def _patch_last_close(df, px):
+    """✅ (點1) 用即時現價覆蓋df最後一根K棒收盤價（不改interval/根數）。"""
+    if df is not None and px and len(df) > 0:
+        try:
+            df.iloc[-1, df.columns.get_loc('Close')] = px
+        except Exception:
+            pass
+    return df
+
 def _get_period_label(mode_label):
     """✅ v05280800：月K/週K轉換為家人親友可理解的長期/中期（不洩漏技術細節）"""
     ml = str(mode_label or '')
@@ -869,7 +896,7 @@ def check_buy_precondition(df, is_weekly=False):
         return _abc or cond_D, cond_D  # (整體通過, 是否由條件D觸發)
     except Exception as e:
         # print(f"Precondition Error: {e}") # 偵錯用
-        return False
+        return False, False   # ✅Fix:統一回2元組防crash
 
 # ============================================================
 # 【９．第二道門檻：eLeader 25個複合條件執行】（引用第2-2章策略參數）
@@ -1149,7 +1176,7 @@ def check_short_precondition(df, is_weekly=False):
         _abc_s = cond_A or cond_B
         return _abc_s or cond_D_short, cond_D_short  # (整體通過, 是否由條件D空頭觸發)
     except:
-        return False
+        return False, False   # ✅Fix:統一回2元組
 
 # ============================================================
 # 【條件E：V轉做多 / A轉做空（通用條件，OR 條件A）】
@@ -1522,8 +1549,11 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         # ══════════════════════════════════════════════════════════
 
         # ── 共用：抓取週K（第一道 or 賣出判斷用）────────────────
+        # ✅ (點1) 個股即時現價：盤中用５m最後一根，補更月K/週K/日K最後一根收盤
+        _rt_px = _get_rt_price(ticker, _rt_price_cache) if REALTIME_LAST_BAR else None
         df_w = get_stock_data(ticker, period='5y', interval='1mo', cache=weekly_cache)  # ✅ v05170856 長期投資改月K
         if df_w is None or len(df_w) < 30: return None
+        _patch_last_close(df_w, _rt_px)   # ✅ (點1) 月K最後一根即時補更
         df_w['boll_top20'], df_w['boll_mid20'], df_w['boll_bot20'] = ta.bbands(df_w['Close'], length=20).iloc[:, 0:3].values.T
         df_w['rsi14'] = ta.rsi(df_w['Close'], length=14)
 
@@ -1551,6 +1581,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 # 日K模式第一道：日K 3根，條件A or B
                 _df1st = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # ✅ v05170856 中期投資改週K
                 if _df1st is None or len(_df1st) < 50: return None
+                _patch_last_close(_df1st, _rt_px)   # ✅ (點1) 週K最後一根即時補更
                 _df1st = calc_indicators(_df1st)
                 if _df1st is None: return None
                 # BUY_LOOKBACK_BARS=3，不換算，直接跑
@@ -1594,10 +1625,12 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         # ✅ v05191855：週K快取保留供其他用途
         df_d = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # 週K（保留供參考）
         if df_d is None or len(df_d) < 20: return None
+        _patch_last_close(df_d, _rt_px)   # ✅ (點1) 週K(參考)最後一根即時補更
         df_d = calc_indicators(df_d)
         if df_d is None: return None
         # ✅ v05191855：第二道改用日K（A/B/C/E OR F，符合先大後小原則）
         _df_1d = get_stock_data(ticker, period='1y', interval='1d', cache=daily_cache)
+        _patch_last_close(_df_1d, _rt_px)   # ✅ (點1) 日K最後一根即時補更
         _df_1d = calc_indicators(_df_1d) if _df_1d is not None and len(_df_1d) >= 20 else None
 
         if _is_long_ok:
@@ -1693,8 +1726,8 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         # 週K/日K模式統一，避免過度密集觸發
         rsi_5m_falling  = (last_rsi < prev_rsi and last_rsi < (100 - BUY_RSI_MIN))
         macd_5m_falling = not macd_5m_ok  # MACD柱下降
-        cond_5m_buy     = check_buy_precondition(df_5m)    # 買進：近3根5分K條件A or B
-        cond_5m_short   = check_short_precondition(df_5m)  # 做空：近3根5分K鏡像條件A or B
+        cond_5m_buy     = check_buy_precondition(df_5m)[0]    # 買進：近3根5分K條件A or B
+        cond_5m_short   = check_short_precondition(df_5m)[0]  # 做空：近3根5分K鏡像條件A or B
 
         if _is_long_ok:
             # ── 多頭第三道：（RSI↑ AND MACD↑）AND（5分K買進條件A or B）
@@ -1988,7 +2021,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
         q_w = _normalize_df(yf.download("QQQ", period='2y', interval='1wk', progress=False))
         h_w = _normalize_df(yf.download("HYG", period='2y', interval='1wk', progress=False))
         df_w = calc_indicators(build_fund_proxy_df(s_w, q_w, h_w))
-        if df_w is None or not check_buy_precondition(df_w, is_weekly=True):
+        if df_w is None or not check_buy_precondition(df_w, is_weekly=True)[0]:
             print(f"ℹ️ {fund_name}:週K位階尚未符合觸發買進條件")
             return
 
@@ -3129,7 +3162,7 @@ def main_task():
                     if df_d5 is not None and not df_d5.empty and len(df_d5) >= 5:
                         df_d5 = calc_indicators(df_d5)
                         if df_d5 is not None:
-                            _daily_buy  = check_buy_precondition(df_d5)
+                            _daily_buy  = check_buy_precondition(df_d5)[0]
                             _daily_sell = check_sell_condition(df_d5)
                             _zone = '低檔✅' if _daily_buy else ('高檔⚠️' if _daily_sell else '中軌區間')
                             print(f'  ℹ️ {ticker} 日K位階：{_zone}（供參考）')
