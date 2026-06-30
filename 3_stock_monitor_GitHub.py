@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '07010514'
+SCRIPT_VERSION = '07010537'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1174,6 +1174,13 @@ def check_short_precondition(df, is_weekly=False):
         macd_shrink = float(mh.iloc[-1]) < float(mh.iloc[-2])
         cond_B = high_above_mid and low_above_bot and macd_expand and macd_shrink
 
+        # 鐡像條件C（大盤強空頭放寬）：近N根任一最高價 >= 布林中軌 AND RSI↓ AND MACD柱↓  # ✅ 07010537
+        try:
+            high_touch_mid = (h.iloc[-n:] >= bm.iloc[-n:]).any()
+            cond_C = high_touch_mid and rsi_falling and macd_falling
+        except Exception:
+            cond_C = False
+
 
         # ── 鏡像條件D（上軌做空：強多頭回檔，K棒在中軌以上做空）────────────
         # 位階：近5根每一根最高價都在布林中軌以下
@@ -1213,7 +1220,7 @@ def check_short_precondition(df, is_weekly=False):
           except Exception:
             cond_D_short = False
 
-        _abc_s = cond_A or cond_B
+        _abc_s = cond_A or cond_B or cond_C  # ✅ 07010537 補上 cond_C 鏡像（原只 cond_A or cond_B）
         return _abc_s or cond_D_short, cond_D_short  # (整體通過, 是否由條件D空頭觸發)
     except:
         return False, False   # ✅Fix:統一回2元組
