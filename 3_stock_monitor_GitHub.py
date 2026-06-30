@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '06240532'
+SCRIPT_VERSION = '07010000'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1577,23 +1577,33 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         df_w = get_stock_data(ticker, period='5y', interval='1mo', cache=weekly_cache)  # ✅ v05170856 長期投資改月K
         if df_w is None or len(df_w) < 30: return None
         _patch_last_close(df_w, _rt_px)   # ✅ (點1) 月K最後一根即時補更
-        df_w['boll_top20'], df_w['boll_mid20'], df_w['boll_bot20'] = ta.bbands(df_w['Close'], length=20).iloc[:, 0:3].values.T
-        df_w['rsi14'] = ta.rsi(df_w['Close'], length=14)
+        df_w = calc_indicators(df_w)   # ✅ 07010000 月K根治：改算全指標(macd/ma_c_20)，復活月K長期投資買進/做空/賣出第一道
+        if df_w is None or len(df_w) < 30: return None
+        if 'boll_mid20' not in df_w.columns: df_w['boll_mid20'] = df_w['ma_c_20']
 
         # 🔴 [優先處理賣出]
         if is_holding:
-            # 條件D專屬出場（優先判斷，避免MACD反轉卻被普通賣出邏輯漏掉）
-            _dD_exit, _dD_msg = check_sell_condD(df_w)
-            if _dD_exit:
-                c_price = float(df_w['Close'].iloc[-1])
-                print(f'  🔔 {ticker} {_dD_msg}')
-                return ('SELL', c_price, float(df_w['High'].iloc[-1]), float(df_w['boll_top20'].iloc[-1]),
-                        float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
-            # 普通賣出條件（原有）
-            if check_sell_condition(df_w):
-                c_price = float(df_w['Close'].iloc[-1])
-                return ('SELL', c_price, float(df_w['High'].iloc[-1]), float(df_w['boll_top20'].iloc[-1]),
-                        float(df_w['rsi14'].iloc[-1]), float(df_w['rsi14'].iloc[-2]))
+            # ✅ 06302050 修正：出場改「月K+週K+日K 任一成立即觸發」，且各週期都用 calc_indicators 補齊
+            #    macd/ma_c_20（原 df_w 只算 boll+rsi14，導致賣出條件讀不到 macd_hist/ma_c_20 而靜默回False、持股永遠收不到賣出通知）
+            _df_mon = calc_indicators(df_w)
+            _df_wk  = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)
+            _df_wk  = calc_indicators(_df_wk) if (_df_wk is not None and len(_df_wk) >= 26) else None
+            _df_day = get_stock_data(ticker, period='1y', interval='1d', cache=daily_cache)
+            _df_day = calc_indicators(_df_day) if (_df_day is not None and len(_df_day) >= 26) else None
+            for _lbl, _edf in [('月K', _df_mon), ('週K', _df_wk), ('日K', _df_day)]:
+                if _edf is None or len(_edf) < 26:
+                    continue
+                _dD_exit, _dD_msg = check_sell_condD(_edf)
+                if _dD_exit:
+                    c_price = float(_edf['Close'].iloc[-1])
+                    print(f'  🔔 {ticker} [{_lbl}] {_dD_msg}')
+                    return ('SELL', c_price, float(_edf['High'].iloc[-1]), float(_edf['boll_top20'].iloc[-1]),
+                            float(_edf['rsi14'].iloc[-1]), float(_edf['rsi14'].iloc[-2]))
+                if check_sell_condition(_edf):
+                    c_price = float(_edf['Close'].iloc[-1])
+                    print(f'  🔔 {ticker} [{_lbl}] 獲利了結/反轉賣出觸發')
+                    return ('SELL', c_price, float(_edf['High'].iloc[-1]), float(_edf['boll_top20'].iloc[-1]),
+                            float(_edf['rsi14'].iloc[-1]), float(_edf['rsi14'].iloc[-2]))
             return None
 
         # ── 第一道：週K/日K統一用3根（條件A or B）────────────────
