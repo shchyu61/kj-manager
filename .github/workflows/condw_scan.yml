@@ -1,0 +1,75 @@
+# ============================================================
+# GitHub Actions：條件W 週選擇權做多（雲端專用）自動掃描排程
+# 檔案位置：.github/workflows/condw_scan.yml
+# 建立：2026/07/01 10:49　v07011049
+# 說明：
+#   條件W = 跳過第一二道、只跑第三道5分K V轉觸底翻揚 → 台指(^TWII) buy call
+#   進場窗：週二15:05~週三10:45、週四15:05~週五10:45（跨夜，含夜盤）
+#   同窗同向最多2次（Firebase 2-slot 原子認領去重，跨cron行程）
+#   不靠筆電、雲端直接寄 Gmail 到手機
+#
+#   ★ TEST_MODE 由 sed 設為 'condW'（因 Python 目前未讀取 TEST_MODE 環境變數，
+#     故用 sed 直接改寫該行最穩定；此步驟僅在本 job 的執行副本上進行）
+#   ★ 實際窗邊界(15:05/10:45)由 Python scan_condition_w() 自行把關，cron 略寬無妨
+#
+# 台灣時間 = UTC+8
+# ============================================================
+
+name: 條件W週選擇權做多雲端掃描
+
+on:
+  schedule:
+    # ── 窗一：週二15:05~週三10:45（台灣）= 週二07:05~週三02:45（UTC）──
+    # 週二 07:05~23:xx UTC（每15分，自:05起）
+    - cron: '5/15 7-23 * * 2'
+    # 週三 00:00~02:45 UTC（每15分）
+    - cron: '*/15 0-2 * * 3'
+
+    # ── 窗二：週四15:05~週五10:45（台灣）= 週四07:05~週五02:45（UTC）──
+    # 週四 07:05~23:xx UTC（每15分，自:05起）
+    - cron: '5/15 7-23 * * 4'
+    # 週五 00:00~02:45 UTC（每15分）
+    - cron: '*/15 0-2 * * 5'
+
+  # 允許手動觸發（測試用）
+  workflow_dispatch:
+
+jobs:
+  # ============================================================
+  # Job：條件W 週選擇權做多掃描
+  # ============================================================
+  condw-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8     # 單次僅掃台指5分K，數分鐘足夠
+
+    steps:
+      # 1. 取得程式碼
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      # 2. 安裝 Python 3.12
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. 安裝所需套件
+      - name: 安裝套件
+        run: |
+          pip install yfinance pandas pandas-ta pytz twstock cryptography google-auth requests
+
+      # 4. 設定 TEST_MODE='condW'（sed 改寫執行副本，不影響倉庫原檔行為）
+      - name: 設定條件W模式
+        run: |
+          sed -i "s/^TEST_MODE = False/TEST_MODE = 'condW'/" 3_stock_monitor_GitHub.py
+          echo "已設定 TEST_MODE='condW'"
+          grep -n "^TEST_MODE = " 3_stock_monitor_GitHub.py
+
+      # 5. 執行條件W掃描
+      - name: 執行條件W週選擇權做多掃描
+        env:
+          GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
+        run: |
+          python 3_stock_monitor_GitHub.py
