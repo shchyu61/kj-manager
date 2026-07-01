@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '07010537'
+SCRIPT_VERSION = '07011049'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -110,6 +110,13 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # 'weekly' = 週K三道關卡（第一道週K3根/第二道日K eLeader/第三道5分K3根）
 # 'daily'  = 日K三道關卡（第一道日K3根/第二道日K eLeader/第三道5分K3根）
 # 'mixed'=混合模式(週K三道 OR 日K三道，任一通過即觸發)
+# ── 【條件W：週選擇權做多專屬設定】（TEST_MODE = 'condW' 時才啟用）✅ 07011049 純新增 ──
+# 執行時段：週二15:05~週三10:45、週四15:05~週五10:45（跨夜，含夜盤，主力夜盤為主戰場）
+# 標的：台指（^TWII）；只做 buy call（不做空）；跳過第一二道、只跑第三道5分K V轉觸底翻揚
+# 防過頻：同一窗、同方向最多通知2次（主力煙霧彈/真發動順序會互換，故非1次）
+CONDW_TARGET         = '^TWII'
+CONDW_MAX_PER_WINDOW = 2       # 同一窗、同方向最多通知次數
+CONDW_OWNER          = 'shchyu61@gmail.com'
 SCAN_MODE = 'mixed'   # 切換：'weekly' / 'daily' / 'mixed'
 _tw_prescreened = []   # 模組層級全域預篩清單（scan_stock 用 global 存取）
 _prescreened_ind = {}  # ✅ 05041037新增：第一+第二道指標快取（供Firebase上傳）
@@ -2782,6 +2789,90 @@ def scan_stock_mixed(ticker, is_holding=False):
     return None
 
 
+def _condw_current_window():
+    """條件W時間窗判定：回傳當前所屬窗ID；不在窗內回None。✅ 07011049 純新增。
+    窗一：週二15:05 ~ 週三10:45；窗二：週四15:05 ~ 週五10:45（跨夜，含夜盤）。"""
+    from datetime import timedelta as _td
+    tz = pytz.timezone('Asia/Taipei')
+    now = datetime.now(tz)
+    wd = now.weekday()               # 0=週一 … 4=週五
+    tv = now.hour * 60 + now.minute
+    d  = now.strftime('%Y%m%d')
+    # 窗一：週二(1)15:05起
+    if wd == 1 and tv >= 15*60+5:
+        return f'{d}_W2'
+    # 窗一延續：週三(2)10:45止（窗ID用前一日週二）
+    if wd == 2 and tv <= 10*60+45:
+        return f"{(now - _td(days=1)).strftime('%Y%m%d')}_W2"
+    # 窗二：週四(3)15:05起
+    if wd == 3 and tv >= 15*60+5:
+        return f'{d}_W4'
+    # 窗二延續：週五(4)10:45止（窗ID用前一日週四）
+    if wd == 4 and tv <= 10*60+45:
+        return f"{(now - _td(days=1)).strftime('%Y%m%d')}_W4"
+    return None
+
+
+def scan_condition_w():
+    """條件W：週選擇權做多進場（雲端專用）。跳過第一二道，只跑第三道5分K V轉觸底翻揚→buy call。
+    同窗同向最多2次（Firebase 2-slot 原子認領跨cron行程去重）。✅ 07011049 純新增，不影響既有掃描。"""
+    wid = _condw_current_window()
+    now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+    if wid is None:
+        print('  ℹ️ 條件W：目前不在進場時間窗（週二15:05~週三10:45／週四15:05~週五10:45），跳過')
+        return
+    print(f'\n📊 條件W 週選擇權做多掃描：{CONDW_TARGET}（窗 {wid}）')
+    try:
+        df5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
+        if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
+            print('  ⚠️ 條件W：5分K資料不足，跳過'); return
+        df5 = calc_indicators(df5)
+        if df5 is None:
+            print('  ⚠️ 條件W：指標計算失敗，跳過'); return
+        n5 = BUY_LOOKBACK_5MK
+        l5=df5['Low']; h5=df5['High']; bb5=df5['boll_bot20']; bt5=df5['boll_top20']
+        bm5=df5['ma_c_20']; mh5=df5['macd_hist']; rsi5=df5['rsi14']
+        rsi_now=float(rsi5.iloc[-1]); rsi_prev=float(rsi5.iloc[-2])
+        mh_now=float(mh5.iloc[-1]);  mh_prev=float(mh5.iloc[-2])
+        close=float(df5['Close'].iloc[-1]); boll_bot=float(bb5.iloc[-1])
+        rsi_rising  = rsi_now > rsi_prev
+        macd_rising = mh_now  > mh_prev
+        # ── 只跑第三道：5分K V轉觸底翻揚做多（條件A/B或E）+ RSI↑ + MACD柱↑ + 近下軌 ──
+        _condA = (l5.iloc[-n5:] <= bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE).any() and rsi_rising and macd_rising
+        _low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
+        _high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
+        _macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
+        _condB = _low_mid and _high_top and _macd_shr and macd_rising
+        _condE = check_condE_long(df5) if df5 is not None else False
+        near_lower = close <= boll_bot * BUY_BOLL_TOLERANCE
+        _buy = (_condA or _condB or _condE) and rsi_rising and macd_rising and near_lower and rsi_now > BUY_RSI_MIN
+        if not _buy:
+            print('  ❌ 條件W：第三道5分K V轉觸底翻揚未成立，不進場'); return
+        # ── 同窗同向最多2次：Firebase 2-slot 原子認領（跨cron行程）──
+        _today = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d')
+        _sent_slot = None
+        for _slot in range(1, CONDW_MAX_PER_WINDOW + 1):
+            _claim = _claim_alert_firebase(f'condW_buycall_{wid}#{_slot}', _today)
+            if _claim is True or _claim is None:   # 認領成功／無憑證(本地後援放行)
+                _sent_slot = _slot; break
+            # _claim is False → 該slot已被認領，試下一slot
+        if _sent_slot is None:
+            print(f'  ⚠️ 條件W：本窗做多已達{CONDW_MAX_PER_WINDOW}次上限，靜音'); return
+        # ── 週選擇權履約價推薦 + Gmail ──
+        _opt_hint = get_weekly_option_hint(close, 'buy')
+        msg = (f"☁️【雲端】⭐【條件W 週選擇權做多進場】⭐（本窗第{_sent_slot}次）\n"
+               f"標的：{CONDW_TARGET}（台指）\n"
+               f"收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\n"
+               f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）　MACD柱：↑\n"
+               f"進場窗：{wid}\n"
+               f"時間：{now_str_f}"
+               + _opt_hint)
+        _ok = send_gmail(f"☁️【雲端】⭐條件W週選買進 {CONDW_TARGET} - {now_str_f}", msg)
+        print(f"  {'✅' if _ok else '❌'} 條件W 做多訊號（本窗第{_sent_slot}次）{'已發送' if _ok else '發送失敗'}")
+    except Exception as _e:
+        print(f'  ⚠️ 條件W掃描異常：{str(_e)[:80]}')
+
+
 def main_task():
     # 🔥 宣告 global 確保全域共用
     global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals
@@ -3571,6 +3662,14 @@ if __name__ == "__main__":
     now = datetime.now(tz)
     test_now = now.strftime('%H:%M:%S')
 
+    # === [條件W 週選擇權做多模式]：TEST_MODE = 'condW' ✅ 07011049 純新增分支 ===
+    if TEST_MODE == 'condW':
+        print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三10:45／週四15:05~週五10:45）")
+        scan_condition_w()
+        time.sleep(3)
+        exit()
+
+
     # === [期貨5分K模式]：TEST_MODE = '5mk' ===
     if TEST_MODE == '5mk':
         # 檢查是否在期貨交易時段
@@ -3706,3 +3805,4 @@ if __name__ == "__main__":
 
     print(f"✅ {market_name} 監控行程圓滿結束")
     time.sleep(5)
+
