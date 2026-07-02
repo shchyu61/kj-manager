@@ -1635,6 +1635,39 @@
 
         // ── 主分析函數：Yahoo Finance + 自行計算指標 ─────────────
 
+        // ── 網頁守門員：月/週/日K 多週期 RSI+MACD+布林 補值（07021138 新增，純加法）──
+        //   重用 analyzeStock(code, interval, range)：各週期快取獨立(_cacheKey含interval)，不影響主掃描
+        async function enrichGuardian(code, el){
+            el = el || document.getElementById('gtf-' + code);
+            if(!el) return;
+            try{
+                const tfs = [['月K','1mo','5y'], ['週K','1wk','2y'], ['日K','1d','1y']];
+                const bMap = { near_upper:'近上軌', mid_zone:'中軌', near_lower:'近下軌' };
+                const rows = [];
+                for(const t of tfs){
+                    const r = await analyzeStock(code, t[1], t[2]);
+                    if(!r){ rows.push('<div class="text-[11px] text-slate-400 font-black">' + t[0] + ' 無資料</div>'); continue; }
+                    const rUp = r.rsi_trend === 'rising', mUp = r.macd_trend === 'rising';
+                    rows.push(
+                        '<div class="flex gap-3 text-[11px] font-black items-center">'
+                        + '<span class="text-slate-400 w-9 shrink-0">' + t[0] + '</span>'
+                        + '<span class="' + (rUp ? 'text-emerald-500' : 'text-rose-500') + '">RSI ' + r.rsi + (rUp ? '↑' : '↓') + '</span>'
+                        + '<span class="' + (mUp ? 'text-emerald-500' : 'text-rose-500') + '">MACD柱' + (mUp ? '↑' : '↓') + '</span>'
+                        + '<span class="text-amber-500">' + (bMap[r.boll_position] || r.boll_position) + '</span>'
+                        + '</div>'
+                    );
+                }
+                el.innerHTML = '<div class="mt-1 space-y-0.5 border-t border-slate-300/40 pt-1">'
+                    + '<div class="text-[10px] text-slate-400 font-black mb-0.5">🛡️ 月/週/日K 守門員</div>'
+                    + rows.join('') + '</div>';
+            }catch(e){ el.innerHTML = '<span class="text-[11px] text-slate-400 font-black">🛡️ 守門員載入失敗</span>'; }
+        }
+        async function sweepGuardians(){
+            const els = document.querySelectorAll('.guardian-tf:not([data-done])');
+            els.forEach(function(el){ el.setAttribute('data-done', '1'); enrichGuardian(el.getAttribute('data-code'), el); });
+        }
+        setInterval(sweepGuardians, 1500);
+
         // ── 診斷卡片 HTML 產生器 ─────────────────────────────────
         const makeDiagCard = (code, result, bgDark, isHolding = false) => {
             const name     = stockNameMap[code] || '未定義資產';
@@ -1695,6 +1728,8 @@
                     <span class="diag-rsi ${rsiClr} text-[12px] font-black">RSI ${result.rsi} ${arrow}</span>
                     <span class="${bollClr[result.boll_position] || textSub} text-[12px] font-black">${bollMap[result.boll_position] || result.boll_position}</span>
                 </div>
+                <!-- 網頁守門員：月/週/日K RSI+MACD+布林（07021138 新增，由 sweepGuardians 補值） -->
+                <div class="guardian-tf mt-2 px-1" data-code="${code}" id="gtf-${code}"><span class="text-[11px] text-slate-400 font-black">🛡️ 月/週/日K 守門員：載入中…</span></div>
                 ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[12px] font-black text-center">${condText}</div>` : ''}
                 ${(window._isAdmin && result.debug_info) ? `<div class="mt-1 px-2 py-1 rounded-xl text-[11px] font-black" style="background:#1e293b;color:#94a3b8">
                     <div>${result.debug_info.week_k||''}</div>
@@ -2342,6 +2377,7 @@
                 price: price.toFixed(2),
                 rsi: Math.round(rsiNow * 10) / 10,
                 rsi_trend, boll_position, buy_signal, sell_signal, conditions,
+                macd_trend: (_t2 ? 'rising' : 'falling'),
                 debug_info: _debug
             };
             // ✅ 05041537：外匯方向過濾改由 _applyFxDir 統一處理（快取命中也有效）
