@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '07030929'
+SCRIPT_VERSION = '07031447'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1940,9 +1940,9 @@ def check_overnight_extreme_move():
 
         print(f"  📊 EWT即時監控：{_cur_price:.2f}（前收{_prev_close:.2f}，變化{_chg_pct:+.2f}%，估台指{_est_points:+.0f}點）")
 
-        # 閾值：1000點（≈ 2.22%）
-        _threshold_pts = 1000
-        _threshold_pct = _threshold_pts / _twii_base * 100  # ≈ 2.22%
+        # 閾值：750點（≈ 1.67%）✅ 07030953 由 2.22%(1000點) 下修至 1.5~1.8% 區間，更早響
+        _threshold_pts = 750
+        _threshold_pct = _threshold_pts / _twii_base * 100  # ≈ 1.67%
 
         if abs(_chg_pct) < _threshold_pct:
             return  # 未達閾值，不通知
@@ -3694,7 +3694,9 @@ if __name__ == "__main__":
         in_futures = (
             (wd_f == 0 and tv_f >= 12*60+50) or                             # 週一12:50後
             (wd_f == 1 and (tv_f < 1*60 or tv_f >= 5*60)) or            # 週二（排除深夜01:00~05:00）
-            (wd_f == 2 and tv_f <= 11*60+30)                             # 週三11:30前
+            (wd_f == 2 and tv_f <= 11*60+30) or                             # 週三11:30前
+            (wd_f == 3 and tv_f >= 15*60+5) or                              # ✅ 07031447 週四15:05起(週選夜盤)
+            (wd_f == 4 and tv_f <= 10*60+45)                                # ✅ 週五10:45止
         )
 
         if not in_futures:
@@ -3716,6 +3718,8 @@ if __name__ == "__main__":
                 (wd_l == 0 and tv_l >= 12*60+50) or
                 (wd_l == 1 and (tv_l < 1*60 or tv_l >= 5*60)) or  # 排除深夜01:00~05:00
                 (wd_l == 2 and tv_l <= 11*60+30) or
+                (wd_l == 3 and tv_l >= 15*60+5) or
+                (wd_l == 4 and tv_l <= 10*60+45) or
                 (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉
             )
             if not in_f:
