@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '07011049'
+SCRIPT_VERSION = '07030929'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -50,6 +50,7 @@ FIREBASE_CRED_FILE     = 'firebase_service_key.json'    # 本機金鑰檔案路�
 # ✅ 💻【本機】執行：直接填入帳號密碼
 # ✅ ☁️【雲端】GitHub Actions執行：自動從 GitHub Secrets 讀取，不需填寫
 import os as _os
+TEST_MODE = _os.environ.get('TEST_MODE', TEST_MODE)  # ✅ 07030929 修正：讀環境變數（雲端yml的 TEST_MODE:'5mk'/'condW' 才會生效；未設則沿用上方預設）
 # ✅ v05190013：GitHub Actions偵測
 IS_GITHUB_ACTIONS = _os.environ.get('GITHUB_ACTIONS','').lower() == 'true'
 SCAN_TYPE = _os.environ.get('SCAN_TYPE', 'tw')  # 'tw'=台股, 'futures'=期貨
@@ -457,6 +458,18 @@ def get_active_markets():
     # 週三 11:30 以前（日盤結束）
     elif weekday == 2 and time_val <= 11*60+30:
         is_futures_time = True
+
+    # ✅ 07030929 乙案新增：期貧5mk空方 加上週選夜盤時窗（含深夜，主力夜盤為主戰場）
+    #   週二15:05~週三10:45 ／ 週四15:05~週五10:45（不動原週一~週三窗）
+    if not is_futures_time:
+        if weekday == 1 and time_val >= 15*60+5:          # 週二15:05起
+            is_futures_time = True
+        elif weekday == 2 and time_val <= 10*60+45:       # 週三10:45止
+            is_futures_time = True
+        elif weekday == 3 and time_val >= 15*60+5:        # 週四15:05起
+            is_futures_time = True
+        elif weekday == 4 and time_val <= 10*60+45:       # 週五10:45止
+            is_futures_time = True
 
     if is_futures_time:
         active.append('FUTURES')  # 台指期5分K
