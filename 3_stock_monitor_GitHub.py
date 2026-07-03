@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '07031936'
+SCRIPT_VERSION = '07040032'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1891,7 +1891,7 @@ def check_tw_daytime_extreme(tse_mkt_result):
         _direction = 'DOWN' if _chg_pts < 0 else 'UP'
         _alert_key = f"TWII_DAYTIME_{_direction}_{_today_str}"
         _today_notified = notified.get(_today_str, [])
-        if _alert_key in _today_notified:
+        if _today_notified.count(_alert_key) >= 2:
             print(f"  🔕 台股白天極端異動今日已通知（{_direction}），跳過")
             return
 
@@ -1961,7 +1961,11 @@ def check_overnight_extreme_move():
         _alert_key = f"TWII_EXTREME_{_direction}_{_today_str}"
 
         # ✅ v06131103：Firebase原子佔位（樂觀並行控制，跨多台機器一勞永逸防重複）
-        _claim = _claim_alert_firebase(_alert_key, _today_str)
+        _claim = False   # ✅ 07040032 max-2：2-slot原子認領(同標的同方向每日最多2次)
+        for _slot in (1, 2):
+            _c = _claim_alert_firebase(f"{_alert_key}#{_slot}", _today_str)
+            if _c is True or _c is None:
+                _claim = _c; break
         if _claim is False:
             print(f"  🔕 台指夜盤極端異動已被其他機器佔位/今日已通知（{_direction}），跳過")
             return
@@ -1972,7 +1976,7 @@ def check_overnight_extreme_move():
                 if _fb_reload: notified.update(_fb_reload)
             except: pass
             _today_notified = notified.get(_today_str, [])
-            if _alert_key in _today_notified:
+            if _today_notified.count(_alert_key) >= 2:
                 print(f"  🔕 台指夜盤極端異動今日已通知過（{_direction}），跳過")
                 return
         # _claim is True → 已成功原子佔位，續發送
@@ -1998,7 +2002,7 @@ def check_overnight_extreme_move():
         # 記錄已通知（記憶體同步；佔位成功時Firebase已寫入，僅後援模式才寫回）
         if _today_str not in notified:
             notified[_today_str] = []
-        if _alert_key not in notified[_today_str]:
+        if notified[_today_str].count(_alert_key) < 2:
             notified[_today_str].append(_alert_key)
         if _claim is None:
             save_notified(notified)  # 僅後援模式需寫回，避免重複patch Firebase
@@ -2092,7 +2096,7 @@ def scan_limit_up():
         # Gmail通知
         _notif_key = f"LIMIT_UP_{_today_str}"
         _today_notified = notified.get(_today_str, [])
-        if _notif_key in _today_notified:
+        if _today_notified.count(_notif_key) >= 2:
             print("  🔕 今日漲停追蹤已通知過，跳過")
             return
 
@@ -2157,7 +2161,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
             _fund_key = f"基金_{fund_name}_BUY"
             _today_f  = datetime.now().strftime("%Y-%m-%d")
             if _today_f not in notified: notified[_today_f] = []
-            if _fund_key in notified[_today_f]:
+            if notified[_today_f].count(_fund_key) >= 2:
                 print(f"🔕 {fund_name} 今日買進訊號已通知過，跳過")
             else:
                 notified[_today_f].append(_fund_key)
@@ -3544,7 +3548,7 @@ def main_task():
         for s in delist_signals:
             market, code, dtype, dmsg = s
             key = f"{market}_{code}_DELIST"
-            if key not in notified[today]:
+            if notified[today].count(key) < 2:
                 filtered_d.append(s)
                 notified[today].append(key)
 
@@ -3598,7 +3602,7 @@ def main_task():
             market, code, *_ = s
             key = f"{market}_{code}_BUY"
 
-            if key not in notified[today]:
+            if notified[today].count(key) < 2:
                 filtered.append(s)
                 notified[today].append(key)
 
@@ -3638,7 +3642,7 @@ def main_task():
             market, code, *_ = s
             key = f"{market}_{code}_SELL"
 
-            if key not in notified[today]:
+            if notified[today].count(key) < 2:
                 filtered.append(s)
                 notified[today].append(key)
 
