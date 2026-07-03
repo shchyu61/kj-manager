@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '07031447'
+SCRIPT_VERSION = '07031936'
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -32,6 +32,8 @@ TEST_MODE = False   # 切換：False / True / '5mk'
 FUTURES_5MK_TARGETS  = ['^TWII']   # 期貨標的（可加入 'TXFF' 等）
 FUTURES_5MK_INTERVAL = 300         # 每300秒（5分鐘）掃描一次
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
+_futures_is_holding = False   # ✅ 07031936 正式宣告為模組全域(取代原dir()守門)
+_futures_is_short   = False   # ✅ 07031936 同上
 
 # FinMind設定（財務篩選 + 集保大戶 + 法人大買）
 FINMIND_TOKEN      = __import__('os').environ.get('FINMIND_TOKEN', '')  # 可選Token
@@ -759,6 +761,13 @@ def _get_period_label(mode_label):
 def save_notified(data):
     """儲存通知紀錄：雲端版優先用Firebase，本機版用json檔"""
     import os
+    # ✅ 07031936 清理：只留最新7個日期key，避免notified無限長大
+    try:
+        if isinstance(data, dict) and len(data) > 7:
+            _keep = sorted(data.keys())[-7:]
+            data = {k: data[k] for k in _keep}
+    except Exception:
+        pass
     if os.environ.get(FIREBASE_CRED_ENV):
         save_notified_firebase(data)
         return
@@ -1855,7 +1864,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 # ============================================================
 def check_tw_daytime_extreme(tse_mkt_result):
     """✅ v06130522：台股白天大盤極端異動警報
-    台股收盤後顯示，若當日^TWII漲跌超過1000點 → Gmail通知
+    台股收盤後顯示，若當日^TWII漲跌超過750點 → Gmail通知
     """
     try:
         import yfinance as _yf
@@ -1877,7 +1886,7 @@ def check_tw_daytime_extreme(tse_mkt_result):
         _chg_pct = _chg_pts / _prev * 100
 
         print(f"  📊 台股大盤今日：{_cur:.0f}（前收{_prev:.0f}，漲跌{_chg_pts:+.0f}點，{_chg_pct:+.2f}%）")
-        if abs(_chg_pts) < 1000: return  # 未達閾值
+        if abs(_chg_pts) < 750: return  # ✅ 07031936 台1000點下修至750點(更早警覺,同夜盤幅度)
 
         _direction = 'DOWN' if _chg_pts < 0 else 'UP'
         _alert_key = f"TWII_DAYTIME_{_direction}_{_today_str}"
@@ -2888,7 +2897,7 @@ def scan_condition_w():
 
 def main_task():
     # 🔥 宣告 global 確保全域共用
-    global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals
+    global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
 
     # ✅ [修正: 每次掃描開始前必須清空當次訊號, 避免重複累加發信]
     buy_signals   = []
@@ -3201,8 +3210,7 @@ def main_task():
     # ── 期貨5分K掃描（TEST_MODE='5mk'且FUTURES在active_markets時執行）──
     if 'FUTURES' in active_markets and TEST_MODE == '5mk':
         # ✅ 持倉狀態：多倉/空倉分開追蹤
-        if '_futures_is_holding' not in dir(): _futures_is_holding = False
-        if '_futures_is_short'   not in dir(): _futures_is_short   = False
+        # ✅ 07031936 _futures_is_holding/_futures_is_short 已於模組頂層正式宣告為全域，不再用dir()守門
         _pos_str = '多倉🔴' if _futures_is_holding else ('空倉🔵' if _futures_is_short else '空手⬜')
         _mode_str = f'SCAN_MODE={SCAN_MODE}' if 'SCAN_MODE' in dir() else SCAN_MODE
         print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}')
