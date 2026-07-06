@@ -10,6 +10,8 @@ SCRIPT_VERSION = '07040032'
 # 快取設定（週K決定要不要看，日K決定準不準，5分K決定何時動手）
 USE_CACHE = True
 WEEKLY_REFRESH_HOUR = 8   # 每天早上更新一次月K快取（long-term）
+USE_CROSS_RUN_CACHE = True   # ✅ 方案②(07061319) 月K/週K跨輪(跨程序)快取，大幅降掃描耗時；出錯自動回退、設False可一鍵關閉
+KLINE_CACHE_FILE = '6_kline_cache.pkl'   # 跨輪快取檔（程式自動產生，保留勿刪）
 five_min_cache = {}  # ✅ 新增 5 分鐘 K 線快取容器
 # ✅ (點1) 06221854：個股「最後一根K棒收盤價」即時補更總開關＋現價快取
 REALTIME_LAST_BAR = True   # True=月K/週K/日K最後一根用即時５m現價覆蓋（盤中即時）；API負載過重可設False停用
@@ -2899,6 +2901,49 @@ def scan_condition_w():
         print(f'  ⚠️ 條件W掃描異常：{str(_e)[:80]}')
 
 
+def _kline_cache_path():
+    import os
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), KLINE_CACHE_FILE)
+
+def load_cross_run_cache():
+    """✅ 方案②(07061319) 程序啟動時載入『今日』跨輪月K/週K快取；任何錯誤自動回退(不影響掃描)。"""
+    if not USE_CROSS_RUN_CACHE:
+        return
+    global weekly_cache, daily_cache
+    try:
+        import pickle, os
+        p = _kline_cache_path()
+        if not os.path.exists(p):
+            print('♻️ [方案②] 無跨輪快取檔，本輪重新抓取並建立'); return
+        with open(p, 'rb') as f:
+            data = pickle.load(f)
+        today = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d')
+        if not isinstance(data, dict) or data.get('date') != today:
+            _dd = data.get('date') if isinstance(data, dict) else 'NA'
+            print(f'♻️ [方案②] 跨輪快取非今日({_dd})，忽略、重新抓取'); return
+        w = data.get('weekly', {}); d = data.get('daily', {})
+        _wok = {k: v for k, v in w.items() if hasattr(v, 'empty') and not v.empty and len(v) >= 30}
+        _dok = {k: v for k, v in d.items() if hasattr(v, 'empty') and not v.empty}
+        weekly_cache.update(_wok); daily_cache.update(_dok)
+        print(f'✅ [方案②] 已載入今日跨輪快取：月K {len(_wok)} 檔、週K {len(_dok)} 檔（免重抓）')
+    except Exception as _e:
+        print(f'⚠️ [方案②] 載入跨輪快取失敗，自動回退為重新抓取：{_e}')
+
+def save_cross_run_cache(prev_w=0, prev_d=0):
+    """✅ 方案②(07061319) 掃描結束保存今日快取（僅在快取有成長時才寫檔，省IO）；失敗不影響掃描。"""
+    if not USE_CROSS_RUN_CACHE:
+        return
+    try:
+        import pickle
+        if len(weekly_cache) <= prev_w and len(daily_cache) <= prev_d:
+            return
+        today = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d')
+        with open(_kline_cache_path(), 'wb') as f:
+            pickle.dump({'date': today, 'weekly': weekly_cache, 'daily': daily_cache}, f)
+        print(f'💾 [方案②] 已保存今日跨輪快取：月K {len(weekly_cache)} 檔、週K {len(daily_cache)} 檔')
+    except Exception as _e:
+        print(f'⚠️ [方案②] 保存跨輪快取失敗（不影響本輪掃描）：{_e}')
+
 def main_task():
     # 🔥 宣告 global 確保全域共用
     global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
@@ -2920,6 +2965,11 @@ def main_task():
         print(f"♻️ [{now_str}] 偵測到新的一天, 正在清除快取資料以獲取最新K線...")
         weekly_cache.clear()
         daily_cache.clear()
+
+    # ✅ 方案②(07061319) 記憶體快取為空(新程序或剛清空)時，載入今日跨輪快取以免重抓
+    if USE_CROSS_RUN_CACHE and len(weekly_cache) == 0 and len(daily_cache) == 0:
+        load_cross_run_cache()
+    _xrun_prev_w = len(weekly_cache); _xrun_prev_d = len(daily_cache)   # 記錄載入後基準，供結束時判斷是否成長
 
     # ✅ 主流程一定要執行(不能縮在 if 裡)
     active_markets = get_active_markets()
@@ -3503,6 +3553,8 @@ def main_task():
     print(f"\n{'='*55}")
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
+    # ✅ 方案②(07061319) 掃描結束保存今日跨輪快取（成長才存）
+    save_cross_run_cache(_xrun_prev_w, _xrun_prev_d)
     # ✅ v05170940：寫入掃描狀態到Firebase供網頁版「上次掃描時間」顯示
     if LOAD_SENTINEL and _load_stats.get('scan_start'):
         _dur_min = (time.time() - _load_stats['scan_start']) / 60.0
