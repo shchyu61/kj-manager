@@ -707,7 +707,7 @@ def _safe_float(val):
 # ✅ (點1-B 06240532) 負荷哨兵：監測5m抓取失敗率與掃描耗時，超門檻寄Gmail警報
 LOAD_SENTINEL = True       # 負荷哨兵總開關
 LOAD_FAIL_PCT = 0.30       # 5m抓取失敗率門檻（>30%視為yfinance限流/負荷過重）
-LOAD_MAX_MIN  = 25         # 單輪掃描耗時門檻（分鐘）
+LOAD_MAX_MIN  = 50         # 單輪掃描耗時門檻（分鐘）✅07071728上修25→50：台股1827支全量掃描正常約45分(首掃建方案②快取)，原25分過低致頻繁誤報；50分僅真正卡住才警報
 _load_stats   = {'fetch_total': 0, 'fetch_fail': 0, 'scan_start': None}
 
 def _get_rt_price(ticker, cache=None):
