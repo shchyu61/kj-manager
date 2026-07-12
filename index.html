@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v07021138</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v07130612</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1922,6 +1922,45 @@
             };
         };
 
+        // ✅ (07130612) 日K→週K/月K 重採樣【發現1修復】
+        //    FinMind（台股TaiwanStockPrice／美股USStockPrice）僅提供日K，且原程式忽略 _iv，
+        //    導致「月K長期」「週K中期」實際都在日K上計算 → 與本機/雲端版(.py用真月K/週K)策略不一致。
+        //    本函式將日K重採樣成真週K/月K：週K以「該週週一」分組、月K以「年月」分組；
+        //    每根K棒＝開(首日開)/高(期間最高)/低(期間最低)/收(末日收)/量(加總)。
+        //    最後一根為「進行中」的當週/當月(尚未收)，與 yfinance 行為一致。
+        const _resampleOHLC = (o, h, l, c, v, ts, iv) => {
+            if (iv !== '1wk' && iv !== '1mo') return { o, h, l, c, v, ts };   // 日K/5分K原樣返回
+            const _idx = ts.map((t, i) => i)
+                           .filter(i => c[i] != null && !isNaN(c[i]))
+                           .sort((a, b) => ts[a] - ts[b]);                     // 保險：一律依時間升冪
+            const _key = (sec) => {
+                const d = new Date(sec * 1000);
+                if (iv === '1mo') return d.getUTCFullYear() * 100 + (d.getUTCMonth() + 1);
+                const _d  = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+                const _wd = _d.getUTCDay();                                    // 0=日,1=一,...6=六
+                _d.setUTCDate(_d.getUTCDate() - (_wd === 0 ? 6 : _wd - 1));    // 回推到該週週一
+                return Math.floor(_d.getTime() / 86400000);
+            };
+            const O = [], H = [], L = [], C = [], V = [], T = [];
+            let _cur = null;
+            for (const i of _idx) {
+                const k   = _key(ts[i]);
+                const _op = (o[i] != null && !isNaN(o[i])) ? o[i] : c[i];
+                const _hi = (h[i] != null && !isNaN(h[i])) ? h[i] : c[i];
+                const _lo = (l[i] != null && !isNaN(l[i])) ? l[i] : c[i];
+                if (k !== _cur) {
+                    _cur = k;
+                    O.push(_op); H.push(_hi); L.push(_lo); C.push(c[i]); V.push(v[i] || 0); T.push(ts[i]);
+                } else {
+                    const j = C.length - 1;
+                    if (_hi > H[j]) H[j] = _hi;
+                    if (_lo < L[j]) L[j] = _lo;
+                    C[j] = c[i]; V[j] += (v[i] || 0); T[j] = ts[i];
+                }
+            }
+            return { o: O, h: H, l: L, c: C, v: V, ts: T };
+        };
+
         const analyzeStock = async (code, _forceInterval = null, _forceRange = null) => {
             // 局部 interval/range（優先使用強制參數，避免並行競態問題）
             const _iv = _forceInterval || SCAN_INTERVAL;
@@ -1956,7 +1995,10 @@
                 // ✅ 台股改用 FinMind（完全支援CORS，不需Proxy）
                 // Token使用全域 _FM_TOKEN
                 const _today = new Date().toISOString().slice(0,10);
-                const _start = new Date(Date.now() - 150*24*60*60*1000).toISOString().slice(0,10); // 800天前
+                // ✅ (07130612) 依週期取足夠日K供重採樣：月K需5年、週K需2年、其餘150天
+                //    （原註解誤寫「800天前」、實際為150天，本次一併更正）
+                const _days  = _iv === '1mo' ? 1825 : _iv === '1wk' ? 730 : 150;
+                const _start = new Date(Date.now() - _days*24*60*60*1000).toISOString().slice(0,10);
                 // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
                 const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${window._FM_TOKEN}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
@@ -1970,9 +2012,11 @@
                 const _lows   = _rows.map(r => parseFloat(r.min));   // FinMind低點是min
                 const _vols   = _rows.map(r => parseInt(r.Trading_Volume||0));
                 const _ts     = _rows.map(r => Math.floor(new Date(r.date).getTime()/1000));
+                // ✅ (07130612)【發現1修復】日K → 依 _iv 重採樣成真週K/月K（gate1/gate2 三版一致）
+                const _rs = _resampleOHLC(_opens, _highs, _lows, _closes, _vols, _ts, _iv);
                 yResult = {
-                    indicators: { quote: [{close:_closes, open:_opens, high:_highs, low:_lows, volume:_vols}], adjclose:[{adjclose:_closes}] },
-                    timestamp: _ts,
+                    indicators: { quote: [{close:_rs.c, open:_rs.o, high:_rs.h, low:_rs.l, volume:_rs.v}], adjclose:[{adjclose:_rs.c}] },
+                    timestamp: _rs.ts,
                     meta: { symbol: code+'.TW', regularMarketPrice: _closes[_closes.length-1] }
                 };
             } else {
@@ -1983,7 +2027,9 @@
                     try {
                         // Token使用全域 _FM_TOKEN
                         const _today2 = new Date().toISOString().slice(0,10);
-                        const _start2 = new Date(Date.now() - 150*24*60*60*1000).toISOString().slice(0,10);
+                        // ✅ (07130612) 美股與台股同源問題：FinMind亦僅提供日K，需取足夠天數供重採樣
+                        const _days2  = _iv === '1mo' ? 1825 : _iv === '1wk' ? 730 : 150;
+                        const _start2 = new Date(Date.now() - _days2*24*60*60*1000).toISOString().slice(0,10);
                         const _fmUs = `https://api.finmindtrade.com/api/v4/data?dataset=USStockPrice&data_id=${code}&start_date=${_start2}&end_date=${_today2}&token=${window._FM_TOKEN}`;
                         const _fdUs = await (await fetch(_fmUs, {signal: AbortSignal.timeout(15000)})).json();
                         if (_fdUs.data && _fdUs.data.length >= 10) {
@@ -1994,9 +2040,11 @@
                             const _lo = _r.map(x => parseFloat(x.Low||x.low||x.close));
                             const _vo = _r.map(x => parseInt(x.Volume||x.volume||0));
                             const _ts2 = _r.map(x => Math.floor(new Date(x.date).getTime()/1000));
+                            // ✅ (07130612)【發現1修復】美股FinMind日K → 依 _iv 重採樣成真週K/月K
+                            const _rs2 = _resampleOHLC(_op, _hi, _lo, _cl, _vo, _ts2, _iv);
                             yResult = {
-                                indicators: { quote:[{close:_cl,open:_op,high:_hi,low:_lo,volume:_vo}], adjclose:[{adjclose:_cl}] },
-                                timestamp: _ts2,
+                                indicators: { quote:[{close:_rs2.c,open:_rs2.o,high:_rs2.h,low:_rs2.l,volume:_rs2.v}], adjclose:[{adjclose:_rs2.c}] },
+                                timestamp: _rs2.ts,
                                 meta: { symbol: code, regularMarketPrice: _cl[_cl.length-1] }
                             };
                         } else { throw new Error('FinMind US no data'); }
