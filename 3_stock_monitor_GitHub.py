@@ -35,6 +35,7 @@ FUTURES_5MK_TARGETS  = ['^TWII']   # 期貨標的（可加入 'TXFF' 等）
 FUTURES_5MK_INTERVAL = 300         # 每300秒（5分鐘）掃描一次
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 _futures_is_holding = False   # ✅ 07031936 正式宣告為模組全域(取代原dir()守門)
+_holdings_sent = False        # ✅ (07130626) 持股每日健檢：本次執行是否已寄出(防迴圈重複寄)
 _futures_is_short   = False   # ✅ 07031936 同上
 
 # FinMind設定（財務篩選 + 集保大戶 + 法人大買）
@@ -2944,9 +2945,137 @@ def save_cross_run_cache(prev_w=0, prev_d=0):
     except Exception as _e:
         print(f'⚠️ [方案②] 保存跨輪快取失敗（不影響本輪掃描）：{_e}')
 
+def _hh_snapshot(_d, _label):
+    """✅ (07130626) 持股健檢：輸出單一週期的 RSI／MACD柱／布林位置 摘要行"""
+    _r  = float(_d['rsi14'].iloc[-1]);      _rp = float(_d['rsi14'].iloc[-2])
+    _mh = float(_d['macd_hist'].iloc[-1]);  _mp = float(_d['macd_hist'].iloc[-2])
+    _bt = float(_d['boll_top20'].iloc[-1]); _bm = float(_d['boll_mid20'].iloc[-1])
+    _bb = float(_d['boll_bot20'].iloc[-1]); _c  = float(_d['Close'].iloc[-1])
+    if   _c >= _bt: _pos = '觸及上軌(過熱區)'
+    elif _c <= _bb: _pos = '觸及下軌(超跌區)'
+    elif _c >= _bm: _pos = '中軌之上(偏多)'
+    else:           _pos = '中軌之下(偏弱)'
+    return (f"　　{_label}：RSI {_r:.1f}（{'↑上升' if _r > _rp else '↓下降'}）｜"
+            f"MACD柱 {_mh:+.3f}（{'↑上升' if _mh > _mp else '↓下降'}）｜布林 {_pos}")
+
+def check_holdings_health():
+    """✅ (07130626)【持股每日健檢通知】主帥指定功能
+    ・對所有持股（台股/美股/虛擬幣/外匯）計算【長期＝月K】與【中期＝週K】的
+      布林／RSI／MACD，並依【混合模式＝OR】（長期 or 中期任一觸發出場即示警）
+      給出「續抱持有」或「建議評估賣出/回補」，彙整成【一封】Gmail。
+    ・出場判斷完全沿用系統既有策略函式（check_sell_condition／check_sell_condD；
+      空單走鏡像 check_cover_condition／check_cover_condD）→ 與掃描策略完全一致。
+    ・雲端版由 GitHub Actions 觸發 → 筆電未開機也收得到；本機版策略相同。
+    """
+    print("\n📋 【持股每日健檢】啟動...")
+    _items = []   # (顯示名, 代號, 是否空單)
+    for _c in HOLDINGS_TW:
+        _items.append((_c, _c + '.TW', (_c in HOLDINGS_SHORT)))
+    for _c in HOLDINGS_US:
+        _items.append((_c, _c, (_c in HOLDINGS_SHORT)))
+    for _c in HOLDINGS_CRYPTO:
+        _items.append((_c, _c, (_c in HOLDINGS_SHORT)))
+    for _c in HOLDINGS_FX:
+        _items.append((_c, _c, (_c in HOLDINGS_SHORT)))
+
+    if not _items:
+        print("📋 目前無持股，略過健檢")
+        return
+
+    _lines, _alert_cnt, _ok_cnt, _fail_cnt = [], 0, 0, 0
+    for _name, _tk, _is_short in _items:
+        try:
+            # 長期＝月K(5y/1mo)；台股 .TW 無資料時自動改試 .TWO（上櫃）
+            _dm = get_stock_data(_tk, period='5y', interval='1mo')
+            if (_dm is None or len(_dm) < 26) and _tk.endswith('.TW'):
+                _tk2 = _tk.replace('.TW', '.TWO')
+                _dm2 = get_stock_data(_tk2, period='5y', interval='1mo')
+                if _dm2 is not None and len(_dm2) >= 26:
+                    _tk, _dm = _tk2, _dm2
+            # 中期＝週K(2y/1wk)
+            _dw = get_stock_data(_tk, period='2y', interval='1wk')
+            if _dm is None or _dw is None or len(_dm) < 26 or len(_dw) < 26:
+                _lines.append(f"・{_name}：⚠️ 取得資料失敗或資料不足，本次略過")
+                _fail_cnt += 1
+                continue
+
+            _im = calc_indicators(_dm)
+            _iw = calc_indicators(_dw)
+            if _im is None or _iw is None:
+                _lines.append(f"・{_name}：⚠️ 指標計算失敗，本次略過")
+                _fail_cnt += 1
+                continue
+
+            _px = float(_im['Close'].iloc[-1])
+
+            # 出場判斷：沿用系統既有策略（做多＝賣出；做空＝回補），混合模式 OR
+            if _is_short:
+                _s_m = check_cover_condition(_im); _sd_m, _md_m = check_cover_condD(_im)
+                _s_w = check_cover_condition(_iw); _sd_w, _md_w = check_cover_condD(_iw)
+                _act = '建議評估【回補】(空單獲利了結)'
+            else:
+                _s_m = check_sell_condition(_im); _sd_m, _md_m = check_sell_condD(_im)
+                _s_w = check_sell_condition(_iw); _sd_w, _md_w = check_sell_condD(_iw)
+                _act = '建議評估【賣出】(獲利了結)'
+
+            _hits = []
+            if _s_m:  _hits.append('長期(月K) 出場訊號')
+            if _sd_m: _hits.append(f'長期(月K) {_md_m}')
+            if _s_w:  _hits.append('中期(週K) 出場訊號')
+            if _sd_w: _hits.append(f'中期(週K) {_md_w}')
+
+            if _hits:
+                _verdict = f"　　👉 🔴 {_act}\n　　　　觸發：" + "；".join(_hits)
+                _alert_cnt += 1
+            else:
+                _verdict = "　　👉 🟢 建議【續抱持有】（長期(月K)與中期(週K) 皆未觸發出場條件）"
+                _ok_cnt += 1
+
+            _lines.append(
+                f"・{_name}{'（空單）' if _is_short else ''}　現價 {_px:,.2f}\n"
+                f"{_hh_snapshot(_im, '長期(月K)')}\n"
+                f"{_hh_snapshot(_iw, '中期(週K)')}\n"
+                f"{_verdict}\n"
+            )
+            print(f"  ✅ {_name} 健檢完成（{'示警' if _hits else '持有'}）")
+        except Exception as _e:
+            _lines.append(f"・{_name}：⚠️ 健檢失敗（{_e}）")
+            _fail_cnt += 1
+            print(f"  ⚠️ {_name} 健檢失敗：{_e}")
+
+    _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+    _subject = f"☁️【雲端】📋 持股每日健檢報告（示警 {_alert_cnt} 檔／持有 {_ok_cnt} 檔）"
+    _body = (
+        f"【持股每日健檢】{_now}（台灣時間）\n"
+        f"{'='*46}\n"
+        f"判斷方式＝混合模式(OR)：長期(月K) 或 中期(週K) 任一觸發出場條件即示警；\n"
+        f"出場條件與主掃描系統【完全相同】(賣出條件／條件D出場；空單為回補鏡像)。\n"
+        f"{'='*46}\n\n"
+        + "\n".join(_lines)
+        + f"\n{'='*46}\n"
+        f"合計：示警 {_alert_cnt} 檔／續抱 {_ok_cnt} 檔／失敗 {_fail_cnt} 檔\n"
+        f"※ 本信為每日定期健檢，非即時買賣訊號；實際進出仍請自行判斷。\n"
+        f"※ 持股清單於程式 HOLDINGS_TW／HOLDINGS_US／HOLDINGS_CRYPTO／HOLDINGS_FX 設定。\n"
+    )
+    try:
+        send_gmail(_subject, _body)
+        print(f"📧 持股健檢報告已寄出（示警{_alert_cnt}／持有{_ok_cnt}／失敗{_fail_cnt}）")
+    except Exception as _e:
+        print(f"⚠️ 持股健檢寄信失敗：{_e}")
+
 def main_task():
     # 🔥 宣告 global 確保全域共用
     global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
+    global _holdings_sent   # ✅ (07130626) 持股每日健檢
+
+    # ✅ (07130626)【持股每日健檢模式】SCAN_TYPE='holdings'：只做持股健檢並寄一封報告，不跑全市場掃描
+    if SCAN_TYPE == 'holdings':
+        if _holdings_sent:
+            print("📋 本次執行已完成持股健檢，跳過重複執行")
+            return
+        check_holdings_health()
+        _holdings_sent = True
+        return
 
     # ✅ [修正: 每次掃描開始前必須清空當次訊號, 避免重複累加發信]
     buy_signals   = []
