@@ -2097,11 +2097,19 @@ def scan_limit_up():
             return
 
         # Gmail通知
+        # ✅ (08031611)【去重升級】原「讀→數→發→寫」非原子：並行/延遲的雲端run會同時
+        #    讀到count=0而各自發信 → 一晚重複發3封。改用與夜盤極端/條件W【相同】的
+        #    Firebase 原子佔位機制，且上限由每日2次改為【每日最多1次】(主帥指定)。
         _notif_key = f"LIMIT_UP_{_today_str}"
-        _today_notified = notified.get(_today_str, [])
-        if _today_notified.count(_notif_key) >= 2:
-            print("  🔕 今日漲停追蹤已通知過，跳過")
+        _claim = _claim_alert_firebase(_notif_key, _today_str)
+        if _claim is False:
+            print("  🔕 今日漲停追蹤已被其他機器佔位／已通知過，跳過")
             return
+        if _claim is None:
+            # 後援：Firebase不可用時退回本地紀錄檢查（每日最多1次）
+            if notified.get(_today_str, []).count(_notif_key) >= 1:
+                print("  🔕 今日漲停追蹤已通知過，跳過")
+                return
 
         _lines = [f"📈 今日漲停股票買進候選（{_now.strftime('%Y/%m/%d')}）", '='*35]
         for _t, _c, _p, _per, _dk in _buy_candidates:
@@ -2949,8 +2957,13 @@ def _hh_snapshot(_d, _label):
     """✅ (07130626) 持股健檢：輸出單一週期的 RSI／MACD柱／布林位置 摘要行"""
     _r  = float(_d['rsi14'].iloc[-1]);      _rp = float(_d['rsi14'].iloc[-2])
     _mh = float(_d['macd_hist'].iloc[-1]);  _mp = float(_d['macd_hist'].iloc[-2])
-    _bt = float(_d['boll_top20'].iloc[-1]); _bm = float(_d['boll_mid20'].iloc[-1])
-    _bb = float(_d['boll_bot20'].iloc[-1]); _c  = float(_d['Close'].iloc[-1])
+    _bt = float(_d['boll_top20'].iloc[-1])
+    _bb = float(_d['boll_bot20'].iloc[-1])
+    # ✅ (08031611)【bug修復】calc_indicators 主路徑(806行起)只建 boll_top20/boll_bot20、
+    #    並【未建 boll_mid20】(僅少量資料的備援路徑738行才有) → 原寫法必 KeyError，
+    #    致每檔健檢皆失敗。改由上下軌取中值（數學上等同 ma_c_20），兩條路徑都安全。
+    _bm = (_bt + _bb) / 2
+    _c  = float(_d['Close'].iloc[-1])
     if   _c >= _bt: _pos = '觸及上軌(過熱區)'
     elif _c <= _bb: _pos = '觸及下軌(超跌區)'
     elif _c >= _bm: _pos = '中軌之上(偏多)'
@@ -2983,6 +2996,7 @@ def check_holdings_health():
         return
 
     _lines, _alert_cnt, _ok_cnt, _fail_cnt = [], 0, 0, 0
+    _fail_names = []   # ✅ (08031611) 失敗標的名稱（僅在有示警而發信時，於信末附註）
     for _name, _tk, _is_short in _items:
         try:
             # 長期＝月K(5y/1mo)；台股 .TW 無資料時自動改試 .TWO（上櫃）
@@ -3025,41 +3039,47 @@ def check_holdings_health():
             if _sd_w: _hits.append(f'中期(週K) {_md_w}')
 
             if _hits:
-                _verdict = f"　　👉 🔴 {_act}\n　　　　觸發：" + "；".join(_hits)
+                # ✅ (08031611)【防狼來了】只有【觸發出場條件】者才寫進信中
                 _alert_cnt += 1
+                _lines.append(
+                    f"・{_name}{'（空單）' if _is_short else ''}　現價 {_px:,.2f}\n"
+                    f"{_hh_snapshot(_im, '長期(月K)')}\n"
+                    f"{_hh_snapshot(_iw, '中期(週K)')}\n"
+                    f"　　👉 🔴 {_act}\n　　　　觸發：" + "；".join(_hits) + "\n"
+                )
             else:
-                _verdict = "　　👉 🟢 建議【續抱持有】（長期(月K)與中期(週K) 皆未觸發出場條件）"
-                _ok_cnt += 1
-
-            _lines.append(
-                f"・{_name}{'（空單）' if _is_short else ''}　現價 {_px:,.2f}\n"
-                f"{_hh_snapshot(_im, '長期(月K)')}\n"
-                f"{_hh_snapshot(_iw, '中期(週K)')}\n"
-                f"{_verdict}\n"
-            )
+                _ok_cnt += 1   # ✅ (08031611) 未觸發者不列入信中，僅計數（避免無效資訊稀釋警覺）
             print(f"  ✅ {_name} 健檢完成（{'示警' if _hits else '持有'}）")
         except Exception as _e:
-            _lines.append(f"・{_name}：⚠️ 健檢失敗（{_e}）")
             _fail_cnt += 1
+            _fail_names.append(str(_name))
             print(f"  ⚠️ {_name} 健檢失敗：{_e}")
 
+    # ✅ (08031611)【防狼來了・主帥指定】零示警＝不發信，僅 console 記錄；
+    #    唯有出現出場示警才寄信，避免每日固定一封造成警覺心鈍化。
+    if _alert_cnt == 0:
+        print(f"📋 持股健檢完成：無任何出場示警（續抱{_ok_cnt}檔／失敗{_fail_cnt}檔）→ 不發信")
+        return
+
     _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
-    _subject = f"☁️【雲端】📋 持股每日健檢報告（示警 {_alert_cnt} 檔／持有 {_ok_cnt} 檔）"
+    _subject = f"☁️【雲端】📋 持股健檢示警！{_alert_cnt} 檔觸發出場條件"
     _body = (
-        f"【持股每日健檢】{_now}（台灣時間）\n"
+        f"【持股健檢・出場示警】{_now}（台灣時間）\n"
         f"{'='*46}\n"
         f"判斷方式＝混合模式(OR)：長期(月K) 或 中期(週K) 任一觸發出場條件即示警；\n"
         f"出場條件與主掃描系統【完全相同】(賣出條件／條件D出場；空單為回補鏡像)。\n"
+        f"※ 未觸發出場者不列入本信（僅統計）；零示警日【不發信】。\n"
         f"{'='*46}\n\n"
         + "\n".join(_lines)
         + f"\n{'='*46}\n"
-        f"合計：示警 {_alert_cnt} 檔／續抱 {_ok_cnt} 檔／失敗 {_fail_cnt} 檔\n"
-        f"※ 本信為每日定期健檢，非即時買賣訊號；實際進出仍請自行判斷。\n"
+        f"合計：示警 {_alert_cnt} 檔／續抱 {_ok_cnt} 檔／失敗 {_fail_cnt} 檔"
+        + (f"（失敗：{'、'.join(_fail_names)}）" if _fail_names else "") + "\n"
+        f"※ 本信為持股出場示警，非即時買賣訊號；實際進出仍請自行判斷。\n"
         f"※ 持股清單於程式 HOLDINGS_TW／HOLDINGS_US／HOLDINGS_CRYPTO／HOLDINGS_FX 設定。\n"
     )
     try:
         send_gmail(_subject, _body)
-        print(f"📧 持股健檢報告已寄出（示警{_alert_cnt}／持有{_ok_cnt}／失敗{_fail_cnt}）")
+        print(f"📧 持股健檢示警已寄出（示警{_alert_cnt}／續抱{_ok_cnt}／失敗{_fail_cnt}）")
     except Exception as _e:
         print(f"⚠️ 持股健檢寄信失敗：{_e}")
 
@@ -3316,7 +3336,10 @@ def main_task():
             time.sleep(0.1)
 
         # ✅ v06081833：台股收盤後執行漲停追蹤（14:00後，每日一次）
-        _scan_hour = datetime.now().hour
+        # ✅ (08031611)【時區bug修復】原 datetime.now() 在 GitHub Actions 為 UTC，
+        #    台灣00:45=UTC16:45 亦 >=14 → 漲停追蹤誤在【台灣深夜】觸發發信。
+        #    改用台灣時間，確保只在台股收盤後(14:00~)執行，符合原設計。
+        _scan_hour = datetime.now(pytz.timezone('Asia/Taipei')).hour
         if SCAN_TYPE in ('tw','mixed') and _scan_hour >= 14:
             scan_limit_up()
         # 🔥 正確位置：美股「所有股票」掃描完後，才執行「一次」基金追蹤
