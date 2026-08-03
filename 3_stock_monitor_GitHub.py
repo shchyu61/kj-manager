@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08031637'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08032126'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -42,6 +42,11 @@ _futures_is_short   = False   # ✅ 07031936 同上
 FINMIND_TOKEN      = __import__('os').environ.get('FINMIND_TOKEN', '')  # 可選Token
 FINMIND_MIN_PASS   = 4       # 通過財務篩選最低支數（低於此數不啟用）
 FINMIND_CACHE_HOURS = 168    # 財務資料快取7天（週報不常更新）
+# ── 週選擇權履約價推薦設定 ✅(08032126) ──
+OPT_PREMIUM_MAX      = 16    # ★主帥定案：以小博大，進場權利金上限(元)；>16 不推薦(歸零損失大)
+OPT_SNAPSHOT_TIMEOUT = 6     # 選擇權快照單次逾時秒數（失敗即放棄、不重抓）
+OPT_CHAIN_CACHE_SEC  = 60    # 同一分鐘內重用快照，節省 FinMind token（限600次/hr）
+_opt_chain_cache     = {'ts': 0, 'rows': None}   # 模組頂層宣告，防 'not defined'
 _finmind_cache     = {}      # ✅ 模組頂層宣告，防止 'not defined' 錯誤
 
 # Firebase設定（本機版：讀取AI預篩清單快取）
@@ -1537,6 +1542,103 @@ def analyse_market_index(ticker, label):
 # 【週選擇權履約價推薦】
 # 僅在週三/週五 09:05~10:45 期貨5分K觸發時附加在通知信中
 # ============================================================
+def _fetch_option_chain():
+    """✅ (08032126) 取得台指選擇權【即時快照】權利金（供履約價≤16元篩選）。
+    ★主帥定案之容錯原則：
+      ・只抓【一次】，失敗即放棄、回傳 None，由呼叫端降級為距離推估；【不重抓】。
+      ・同一分鐘內重用快取，避免爆掉 FinMind token 上限（600次/hr）。
+      ・訊號本身照常發送，取不到報價【絕不】影響通知。
+    ★已查證：FinMind taiwan_options_snapshot 文件載明支援 TXO(月選)、TX1~TX5(週三選)；
+      data_id 留空＝一次全部。【週五選(TXU/TXV/TXX/TXY/TXZ) 是否涵蓋尚未實測】，
+      故採防禦式解析；請用 9_選擇權報價測試.py 實測後再據以微調。
+    """
+    global _opt_chain_cache
+    try:
+        import time as _t
+        if _opt_chain_cache.get('rows') is not None and (_t.time() - _opt_chain_cache.get('ts', 0)) < OPT_CHAIN_CACHE_SEC:
+            return _opt_chain_cache['rows']
+        if not FINMIND_TOKEN:
+            print("  ℹ️ 未設定 FINMIND_TOKEN → 履約價改用距離推估")
+            return None
+        import requests as _req
+        _r = _req.get('https://api.finmindtrade.com/api/v4/taiwan_options_snapshot',
+                      headers={'Authorization': f'Bearer {FINMIND_TOKEN}'},
+                      params={'data_id': ''}, timeout=OPT_SNAPSHOT_TIMEOUT)
+        if _r.status_code != 200:
+            print(f"  ⚠️ 選擇權快照 HTTP {_r.status_code} → 降級為距離推估（不重抓）")
+            return None
+        _rows = (_r.json() or {}).get('data') or None
+        _opt_chain_cache = {'ts': _t.time(), 'rows': _rows}
+        print(f"  ✅ 選擇權快照取得 {len(_rows) if _rows else 0} 筆")
+        return _rows
+    except Exception as _e:
+        print(f"  ⚠️ 選擇權快照取得失敗（{str(_e)[:40]}）→ 降級為距離推估（不重抓）")
+        return None
+
+
+def _pick_strikes_by_premium(rows, want_put, spot):
+    """✅ (08032126) 從快照挑出【價外 且 權利金≤OPT_PREMIUM_MAX】的履約價。
+    回傳 [(履約價, 權利金, 契約代碼)]，最多3檔。
+    ・價外定義：PUT 履約價 < 現價；CALL 履約價 > 現價（以小博大，價外才便宜）。
+    ・排序：權利金由高至低＝【最接近價平者優先】，結算落入價內機率較高。
+      7/17 實證：43000P 進場約12元→結算71元(約6倍)；43100P 進場18.5元已>16 故不符。
+    ・同一履約價若有多個到期契約，取權利金最低者（＝最近到期、時間價值最少）。
+    ・防禦式解析：FinMind 欄位名若異動，取不到即回空清單→自動降級，不會拋錯。
+    """
+    try:
+        _S = ('strike_price', 'strike', 'StrikePrice')
+        _T = ('call_put', 'type', 'CallPut', 'option_type')
+        _P = ('close', 'price', 'last_price', 'deal_price', 'LastPrice')
+        _C = ('contract_date', 'due_date', 'option_id', 'data_id', 'contract')
+        _tmp = []
+        for _r in (rows or []):
+            if not isinstance(_r, dict):
+                continue
+            _sv = next((_r[k] for k in _S if _r.get(k) is not None), None)
+            _tv = next((_r[k] for k in _T if _r.get(k) is not None), None)
+            _pv = next((_r[k] for k in _P if _r.get(k) is not None), None)
+            _cv = next((_r[k] for k in _C if _r.get(k) is not None), '')
+            if _sv is None or _tv is None or _pv is None:
+                continue
+            _is_put = str(_tv).strip().lower().startswith('p')
+            if _is_put != bool(want_put):
+                continue
+            _s = float(_sv); _p = float(_pv)
+            if (_is_put and _s >= spot) or ((not _is_put) and _s <= spot):
+                continue                      # 只要價外
+            if not (0 < _p <= OPT_PREMIUM_MAX):
+                continue                      # 只要 ≤16 元
+            _tmp.append((_s, _p, str(_cv)))
+        _best = {}
+        for _s, _p, _c in _tmp:
+            if _s not in _best or _p < _best[_s][1]:
+                _best[_s] = (_s, _p, _c)
+        return sorted(_best.values(), key=lambda x: -x[1])[:3]
+    except Exception as _e:
+        print(f"  ⚠️ 選擇權鏈解析失敗（{str(_e)[:40]}）→ 降級為距離推估")
+        return []
+
+
+def _opt_hint_if_window(current_price, signal_type):
+    """✅ (08032126) 週選擇權推薦【時窗守門】——取代原分散於各訊號點的重複判斷。
+    ・涵蓋週二~週五：週三選(週三結算)、週五選(週五結算) 及其【前一日】(週二/週四)。
+    ・日盤 09:05 ~ 13:30。★起始維持 09:05、嚴禁改 09:00：
+      剛開盤成交量暴增易造成報價 lag，此為主帥當初指定，不得擅改。
+    ・原設定僅 (週三,週五) 09:05~10:45 → 2026/07/17(週五) 中午大跌3000點時
+      訊號落在時窗外而漏發，本次擴展即為修正此缺口。
+    """
+    try:
+        _n = datetime.now(pytz.timezone('Asia/Taipei'))
+        if _n.weekday() not in (1, 2, 3, 4):      # 1=週二 2=週三 3=週四 4=週五
+            return ""
+        _m = _n.hour * 60 + _n.minute
+        if not (9 * 60 + 5 <= _m <= 13 * 60 + 30):
+            return ""
+        return get_weekly_option_hint(current_price, signal_type)
+    except Exception:
+        return ""
+
+
 def get_weekly_option_hint(current_price, signal_type):
     """
     根據當前台指期貨報價和訊號方向，推薦週選擇權履約價範圍
@@ -1550,27 +1652,25 @@ def get_weekly_option_hint(current_price, signal_type):
         _wd  = _now.weekday()  # 2=週三, 4=週五
         _date_str = _now.strftime('%m/%d')
 
-        # 到期日說明
+        # 到期日說明（✅08032126：補齊週二/週四＝結算日前一日）
         if _wd == 2:
-            _expiry = f"本週三（{_date_str}）到期週選擇權"
+            _expiry = f"本週三（{_date_str}）到期週選擇權（週三選）"
         elif _wd == 4:
-            _expiry = f"本週五（{_date_str}）到期週選擇權"
+            _expiry = f"本週五（{_date_str}）到期週選擇權（週五選）"
+        elif _wd == 1:
+            _expiry = f"明日週三到期週選擇權（今日{_date_str}為結算前一日）"
+        elif _wd == 3:
+            _expiry = f"明日週五到期週選擇權（今日{_date_str}為結算前一日）"
         else:
             _expiry = f"當日（{_date_str}）週選擇權"
 
-        # ATM 履約價（四捨五入至最近50點）
-        _atm = round(current_price / 50) * 50
+        _is_put    = (signal_type == 'sell')
+        _opt_type  = 'PUT' if _is_put else 'CALL'
+        _direction = '做空（buy PUT）' if _is_put else '做多（buy CALL）'
 
-        if signal_type == 'sell':
-            # 做空 → 建議 PUT：ATM和略低於ATM（讓put稍有時間價值但不太貴）
-            _strikes = [_atm, _atm - 50, _atm - 100]
-            _opt_type = 'PUT'
-            _direction = '做空（buy PUT）'
-        else:
-            # 做多 → 建議 CALL：ATM和略高於ATM
-            _strikes = [_atm, _atm + 50, _atm + 100]
-            _opt_type = 'CALL'
-            _direction = '做多（buy CALL）'
+        # ── ✅(08032126) 優先以【實際權利金 ≤16元】篩選（以小博大）──
+        _rows  = _fetch_option_chain()
+        _picks = _pick_strikes_by_premium(_rows, _is_put, current_price) if _rows else []
 
         _hint = (
             f"\n\n{'='*40}\n"
@@ -1578,15 +1678,25 @@ def get_weekly_option_hint(current_price, signal_type):
             f"{'='*40}\n"
             f"到期日：{_expiry}\n"
             f"台指現價：{current_price:.0f}\n"
-            f"建議標的：{_opt_type}\n"
-            f"建議履約價範圍（擇一，依市價決定）：\n"
+            f"建議標的：{_opt_type}（價外，以小博大）\n"
         )
-        for _s in _strikes:
-            _hint += f"  → {int(_s)} {_opt_type}\n"
+        if _picks:
+            _hint += f"\n★依【實際權利金】篩選（上限 {OPT_PREMIUM_MAX} 元）：\n"
+            for _s, _p, _c in _picks:
+                _hint += f"  → {int(_s)} {_opt_type}　權利金 {_p:g} 元" + (f"　[{_c}]" if _c else "") + "\n"
+            _hint += "（排序：最接近價平者優先＝結算落入價內機率較高）\n"
+        else:
+            _atm = round(current_price / 50) * 50
+            _strikes = ([_atm - 50, _atm - 100, _atm - 150] if _is_put
+                        else [_atm + 50, _atm + 100, _atm + 150])
+            _hint += (f"\n⚠️【未取得即時權利金報價】以下為【距離推估】，\n"
+                      f"　　尚【未驗證】是否 ≤{OPT_PREMIUM_MAX} 元，下單前請自行確認市價：\n")
+            for _s in _strikes:
+                _hint += f"  → {int(_s)} {_opt_type}（價外，權利金待確認）\n"
         _hint += (
-            f"\n⚠️ 進場條件（請在永豐金確認）：\n"
-            f"  ✅ 市價 ≤ 20 元\n"
-            f"  ✅ 當日最低價 ≥ 12 元（避免時間價值耗盡）\n"
+            f"\n⚠️ 進場原則（主帥定案）：\n"
+            f"  ✅ 進場權利金 ≤ {OPT_PREMIUM_MAX} 元；超過即不進場（歸零時損失過大）\n"
+            f"  ✅ 取價外選項，以小博大（便宜、行情到位可暴賺數十倍）\n"
             f"\n策略：建倉後不停損，持有至期貨5分K碰上/下軌反轉或結算"
         )
         return _hint
@@ -3606,11 +3716,9 @@ def main_task():
                     else:
                         send_gmail._futures_log.append(_now_ts)
                         # ✅ 05101133：週三/週五加入週選擇權推薦
-                        _wd_now = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).weekday()
-                        _hour_now = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).hour
-                        _min_now  = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).minute
-                        _in_opt_window = (_wd_now in (2,4)) and (9*60+5 <= _hour_now*60+_min_now <= 10*60+45)
-                        _opt_hint = get_weekly_option_hint(close, 'buy') if _in_opt_window else ""
+                        # ✅ 08032126：時窗由「週三/五 09:05~10:45」擴展為
+                        #    「週二~週五 09:05~13:30」，統一改用 _opt_hint_if_window 守門
+                        _opt_hint = _opt_hint_if_window(close, 'buy')
                         msg = (
                             f"☁️【雲端】⭐【期貨5分K買進訊號】⭐\n"
                             f"標的：{ticker}\n"
@@ -3634,11 +3742,8 @@ def main_task():
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
                     else:
                         send_gmail._futures_log.append(_now_ts)
-                        _wd_now2 = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).weekday()
-                        _hour_now2 = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).hour
-                        _min_now2  = __import__('datetime').datetime.now(__import__('pytz').timezone('Asia/Taipei')).minute
-                        _in_opt_window2 = (_wd_now2 in (2,4)) and (9*60+5 <= _hour_now2*60+_min_now2 <= 10*60+45)
-                        _opt_hint2 = get_weekly_option_hint(close, 'sell') if _in_opt_window2 else ""
+                        # ✅ 08032126：多方轉弱出場＝盤勢偏空 → 同步建議 buy PUT
+                        _opt_hint2 = _opt_hint_if_window(close, 'sell')
                         msg = (
                             f"☁️【雲端】🔔【期貨5分K平倉訊號】🔔\n"
                             f"標的：{ticker}\n"
@@ -3661,12 +3766,17 @@ def main_task():
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
+                        # ✅ 08032126【重大補漏】做空進場原本【完全沒有】週選擇權推薦，
+                        #    PUT 提示只掛在「平倉」訊號上 → 2026/07/17 大跌3000點當日
+                        #    即使在時窗內也不會建議 buy PUT。本次補上。
+                        _opt_hint3 = _opt_hint_if_window(close, 'sell')
                         msg = (
                             f"☁️【雲端】🔻【期貨5分K做空訊號】🔻\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林上軌：{boll_top:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↓）\n"
                             f"時間：{now_str_f}"
+                            + _opt_hint3
                         )
                         _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
@@ -3683,12 +3793,15 @@ def main_task():
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
+                        # ✅ 08032126【補漏】空方回補＝盤勢轉強 → 同步建議 buy CALL（多空雙向對稱）
+                        _opt_hint4 = _opt_hint_if_window(close, 'buy')
                         msg = (
                             f"☁️【雲端】🟢【期貨5分K平空回補】🟢\n"
                             f"標的：{ticker}\n"
                             f"收盤：{close:.2f}　布林下軌：{boll_bot:.2f}\n"
                             f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）\n"
                             f"時間：{now_str_f}"
+                            + _opt_hint4
                         )
                         _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補訊號{'已發送' if _ok else '發送失敗'}")
