@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '07040032'
+SCRIPT_VERSION = '08031637'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -3040,13 +3040,17 @@ def check_holdings_health():
 
             if _hits:
                 # ✅ (08031611)【防狼來了】只有【觸發出場條件】者才寫進信中
-                _alert_cnt += 1
-                _lines.append(
+                # ✅ (08031637)【計數順序修正】先把整行組好再計數：原為「先計數→後呼叫
+                #    _hh_snapshot」，若 _hh_snapshot 拋錯，計數已加卻又落入 except 計入失敗，
+                #    造成主旨與內文不符（截圖實證：主旨「示警2檔／持有9檔」但內文全為健檢失敗）。
+                _row = (
                     f"・{_name}{'（空單）' if _is_short else ''}　現價 {_px:,.2f}\n"
                     f"{_hh_snapshot(_im, '長期(月K)')}\n"
                     f"{_hh_snapshot(_iw, '中期(週K)')}\n"
                     f"　　👉 🔴 {_act}\n　　　　觸發：" + "；".join(_hits) + "\n"
                 )
+                _alert_cnt += 1
+                _lines.append(_row)
             else:
                 _ok_cnt += 1   # ✅ (08031611) 未觸發者不列入信中，僅計數（避免無效資訊稀釋警覺）
             print(f"  ✅ {_name} 健檢完成（{'示警' if _hits else '持有'}）")
