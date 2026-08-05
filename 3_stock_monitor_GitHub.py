@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08060130'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08060719'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -203,6 +203,22 @@ warnings.filterwarnings('ignore')
 import logging
 logging.getLogger('yfinance').setLevel(logging.CRITICAL)
 
+# ══════════════════════════════════════════════════════════════
+# ✅ (08060719) 台灣時間統一取用函式【時區bug根治】
+#   緣由：嘉義房租專案版AI 於 08/06 提供之「日期/時區 bug」教訓——
+#   裸用 datetime.now() 取的是【執行環境本地時間】，在 GitHub Actions 上就是 UTC。
+#   台灣 UTC+8，故 UTC 00:00~05:59 ＝ 台灣 08:00~13:59（正是台股交易時段），
+#   任何以「小時／日期／星期」做判斷的邏輯在雲端都會整組錯位。
+#   本專案 08/03 修的漲停追蹤深夜誤發即為此型；本次全專案稽核後統一改用本函式。
+#   ★注意：純粹計算「經過多久」(elapsed) 的快取TTL【刻意不改】——
+#     那些值與快取寫入端同源相減，改成 aware 反而會與 naive 相減而崩潰。
+# ══════════════════════════════════════════════════════════════
+def _now_tw():
+    """一律回傳台灣時間(Asia/Taipei)；嚴禁在日期/小時/星期判斷上裸用 datetime.now()。"""
+    return datetime.now(pytz.timezone('Asia/Taipei'))
+
+
+
 # ============================================================
 # 【３-1．下市風險預警模組（最高優先級）】
 # 每 DELISTING_CHECK_DAYS 天檢查一次，結果存入本地 JSON 快取
@@ -249,7 +265,7 @@ def get_delisting_risk(ticker):
             try:
                 from datetime import date as _date
                 d = _date.fromisoformat(str(delist_date))
-                days_left = (d - _date.today()).days
+                days_left = (d - _now_tw().date()).days   # ✅08060719 時區修正：原 _date.today() 在雲端取UTC，天數會差一天
                 if days_left >= 0:
                     msg = f"⚠️【第4階段警報】官方公告下市日期：{delist_date}（距今 {days_left} 天），請儘速處理！"
                 else:
@@ -2292,7 +2308,7 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
             # --- [修正 BUG：send_gmail 內文必須為格式化字串，不可傳入 Tuple] ---
             # ✅ 修正重複通知Bug：基金當天同標的只發1次
             _fund_key = f"基金_{fund_name}_BUY"
-            _today_f  = datetime.now().strftime("%Y-%m-%d")
+            _today_f  = _now_tw().strftime("%Y-%m-%d")   # ✅08060719 時區修正（同漲停追蹤那型）
             if _today_f not in notified: notified[_today_f] = []
             if notified[_today_f].count(_fund_key) >= 2:
                 print(f"🔕 {fund_name} 今日買進訊號已通知過，跳過")
@@ -2317,16 +2333,17 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
 # 【１２．防止觸發條件時反覆收到gmail通知】
 # ============================================================
 notified = load_notified()
-today = datetime.now().strftime("%Y-%m-%d")
+today = _now_tw().strftime("%Y-%m-%d")   # ✅08060719【高風險修正】notified去重主鍵，原在雲端取UTC日期
 
 if today not in notified:
     notified[today] = []  # ✅ 05101039修正：只新增今天的key，不覆蓋整個字典
 
 # ✅ v05231322：跨午夜保護（00:00-06:00視為前一個交易日，避免重複通知）
-_cur_hour = datetime.now().hour
+_cur_hour = _now_tw().hour   # ✅08060719【極高風險修正】原取UTC小時：UTC00-06＝台灣08:00-14:00(台股交易時段)，
+                             #   會在早盤誤啟動『跨午夜保護』把昨日通知記錄併入今日，使當天真訊號被判『已通知過』而靜音
 if _cur_hour < 6:
     from datetime import timedelta as _tdelta
-    _prev_day = (datetime.now()-_tdelta(days=1)).strftime("%Y-%m-%d")
+    _prev_day = (_now_tw()-_tdelta(days=1)).strftime("%Y-%m-%d")   # ✅08060719 時區修正
     if _prev_day in notified:
         notified[today] = list(set(notified.get(today,[]) + notified[_prev_day]))
 # ============================================================
@@ -2391,7 +2408,7 @@ def _export_scan_results(buy_signals, sell_signals, now_str):
     try:
         import json, csv
         from datetime import datetime as _dt
-        _date = _dt.now().strftime('%Y%m%d_%H%M')
+        _date = _now_tw().strftime('%Y%m%d_%H%M')   # ✅08060719 時區修正
         # 整理買進訊號
         _buy = [{'market':s[0],'code':s[1],'close':round(s[2],2),'rsi':round(s[3],1),
                  'boll':s[4],'conditions':str(s[5])} for s in buy_signals]
@@ -2405,7 +2422,7 @@ def _export_scan_results(buy_signals, sell_signals, now_str):
         # ✅ v05231340：停用JSON輸出，只保留CSV（JSON不方便複製代碼）
         # ✅ v05280820：CSV改為當日累計，同標的只出現1次（market+code去重）
         if _buy:
-            _date_only = datetime.now().strftime('%Y%m%d')  # 日期不含時間
+            _date_only = _now_tw().strftime('%Y%m%d')  # 日期不含時間 ✅08060719 時區修正
             _csv_path = f'scan_buy_{_date_only}.csv'
             _fields = ['market','code','close','rsi','boll','conditions']
             # 讀取今日既有資料（若已存在）
@@ -2428,7 +2445,7 @@ def _export_scan_results(buy_signals, sell_signals, now_str):
                 print(f'  ✅ CSV新增{len(_new_rows)}筆（跳過{len(_buy)-len(_new_rows)}筆重複）')
             else:
                 print(f'  ℹ️ CSV無新增（{len(_buy)}筆今日已記錄）')
-        print(f"\n📄 當日CSV：{'scan_buy_'+datetime.now().strftime('%Y%m%d')+'.csv' if _buy else '（無買進訊號）'}")
+        print(f"\n📄 當日CSV：{'scan_buy_'+_now_tw().strftime('%Y%m%d')+'.csv' if _buy else '（無買進訊號）'}")
         print(f"   📋 買進代碼（複製到eleader）：{' '.join(_buy_codes) if _buy_codes else '（無）'}")
     except Exception as _e:
         print(f"  ⚠️ 輸出CSV/JSON失敗：{_e}")
@@ -3403,7 +3420,7 @@ def main_task():
 
         # ── 週六全量掃描 OR 平日使用Firebase快取 ──────────────────
         # ✅ v05201555：週六強制全量1827支重掃（定期更新預篩清單）
-        _is_saturday_scan = (datetime.now().weekday() == 5) or (SCAN_TYPE == 'tw_full')
+        _is_saturday_scan = (_now_tw().weekday() == 5) or (SCAN_TYPE == 'tw_full')   # ✅08060719 時區修正：原取UTC星期
         _fb_cache = read_tw_prescreened()
         if not _is_saturday_scan and _fb_cache and len(_fb_cache.get('codes', [])) > 0:
             _cached_codes = _fb_cache['codes']
