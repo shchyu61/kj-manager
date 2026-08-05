@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08032126'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08060130'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -126,7 +126,9 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # 標的：台指（^TWII）；只做 buy call（不做空）；跳過第一二道、只跑第三道5分K V轉觸底翻揚
 # 防過頻：同一窗、同方向最多通知2次（主力煙霧彈/真發動順序會互換，故非1次）
 CONDW_TARGET         = '^TWII'
-CONDW_MAX_PER_WINDOW = 2       # 同一窗、同方向最多通知次數
+CONDW_MAX_PER_WINDOW = 2       # 同一窗、同方向最多通知次數（夜盤用）
+CONDW_MAX_DAY        = 3       # ✅08060130 日盤(09:05~13:30)獨立配額3次：日盤是主帥能實際下單、
+                               #   且週選結算日決勝的時段，值得多一次；夜盤維持2次避免深夜吵醒。
 CONDW_OWNER          = 'shchyu61@gmail.com'
 SCAN_MODE = 'mixed'   # 切換：'weekly' / 'daily' / 'mixed'
 _tw_prescreened = []   # 模組層級全域預篩清單（scan_stock 用 global 存取）
@@ -141,8 +143,11 @@ ELEADER_RSI_MAX      = 78     # eLeader基底條件：前根RSI需 < 此值才�
 
 # ── 【２-3】做多賣出策略（獲利了結）：截圖1、2條件 ─────────────
 # 最高價 >= 布林上緣 AND RSI下降 AND MACD柱縮小
-SELL_BOLL_TOLERANCE  = 1.00   # 布林上緣容忍度（1.00=嚴格貼上緣；0.97=上緣下方3%即觸發）
-COVER_BOLL_TOLERANCE = 1.00   # ✅ 07010514 做空回補：布林下緣容忍度（鏡像SELL_BOLL_TOLERANCE）
+SELL_BOLL_TOLERANCE  = 0.98   # ✅08060130 鏡像對稱修正：原1.00=必須真的碰到上軌(零容忍)，
+                              #   而多方 BUY_BOLL_TOLERANCE=1.02 允許下軌上方2%內 → 多空門檻嚴重不對稱，
+                              #   空方訊號極難觸發，違反本專案「做空＝多方策略鏡像」原則。
+                              #   改為0.98(上軌下方2%內即算近上軌)，與1.02完全對稱。若嫌訊號過多可改回1.00。
+COVER_BOLL_TOLERANCE = 1.02   # ✅08060130 鏡像對稱：回補為賣出之鏡像，比照 SELL 同等寬鬆(原1.00過嚴)
 
 # ── 【２-4】做多停損策略（預留，目前未啟用）────────────────────
 # 未來可在此新增停損條件，例如：
@@ -480,6 +485,13 @@ def get_active_markets():
             is_futures_time = True
         elif weekday == 4 and time_val <= 10*60+45:       # 週五10:45止
             is_futures_time = True
+
+    # ✅ 08060105【補齊上一輪未做完整之處】週選擇權多空推薦需涵蓋【日盤 09:05~13:30】。
+    #    原 is_futures_time 僅「週一12:50~週三11:30」＋夜盤窗，週四/週五日盤【完全不在內】，
+    #    導致 08032126 新增的週三/四/五日盤 cron 會被本閘門擋掉、等於沒有作用。
+    #    本次補齊：週二~週五 09:05~13:30 一律視為期貨掃描時段（起始09:05不可改09:00）。
+    if (not is_futures_time) and weekday in (1, 2, 3, 4) and (9*60+5 <= time_val <= 13*60+30):
+        is_futures_time = True
 
     if is_futures_time:
         active.append('FUTURES')  # 台指期5分K
@@ -2996,15 +3008,23 @@ def scan_condition_w():
         if not _buy:
             print('  ❌ 條件W：第三道5分K V轉觸底翻揚未成立，不進場'); return
         # ── 同窗同向最多2次：Firebase 2-slot 原子認領（跨cron行程）──
-        _today = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d')
+        _now_tw = datetime.now(pytz.timezone('Asia/Taipei'))
+        _today  = _now_tw.strftime('%Y-%m-%d')
+        # ✅ 08060105【配額分離·修 8/5 漏發】原本【日盤與夜盤共用】同一天的2個槽位：
+        #    夜盤(00:00~05:00)若已用掉2次，日盤09:05之後就會被判「本窗已達2次上限，靜音」
+        #    → 2026/08/05(週三)早盤急漲900點卻收不到 buy call 通知的可能主因。
+        #    改為【日盤(09:05~13:30) 與 夜盤 各自獨立2次配額】，互不排擠。
+        _tv_w  = _now_tw.hour * 60 + _now_tw.minute
+        _sess  = 'day' if (9*60+5 <= _tv_w <= 13*60+30) else 'night'
+        _max_slot = CONDW_MAX_DAY if _sess == 'day' else CONDW_MAX_PER_WINDOW   # ✅08060130 日盤3次/夜盤2次
         _sent_slot = None
-        for _slot in range(1, CONDW_MAX_PER_WINDOW + 1):
-            _claim = _claim_alert_firebase(f'condW_buycall_{wid}#{_slot}', _today)
+        for _slot in range(1, _max_slot + 1):
+            _claim = _claim_alert_firebase(f'condW_buycall_{wid}_{_sess}#{_slot}', _today)
             if _claim is True or _claim is None:   # 認領成功／無憑證(本地後援放行)
                 _sent_slot = _slot; break
             # _claim is False → 該slot已被認領，試下一slot
         if _sent_slot is None:
-            print(f'  ⚠️ 條件W：本窗做多已達{CONDW_MAX_PER_WINDOW}次上限，靜音'); return
+            print(f'  ⚠️ 條件W：本{_sess}時段做多已達{_max_slot}次上限，靜音'); return
         # ── 週選擇權履約價推薦 + Gmail ──
         _opt_hint = get_weekly_option_hint(close, 'buy')
         msg = (f"☁️【雲端】⭐【條件W 週選擇權做多進場】⭐（本窗第{_sent_slot}次）\n"
@@ -3196,6 +3216,85 @@ def check_holdings_health():
         print(f"📧 持股健檢示警已寄出（示警{_alert_cnt}／續抱{_ok_cnt}／失敗{_fail_cnt}）")
     except Exception as _e:
         print(f"⚠️ 持股健檢寄信失敗：{_e}")
+
+def scan_futures_15mk():
+    """✅ (08060105)【15分K 訊號】主帥指定新增（原系統只有5分K）。
+    ・緣由：2026/08/05(週三)09:45 主帥截圖之15分K已達成做多條件（MACD柱觸底V轉＋RSI↑），
+      但系統【根本沒有15分K這個資料來源】，結構上不可能觸發。
+    ・多空雙向：做多→建議 buy CALL；做空→建議 buy PUT（沿用 _opt_hint_if_window 時窗守門）。
+    ・回看根數【等比換算】(K棒等比換算原則)：5分K 54根 ＝ 4.5小時
+      → 15分K 為 54÷3 ＝【18根】，涵蓋相同時間長度，不可直接沿用54。
+    ・去重：同一根15分K棒、同方向【只發一次】，用 Firebase 原子佔位（跨cron行程安全）。
+    ・完全獨立於5分K流程：本函式任何例外都被吃掉，【不影響】既有5分K掃描與訊號。
+    """
+    try:
+        _n15 = max(3, int(round(BUY_LOOKBACK_5MK / 3)))    # 54根5分K → 18根15分K（等比換算）
+        for _tk in FUTURES_5MK_TARGETS:
+            try:
+                _df = _normalize_df(yf.download(_tk, period='5d', interval='15m', progress=False))
+                if _df is None or _df.empty or len(_df) < _n15 + 2:
+                    print(f'  ⚠️ 15分K：{_tk} 資料不足，跳過'); continue
+                _df = calc_indicators(_df)
+                if _df is None:
+                    print(f'  ⚠️ 15分K：{_tk} 指標計算失敗，跳過'); continue
+
+                _l = _df['Low']; _h = _df['High']
+                _bb = _df['boll_bot20']; _bt = _df['boll_top20']
+                _mh = _df['macd_hist'];  _rsi = _df['rsi14']
+                _close    = float(_df['Close'].iloc[-1])
+                _boll_bot = float(_bb.iloc[-1]); _boll_top = float(_bt.iloc[-1])
+                _r_now = float(_rsi.iloc[-1]); _r_prev = float(_rsi.iloc[-2])
+                _m_now = float(_mh.iloc[-1]);  _m_prev = float(_mh.iloc[-2])
+                _r_up   = _r_now > _r_prev;  _r_dn = _r_now < _r_prev
+                _m_up   = _m_now > _m_prev;  _m_dn = _m_now < _m_prev
+
+                # 多方：近18根任一最低價觸及布林下軌 AND 當根RSI↑ AND 當根MACD柱↑ AND 現價仍近下軌
+                _near_low  = (_l.iloc[-_n15:] <= _bb.iloc[-_n15:] * BUY_BOLL_TOLERANCE).any()
+                _buy  = (_near_low and _r_up and _m_up
+                         and _close <= _boll_bot * BUY_BOLL_TOLERANCE and _r_now > BUY_RSI_MIN)
+                # 空方鏡像：近18根任一最高價觸及布林上軌 AND RSI↓ AND MACD柱↓ AND 現價仍近上軌
+                _near_high = (_h.iloc[-_n15:] >= _bt.iloc[-_n15:] * SELL_BOLL_TOLERANCE).any()
+                _sell = (_near_high and _r_dn and _m_dn and _close >= _boll_top * SELL_BOLL_TOLERANCE)
+
+                if not (_buy or _sell):
+                    print(f"  ℹ️ {_tk} 15分K：RSI={_r_now:.1f}({'↑' if _r_up else '↓'})  "
+                          f"MACD柱={'↑' if _m_up else '↓'}  未達進出場條件")
+                    continue
+
+                _dir = 'buy' if _buy else 'sell'
+                # ── 去重：同一根15分K棒、同方向只發一次（Firebase 原子佔位）──
+                _bar = str(_df.index[-1])[:16].replace(' ', 'T')
+                _tw  = datetime.now(pytz.timezone('Asia/Taipei'))
+                _day = _tw.strftime('%Y-%m-%d')
+                _claim = _claim_alert_firebase(f'f15mk_{_tk}_{_dir}_{_bar}', _day)
+                if _claim is False:
+                    print(f'  🔕 15分K：{_tk} 本根({_bar}) {_dir} 已通知過，跳過'); continue
+
+                _now_str = _tw.strftime('%Y/%m/%d %H:%M')
+                _opt = _opt_hint_if_window(_close, _dir)
+                if _buy:
+                    _title = f"☁️【雲端】⭐【期貨15分K買進訊號】⭐"
+                    _body  = (f"{_title}\n標的：{_tk}\n"
+                              f"收盤：{_close:.2f}　布林下軌：{_boll_bot:.2f}\n"
+                              f"RSI：{_r_prev:.1f} → {_r_now:.1f}（↑）　MACD柱：{_m_prev:+.2f} → {_m_now:+.2f}（↑）\n"
+                              f"回看根數：{_n15} 根15分K（＝54根5分K等比換算）\n"
+                              f"時間：{_now_str}" + _opt)
+                    _sub = f"☁️【雲端】⭐期貨15分K買進 {_tk} - {_now_str}"
+                else:
+                    _title = f"☁️【雲端】🔻【期貨15分K做空訊號】🔻"
+                    _body  = (f"{_title}\n標的：{_tk}\n"
+                              f"收盤：{_close:.2f}　布林上軌：{_boll_top:.2f}\n"
+                              f"RSI：{_r_prev:.1f} → {_r_now:.1f}（↓）　MACD柱：{_m_prev:+.2f} → {_m_now:+.2f}（↓）\n"
+                              f"回看根數：{_n15} 根15分K（＝54根5分K等比換算）\n"
+                              f"時間：{_now_str}" + _opt)
+                    _sub = f"☁️【雲端】🔻期貨15分K做空 {_tk} - {_now_str}"
+                _ok = send_gmail(_sub, _body)
+                print(f"  {'✅' if _ok else '❌'} {_tk} 15分K {_dir} 訊號{'已發送' if _ok else '發送失敗'}")
+            except Exception as _e:
+                print(f'  ⚠️ 15分K：{_tk} 掃描異常（{str(_e)[:60]}）')
+    except Exception as _e:
+        print(f'  ⚠️ 15分K掃描整體異常（{str(_e)[:60]}）→ 不影響5分K掃描')
+
 
 def main_task():
     # 🔥 宣告 global 確保全域共用
@@ -3535,6 +3634,9 @@ def main_task():
         _mode_str = f'SCAN_MODE={SCAN_MODE}' if 'SCAN_MODE' in dir() else SCAN_MODE
         print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}')
         print(f'   持倉狀態：{_pos_str}　掃描模式：{_mode_str}')
+        # ✅ 08060105 新增：先跑15分K訊號（獨立流程，異常不影響下方5分K掃描）
+        print(f'\n📊 期貨15分K掃描：{FUTURES_5MK_TARGETS}')
+        scan_futures_15mk()
         for ticker in FUTURES_5MK_TARGETS:
             try:
                 # ══════════════════════════════════════════════
@@ -3664,7 +3766,7 @@ def main_task():
                 _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and macd_rising
                 # ✅ v06160503修復：near_lower/near_upper 原定義在使用之後(use-before-def)，上移至此
                 near_lower   = close  <= boll_bot * BUY_BOLL_TOLERANCE
-                near_upper   = close  >= boll_top * 1.00
+                near_upper   = close  >= boll_top * SELL_BOLL_TOLERANCE   # ✅08060130 原硬寫1.00，改用常數以維持多空對稱
                 # ✅ v05192313：5分K進場加入條件D（追高/追空）
                 _5mk_cond_D_long  = getattr(df5.iloc[-1],'rsi14',0) > getattr(df5.iloc[-2],'rsi14',0) and near_upper
                 _5mk_cond_D_short = getattr(df5.iloc[-1],'rsi14',0) < getattr(df5.iloc[-2],'rsi14',0) and near_lower
