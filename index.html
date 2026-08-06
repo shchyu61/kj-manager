@@ -214,7 +214,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v07130612</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v08061131</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1922,6 +1922,18 @@
             };
         };
 
+        // ✅ (08061131)【時區bug根治】本地日期字串工具
+        //   緣由：嘉義房租專案版AI 08/06 提供之同型 bug——toISOString() 回傳的是【UTC】，
+        //   台灣 UTC+8，故本地 00:00~07:59 轉 UTC 會落到【前一天】，slice(0,10) 必然錯一天。
+        //   本檔原用 new Date().toISOString().slice(0,10) 當 FinMind 抓資料的結束日，
+        //   家人/房客若在【清晨】開網頁診斷，會少抓一天、最後一根K棒停在昨天。
+        //   改用 getFullYear/getMonth/getDate（皆為本地時區）自行組字串，天生正確。
+        const _localYMD = (d) => {
+            d = d || new Date();
+            const m = d.getMonth() + 1, dd = d.getDate();
+            return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+        };
+
         // ✅ (07130612) 日K→週K/月K 重採樣【發現1修復】
         //    FinMind（台股TaiwanStockPrice／美股USStockPrice）僅提供日K，且原程式忽略 _iv，
         //    導致「月K長期」「週K中期」實際都在日K上計算 → 與本機/雲端版(.py用真月K/週K)策略不一致。
@@ -1994,11 +2006,11 @@
             if (isTW) {
                 // ✅ 台股改用 FinMind（完全支援CORS，不需Proxy）
                 // Token使用全域 _FM_TOKEN
-                const _today = new Date().toISOString().slice(0,10);
+                const _today = _localYMD();   // ✅08061131 時區修正：原 toISOString() 在台灣清晨會取到前一天
                 // ✅ (07130612) 依週期取足夠日K供重採樣：月K需5年、週K需2年、其餘150天
                 //    （原註解誤寫「800天前」、實際為150天，本次一併更正）
                 const _days  = _iv === '1mo' ? 1825 : _iv === '1wk' ? 730 : 150;
-                const _start = new Date(Date.now() - _days*24*60*60*1000).toISOString().slice(0,10);
+                const _start = _localYMD(new Date(Date.now() - _days*24*60*60*1000));   // ✅08061131 時區修正
                 // ✅ FinMind台股：統一用日K（TaiwanStockPrice），欄位：open/max/min/close
                 const _fmUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${code}&start_date=${_start}&end_date=${_today}&token=${window._FM_TOKEN}`;
                 const _fmResp = await fetch(_fmUrl, {signal: AbortSignal.timeout(15000)});
@@ -2026,10 +2038,10 @@
                 if (!_isCrypto && !_isIndex) {
                     try {
                         // Token使用全域 _FM_TOKEN
-                        const _today2 = new Date().toISOString().slice(0,10);
+                        const _today2 = _localYMD();   // ✅08061131 時區修正
                         // ✅ (07130612) 美股與台股同源問題：FinMind亦僅提供日K，需取足夠天數供重採樣
                         const _days2  = _iv === '1mo' ? 1825 : _iv === '1wk' ? 730 : 150;
-                        const _start2 = new Date(Date.now() - _days2*24*60*60*1000).toISOString().slice(0,10);
+                        const _start2 = _localYMD(new Date(Date.now() - _days2*24*60*60*1000));   // ✅08061131 時區修正
                         const _fmUs = `https://api.finmindtrade.com/api/v4/data?dataset=USStockPrice&data_id=${code}&start_date=${_start2}&end_date=${_today2}&token=${window._FM_TOKEN}`;
                         const _fdUs = await (await fetch(_fmUs, {signal: AbortSignal.timeout(15000)})).json();
                         if (_fdUs.data && _fdUs.data.length >= 10) {
@@ -3462,7 +3474,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 var _gnEl=document.getElementById('calc-gmail-notify');
                                 if(_gnEl && _gnEl.value==='on'){
                                     await initFirebaseAuth();
-                                    var _ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+                                    var _d0=new Date(), _p=(n)=>(n<10?'0':'')+n;
+                                    var _ts=_localYMD(_d0)+'T'+_p(_d0.getHours())+'-'+_p(_d0.getMinutes())+'-'+_p(_d0.getSeconds());   // ✅08061131 時區修正：檔名日期原用UTC，台灣清晨會標成前一天
                                     var _pgRef=doc(window.db,'artifacts',window.appId,'public','pending_gmail_'+_ts+'_'+_c);
                                     await setDoc(_pgRef,{
                                         ticker:_c, signal:'BUY', price:_r.close,
