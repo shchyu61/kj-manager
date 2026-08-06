@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08061155'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08060719'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -15,19 +15,6 @@ KLINE_CACHE_FILE = '6_kline_cache.pkl'   # 跨輪快取檔（程式自動產生�
 five_min_cache = {}  # ✅ 新增 5 分鐘 K 線快取容器
 # ✅ (點1) 06221854：個股「最後一根K棒收盤價」即時補更總開關＋現價快取
 REALTIME_LAST_BAR = True   # True=月K/週K/日K最後一根用即時５m現價覆蓋（盤中即時）；API負載過重可設False停用
-RT_PREFETCH_CHUNK    = 100   # ✅08061155 即時價批次預抓每批支數（1827支約19批，取代原逐支抓取）
-LIMIT_UP_MAX_SCAN    = 20    # ✅08061155 漲停追蹤每輪最多掃描支數（主帥指定先設20支觀察負荷）
-# ✅08061155 漲停追蹤優先序：以台灣大型權值股（0050成分股近似清單）為主，其餘依原順序遞補。
-#   ★此為近似清單、非官方即時成分股（0050每季調整），僅作「優先排序」用途，
-#     排錯不會漏掃、只影響先後順序；主帥可自行增刪。若20支不夠用，
-#     可調高 LIMIT_UP_MAX_SCAN，或在本清單後方續增前100/150大市值與熱門股代碼。
-TW_LARGE_CAP_PRIORITY = [
-    '2330','2317','2454','2308','2382','2881','2882','2891','2412','2303',
-    '3711','1216','2886','2884','2885','2892','5880','2357','3231','2345',
-    '3034','3008','2379','3037','6669','3661','2207','1301','1303','1326',
-    '6505','2002','2603','2609','2615','2912','3045','4904','4938','5871',
-    '2883','2887','2890','2880','1101','1102','2105','9910','6415','2409',
-]
 _rt_price_cache = {}        # 每ticker每輪只抿一次即時現價，避免重複API
 DELISTING_CHECK_DAYS = 1  # 每1天重新查詢（避免誤快取）（3天兼顧效能與即時性，可改1~7）
 DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
@@ -210,7 +197,6 @@ import json
 import os
 
 weekly_cache = {} # 長期投資月K快取（原週K，v05170856改月K）
-_rt_price_map = {}  # ✅08061155 即時價對照表 {ticker: 現價}，由 prefetch_realtime_prices() 批次填入
 daily_cache  = {} # 中期投資週K快取（原日K，v05170856改週K）
 
 warnings.filterwarnings('ignore')
@@ -789,52 +775,6 @@ def _patch_ref_realtime(df, px):
     except Exception:
         pass
     return df
-
-def prefetch_realtime_prices(tickers, label=''):
-    """✅ (08061155)【(點1) 即時補更恢復】批次預抓各標的即時現價。
-    ・背景：06240532 方案B 為降負荷，把 gate1/2 的即時化整個關閉（_rt_px 恆為 None），
-      使月K/週K/日K 第一關實際採用【收盤資料、而非盤中即時價】——盤中訊號因此可能延遲。
-      主帥 2026/08/06 決定恢復，但不得重蹈「1827支各抓一次5分K」的負荷覆轍。
-    ・做法：改用 yfinance【批次下載】，一次抓一整批（預設100支）當日5分K，
-      只取每支最後一根收盤價 → API 呼叫次數由約1827次降為約19次。
-    ・容錯：任一批失敗只影響該批（退回非即時），不中斷掃描、不影響訊號發送；
-      整體異常亦只是全部退回原本的非即時行為，等同關閉本功能。
-    ・REALTIME_LAST_BAR=False 可一鍵停用，完全還原 08060719 行為。
-    """
-    global _rt_price_map
-    _rt_price_map = {}
-    if not REALTIME_LAST_BAR or not tickers:
-        return
-    try:
-        _ts = [t for t in tickers if t]
-        if not _ts:
-            return
-        _batches = (len(_ts) + RT_PREFETCH_CHUNK - 1) // RT_PREFETCH_CHUNK
-        _ok = 0
-        for _bi in range(_batches):
-            _batch = _ts[_bi * RT_PREFETCH_CHUNK:(_bi + 1) * RT_PREFETCH_CHUNK]
-            try:
-                _df = yf.download(_batch, period='1d', interval='5m',
-                                  progress=False, group_by='ticker', threads=True)
-                if _df is None or len(_df) == 0:
-                    continue
-                for _t in _batch:
-                    try:
-                        _sub = _df[_t] if len(_batch) > 1 else _df
-                        _c = _sub['Close'].dropna()
-                        if len(_c) > 0:
-                            _px = float(_c.iloc[-1])
-                            if _px > 0:
-                                _rt_price_map[_t] = _px
-                                _ok += 1
-                    except Exception:
-                        continue
-            except Exception as _e:
-                print(f'  ⚠️ 即時價批次 {_bi+1}/{_batches} 失敗（{str(_e)[:40]}）→ 該批退回非即時')
-        print(f'  ⚡ {label}即時價預抓：{_ok}/{len(_ts)} 支成功（共 {_batches} 批，取代逐支抓取）')
-    except Exception as _e:
-        print(f'  ⚠️ 即時價預抓整體異常（{str(_e)[:40]}）→ 全部退回非即時（不影響掃描）')
-
 
 def _patch_last_close(df, px):
     """✅ (點1) 用即時現價覆蓋df最後一根K棒收盤價（不改interval/根數）。"""
@@ -1827,9 +1767,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 
         # ── 共用：抓取週K（第一道 or 賣出判斷用）────────────────
         # ✅ (點1) 個股即時現價：盤中用５m最後一根，補更月K/週K/日K最後一根收盤
-        # ✅08061155【(點1) 即時補更恢復】改由批次預抓表取值（零額外API呼叫）：
-        #   06240532 曾因負荷而恆設 None，使第一關實際使用收盤價而非盤中即時價。
-        _rt_px = _rt_price_map.get(ticker)
+        _rt_px = None   # ✅(點1-B 06240532) gate1/2不抽5m不即時(省負荷)，即時化移到gate3重用既有5m
         df_w = get_stock_data(ticker, period='5y', interval='1mo', cache=weekly_cache)  # ✅ v05170856 長期投資改月K
         if df_w is None or len(df_w) < 30: return None
         _patch_last_close(df_w, _rt_px)   # ✅ (點1) 月K最後一根即時補更
@@ -2240,12 +2178,7 @@ def scan_limit_up():
         _limit_up = []
         print(f"  掃描 {len(_tw_codes)} 支預篩台股是否漲停...")
 
-        # ✅08061155【主帥指定】上限由50支改為 LIMIT_UP_MAX_SCAN(=20)，並改為【大型權值股優先】：
-        #   預篩清單原本沒有市值排序，直接取前50支等於隨機取樣；
-        #   改以 TW_LARGE_CAP_PRIORITY（0050成分股近似清單）排序，大型股先掃、其餘遞補。
-        _pri = {c: i for i, c in enumerate(TW_LARGE_CAP_PRIORITY)}
-        _tw_codes = sorted(_tw_codes, key=lambda t: _pri.get(str(t).split('.')[0], 9999))
-        for _ticker in _tw_codes[:LIMIT_UP_MAX_SCAN]:  # 主帥指定先設20支觀察負荷
+        for _ticker in _tw_codes[:50]:  # 限制最多50支，避免API過載
             try:
                 _info = _yf.Ticker(_ticker).fast_info
                 _prev = getattr(_info, 'previous_close', None)
@@ -3508,7 +3441,6 @@ def main_task():
         _tw_prescreened = []
         _prescreened_ind = {}  # ✅ 05041037
 
-        prefetch_realtime_prices(tw_list, '台股')   # ✅08061155 批次預抓即時價
         for i, ticker in enumerate(tw_list):
             if (i+1) % 50 == 0:
                 print(f'  進度：{i+1}/{total_tw}...')
@@ -3595,7 +3527,6 @@ def main_task():
         _us_market_warn     = _dji_mkt['warn']
 
         print(f'\n📊 美股掃描：共{len(US_STOCKS)}支')
-        prefetch_realtime_prices(US_STOCKS, '美股')   # ✅08061155 批次預抓即時價
         for ticker in US_STOCKS:
             is_holding = ticker in HOLDINGS_US
             if SCAN_MODE == 'mixed':
@@ -3663,7 +3594,6 @@ def main_task():
         print('\n📊 虛擬幣：非交易時段，跳過')
     else:
         print(f'\n📊 虛擬幣掃描：共{len(CRYPTO_LIST)}支')
-        prefetch_realtime_prices(CRYPTO_LIST, '虛擬幣')   # ✅08061155 批次預抓即時價
         for ticker in CRYPTO_LIST:
             is_holding = ticker in HOLDINGS_CRYPTO
             if SCAN_MODE == 'mixed':
@@ -3693,7 +3623,6 @@ def main_task():
         print('\n📊 外匯：非交易時段，跳過')
     else:
         print(f'\n📊 外匯掃描：共{len(FX_LIST)}支（做多+做空）')
-        prefetch_realtime_prices(FX_LIST, '外匯')   # ✅08061155 批次預抓即時價
         for ticker in FX_LIST:
             is_holding = ticker in HOLDINGS_FX
             if SCAN_MODE == 'mixed':
