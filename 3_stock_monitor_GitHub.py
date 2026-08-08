@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08090115'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08090225'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -268,7 +268,7 @@ def get_delisting_risk(ticker):
     回傳 (is_at_risk: bool, msg: str)
     每 DELISTING_CHECK_DAYS 天才重新向 Yahoo Finance 查詢一次，其餘時間讀本地快取。
     """
-    now = datetime.now()
+    now = datetime.now()  # ⏱️elapsed快取TTL用，非日期/星期判斷 → 時區無關（08090225 依自檢(5)逐筆確認）
 
     # 1. 讀取本地快取
     delisting_cache = {}
@@ -367,7 +367,7 @@ def get_cash_delivery_set():
         return set()
     from datetime import datetime as _dt
     import time as _time
-    now = _dt.now()
+    now = _dt.now()  # ⏱️elapsed快取TTL用，非日期/星期判斷 → 時區無關（08090225 依自檢(5)逐筆確認）
     with _cash_delivery_lock:
         if _cash_delivery_cache['ts'] is not None:
             elapsed = (now - _cash_delivery_cache['ts']).total_seconds() / 3600
@@ -2596,7 +2596,7 @@ def check_financial_health_finmind(stock_id):
     """✅ v05170954：FinMind財務篩選 流動比率>1.5"""
     global _finmind_cache
     from datetime import datetime as _dt,timedelta as _td
-    now=_dt.now()
+    now=_dt.now()  # ⏱️elapsed快取TTL用，非日期/星期判斷 → 時區無關（08090225 依自檢(5)逐筆確認）
     if stock_id in _finmind_cache:
         c=_finmind_cache[stock_id]
         if (now-c['ts']).total_seconds()/3600<168: return c['pass']
@@ -2635,7 +2635,7 @@ def check_institutional_buying(stock_id):
     global _finmind_cache
     from datetime import datetime as _dt, timedelta as _td
     _cache_key = f'inst_{stock_id}'
-    now = _dt.now()
+    now = _dt.now()  # ⏱️elapsed快取TTL用，非日期/星期判斷 → 時區無關（08090225 依自檢(5)逐筆確認）
     if _cache_key in _finmind_cache:
         c = _finmind_cache[_cache_key]
         if (now - c['ts']).total_seconds() / 3600 < 24: return c['data']
@@ -2720,7 +2720,7 @@ def check_tdcc_holder_trend(stock_id):
     """
     global _finmind_cache
     from datetime import datetime as _dt,timedelta as _td
-    _ck=f'tdcc_{stock_id}'; now=_dt.now()
+    _ck=f'tdcc_{stock_id}'; now=_dt.now()  # ⏱️elapsed快取TTL用，非日期/星期判斷 → 時區無關（08090225 依自檢(5)逐筆確認）
     if _ck in _finmind_cache:
         c=_finmind_cache[_ck]
         if (now-c['ts']).total_seconds()/3600<168: return c['data']
