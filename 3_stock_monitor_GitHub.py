@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08090829'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08091258'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -70,6 +70,19 @@ TEST_MODE = False   # 切換：False / True / '5mk'
 # 通知對象：僅 shchyu61@gmail.com（本人專屬，家人親友不適用）
 FUTURES_5MK_TARGETS  = ['^TWII']   # 期貨標的（可加入 'TXFF' 等）
 FUTURES_5MK_INTERVAL = 300         # 每300秒（5分鐘）掃描一次
+# ✅08091258【🔴B(a) 查證後的真正問題】期貨K棒「陳舊資料」防護
+# ┌─ 決策註記：為何需要這道防護（清單條目 F-07）──────────────────────────
+# │ 現況：期貨5分K與條件W 的第三道關卡，資料來源是 yf.download('^TWII', '5m')。
+# │ ★但 ^TWII 是【加權指數】，只在 09:00~13:30 交易，【夜盤完全沒有資料】。
+# │ 於是夜盤（15:00~次日05:00）執行掃描時，yfinance 會回傳當日日盤的舊K棒，
+# │ 程式仍照常拿 iloc[-1] / iloc[-2] 判斷「V轉」——判的是【白天收盤前那兩根】。
+# │ 例：週二 22:15 掃描，實際比對的是週二 13:20 與 13:25 兩根，已陳舊 9 小時。
+# │ 而且每 5 分鐘掃一次都會得到相同結果 → 同一組陳舊K棒被反覆判定成立，
+# │ 這正是當初需要 CONDW_MAX_PER_WINDOW 配額壓制的深層原因。
+# │ ★本防護：K棒過舊即【不進場】，寧可漏訊號也不發假訊號（狼來了原則）。
+# │ ★取不到K棒時間時【不阻擋】（回傳 None），避免防護本身造成漏訊號。
+# └──────────────────────────────────────────────────────────────────────
+FUT_BAR_MAX_AGE_MIN  = 15    # 最後一根5分K超過此分鐘數即視為陳舊，不進場
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 _futures_is_holding = False   # ✅ 07031936 正式宣告為模組全域(取代原dir()守門)
 _holdings_sent = False        # ✅ (07130626) 持股每日健檢：本次執行是否已寄出(防迴圈重複寄)
@@ -284,6 +297,100 @@ logging.getLogger('yfinance').setLevel(logging.CRITICAL)
 def _now_tw():
     """一律回傳台灣時間(Asia/Taipei)；嚴禁在日期/小時/星期判斷上裸用 datetime.now()。"""
     return datetime.now(pytz.timezone('Asia/Taipei'))
+
+
+# ============================================================
+# 【期貨K棒新鮮度防護 + 期交所台指期即時對照】✅08091258
+# ============================================================
+def _bar_age_minutes(df):
+    """回傳「最後一根K棒距今幾分鐘」。取不到時回 None（＝不阻擋）。
+    ★時區處理：df.index 若帶時區一律轉為台灣時間後再比較，
+      避免 GitHub Actions（UTC）與台灣時間相差8小時造成誤判（歷史地雷）。
+    """
+    try:
+        # ★索引必須是時間型，否則不可計算年齡。
+        #   實測抓到的漏洞：若 index 是 0,1,2 這種序號，pd.Timestamp(2) 會被當成
+        #   「1970年起算2奈秒」而算出 2900 萬分鐘 → 防護反而把所有訊號全擋掉。
+        if not isinstance(df.index, pd.DatetimeIndex):
+            return None
+        _ts = pd.Timestamp(df.index[-1])
+        if _ts.tz is not None:
+            _ts = _ts.tz_convert('Asia/Taipei').tz_localize(None)
+        _now = _now_tw().replace(tzinfo=None)
+        return (_now - _ts.to_pydatetime()).total_seconds() / 60.0
+    except Exception:
+        return None
+
+
+def _bar_too_old(df, label):
+    """K棒是否過舊。過舊回 True 並印出原因；取不到時間一律回 False（不阻擋）。"""
+    _age = _bar_age_minutes(df)
+    if _age is None:
+        return False
+    if _age > FUT_BAR_MAX_AGE_MIN:
+        print(f'  ⛔ {label}：最後一根5分K已陳舊 {_age:.0f} 分鐘'
+              f'（上限 {FUT_BAR_MAX_AGE_MIN} 分）→ 不進場')
+        print('     原因：^TWII 加權指數僅 09:00~13:30 有資料，夜盤無報價；'
+              '此時判斷會用到白天的舊K棒。')
+        return True
+    return False
+
+
+def _taifex_index_snapshot():
+    """由期交所 MIS 取得【臺指現貨】與【臺指期近月】即時報價，供對照顯示。
+    ★用途限定為「顯示與對照」，不參與進場判斷——因為 MIS 只有即時快照、
+      沒有5分K歷史，與 ^TWII 的K棒序列不可混用（兩者價位相差約100~200點，
+      混用會使布林通道位階整組偏移而製造假訊號）。
+    ★失敗即回 None，絕不影響訊號發送。
+    """
+    try:
+        import requests as _req
+        _r = _req.post(OPT_MIS_URL,
+                       json={"MarketType": "0", "SymbolType": "F", "KindID": "1",
+                             "CID": "TXF", "ExpireMonth": "", "RowSize": "全部",
+                             "PageNo": "", "SortColumn": "", "AscDesc": "A"},
+                       timeout=OPT_MIS_TIMEOUT,
+                       headers={'Referer': OPT_MIS_REFERER,
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        if _r.status_code != 200:
+            return None
+        _ql = ((_r.json() or {}).get('RtData') or {}).get('QuoteList') or []
+        _spot = _fut = _ftime = None
+        for _q in _ql:
+            if not isinstance(_q, dict):
+                continue
+            _nm = str(_q.get('DispCName', ''))
+            try:
+                _px = float(str(_q.get('CLastPrice', '')).replace(',', ''))
+            except Exception:
+                continue
+            if _px <= 0:
+                continue
+            if '現貨' in _nm and _spot is None:
+                _spot = _px
+            elif '期' in _nm and _fut is None:      # 清單首檔期貨＝近月
+                _fut = _px
+                _ftime = str(_q.get('CTime', ''))
+        if _fut is None:
+            return None
+        return {'spot': _spot, 'fut': _fut, 'time': _ftime,
+                'basis': (None if _spot is None else _fut - _spot)}
+    except Exception:
+        return None
+
+
+def _taifex_hint_text():
+    """組出可附在通知信/log 的台指期即時對照字串；取不到回空字串。"""
+    _s = _taifex_index_snapshot()
+    if not _s:
+        return ''
+    _t = f"　台指期近月（期交所即時）：{_s['fut']:.0f}"
+    if _s.get('spot') is not None:
+        _t += f"　加權指數：{_s['spot']:.0f}　基差：{_s['basis']:+.0f}"
+    if _s.get('time'):
+        _t += f"　報價時間：{_s['time']}"
+    return _t
+
 
 
 
@@ -3194,6 +3301,11 @@ def scan_condition_w():
         df5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
         if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
             print('  ⚠️ 條件W：5分K資料不足，跳過'); return
+        if _bar_too_old(df5, '條件W'):
+            _h = _taifex_hint_text()
+            if _h:
+                print(f'  ℹ️ 供參考：{_h.strip()}')
+            return
         df5 = calc_indicators(df5)
         if df5 is None:
             print('  ⚠️ 條件W：指標計算失敗，跳過'); return
@@ -3942,6 +4054,11 @@ def main_task():
                 df5 = _normalize_df(yf.download(ticker, period='5d', interval='5m', progress=False))
                 if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
                     print(f'  ⚠️ {ticker} 5分K資料不足（需>={BUY_LOOKBACK_5MK+2}根），跳過')
+                    continue
+                if _bar_too_old(df5, f'{ticker} 期貨5分K'):
+                    _h = _taifex_hint_text()
+                    if _h:
+                        print(f'  ℹ️ 供參考：{_h.strip()}')
                     continue
                 df5 = calc_indicators(df5)
                 if df5 is None:
