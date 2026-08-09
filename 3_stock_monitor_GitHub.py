@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08091324'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08092144'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -83,6 +83,57 @@ FUTURES_5MK_INTERVAL = 300         # 每300秒（5分鐘）掃描一次
 # │ ★取不到K棒時間時【不阻擋】（回傳 None），避免防護本身造成漏訊號。
 # └──────────────────────────────────────────────────────────────────────
 FUT_BAR_MAX_AGE_MIN  = 15    # 最後一根5分K超過此分鐘數即視為陳舊，不進場
+# ✅08091843【主帥 08/09 14:37 定案】買/賣訊號彙整信的通知額度【日盤與夜盤各自獨立】
+# ┌─ 決策註記：SIGNAL_MAX_PER_SESSION（清單條目 F-10）────────────────────
+# │ 主帥原話：「改成每日的日盤2次，每日的夜盤2次。我一收到通知信，就迅速在
+# │ 3分鐘內手機登入app下單進場（也可能用筆電），避免錯過大賺行情。」
+# │ ★問題：原本額度以「整天」計，同一支標的一天只有2次。
+# │   台股22:35 也有全量掃描（證交所20:00後更新資料），虛擬幣/外匯更是24小時，
+# │   夜盤若先用掉2次，隔天日盤就被靜音 → 與 8/5 漏發900點完全同型的風險。
+# │ ★時段界線刻意比條件W 寬（條件W 是 09:05~13:30）：
+# │   全量掃描一輪可達45分鐘，若用送信當下時間判定，12:50 那輪常在13:35才送出，
+# │   會被誤判成夜盤。故日盤採 08:00~15:00，涵蓋掃描耗時。
+# └──────────────────────────────────────────────────────────────────────
+# ✅08092144【主帥 08/09 21:44 修正前令】原訂日盤2次/夜盤2次，改為與條件W 一致：
+#   主帥原話：「既然條件W是日盤3次/夜盤2次，那 gmail 通知信通知我進場
+#   理應也要是日盤3次/夜盤2次才合理。」
+#   日盤多一次的理由（沿用08060130）：日盤是主帥能實際下單的時段，值得多一次；
+#   夜盤維持2次避免深夜打擾。
+SIGNAL_MAX_DAY       = 3   # 買/賣訊號：同標的同方向，日盤最多通知次數
+SIGNAL_MAX_NIGHT     = 2   # 買/賣訊號：同標的同方向，夜盤最多通知次數
+SIGNAL_DAY_START_MIN   = 8*60    # 日盤起 08:00（台灣時間）
+SIGNAL_DAY_END_MIN     = 15*60   # 日盤迄 15:00（台灣時間）
+
+# ✅08091843【🔴B(a) 第二段·階段一】台指期5分K【快照累積器】
+# ┌─ 決策註記：TXF_BAR_ENABLED（清單條目 F-11）──────────────────────────
+# │ 背景：期交所 MIS 只提供【即時快照】，不提供5分K歷史；Yahoo 無台指期分鐘K。
+# │ 主帥 08/09 定案採【乙案】：由程式自行累積 MIS 快照，建立自己的K棒序列。
+# │ ★階段一（本輪）：只累積、只回報，【不接入任何進場判斷】。
+# │   理由：資料要累積數小時才夠算布林/RSI/MACD；在資料品質未經驗證前
+# │   就接進判斷，等於用未驗證資料下單，違反鐵律R-05。
+# │ ★階段二（後續）：資料足量且經主帥確認後，才評估是否接入第三道關卡。
+# │ ★已知限制（必須誠實記錄，不得在階段二忘記）：
+# │   快照式K棒只有「取樣當下的價」，沒有棒內真實的最高/最低價。
+# │   深夜 cron 為每15分鐘一次，會有缺口。這兩點決定它【不能等同真實5分K】。
+# └──────────────────────────────────────────────────────────────────────
+TXF_BAR_ENABLED      = True  # 台指期5分K快照累積器總開關
+TXF_BAR_KEEP         = 120   # Firestore 只保留最近N根，避免文件無限膨脹
+
+# ✅08092108【🆕E】台股白天極端異動：由「收盤後才知道」改為【盤中即時偵測】
+# ┌─ 決策註記：TW_INTRADAY_EXTREME_ENABLED（清單條目 F-12）───────────────
+# │ 原設計：check_tw_daytime_extreme() 取 ^TWII【日K】，
+# │   而日K要收盤後才定形 → 主帥【收盤後才知道今天大漲/大跌750點】，
+# │   等於錯過整段可以進場的行情。這與 8/5 漏發 buy call 是同型損失。
+# │ 本次新增：盤中每5分鐘用【當下現價 vs 昨收】判斷，達門檻立即通知。
+# │ ★資料來源優先序（遵守鐵律AF3：不得混用不同標的的價格序列）：
+# │   ①期交所 MIS【臺指現貨】＝加權指數即時值（首選，與昨收同為加權指數，可直接相減）
+# │   ②^TWII 5分K 最後一根收盤（備援，需通過 _bar_too_old 陳舊檢查）
+# │   ★嚴禁改用【臺指期】現價與加權指數昨收相減——兩者相差百餘點，會虛增漲跌幅。
+# │ ★執行時段限台灣 09:00~13:35（台股交易時段），非此時段直接跳過。
+# └──────────────────────────────────────────────────────────────────────
+TW_INTRADAY_EXTREME_ENABLED = True   # 盤中即時極端異動偵測總開關
+TW_EXTREME_PTS              = 750    # 門檻點數（沿用原值，與夜盤同幅度）
+TW_CLOSE_CONFIRM_ENABLED    = False  # ✅08092144 收盤後的「收盤確認」信：主帥指示關閉
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 _futures_is_holding = False   # ✅ 07031936 正式宣告為模組全域(取代原dir()守門)
 _holdings_sent = False        # ✅ (07130626) 持股每日健檢：本次執行是否已寄出(防迴圈重複寄)
@@ -688,6 +739,189 @@ def get_active_markets():
         active.append('FUTURES')  # 台指期5分K
 
     return active
+
+def _signal_session():
+    """✅08091843 判定買/賣訊號目前屬【日盤】或【夜盤】（台灣時間）。
+    日盤 08:00~15:00，其餘為夜盤。界線比條件W(09:05~13:30)寬，
+    因為全量掃描一輪可達45分鐘，以送信當下時間判定會跨出台股交易時段。
+    """
+    try:
+        _n = _now_tw()
+        _tv = _n.hour * 60 + _n.minute
+        return 'day' if (SIGNAL_DAY_START_MIN <= _tv < SIGNAL_DAY_END_MIN) else 'night'
+    except Exception:
+        return 'day'
+
+
+_txf_acc_done = False   # 本次行程是否已累積過（避免同一輪重複寫入）
+
+
+def accumulate_txf_bar():
+    """✅08091843【🔴B(a) 階段一】把期交所台指期即時快照累積成自建5分K序列。
+    ★只累積與回報，不參與任何進場判斷（見 TXF_BAR_ENABLED 決策註記）。
+    ★儲存於 Firestore（GitHub Actions 每輪檔案系統會重置，本地檔無法跨輪保存）。
+    ★任何失敗都只印訊息並回傳 False，絕不影響掃描與通知。
+    """
+    global _txf_acc_done
+    if (not TXF_BAR_ENABLED) or _txf_acc_done:
+        return False
+    _txf_acc_done = True
+    try:
+        _snap = _taifex_index_snapshot()
+        if not _snap or not _snap.get('fut'):
+            print('  ⏭️ 台指期K棒累積：取不到即時快照，本輪略過')
+            return False
+        _px = float(_snap['fut'])
+
+        import json as _json, os as _os, requests as _req
+        _cred = _os.environ.get(FIREBASE_CRED_ENV)
+        if not _cred:
+            _cf = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if _os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as _f:
+                    _cred = _f.read()
+        if not _cred:
+            print('  ⏭️ 台指期K棒累積：無 Firebase 憑證，本輪略過（不影響掃描）')
+            return False
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(
+            _json.loads(_cred), scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}"
+                f"/public/txf_5m_bars")
+        _hdr = {"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"}
+
+        _bars = []
+        try:
+            _g = _req.get(_url, headers=_hdr, timeout=15)
+            if _g.status_code == 200:
+                _raw = ((_g.json() or {}).get('fields') or {}).get('bars', {}).get('stringValue', '')
+                if _raw:
+                    _bars = _json.loads(_raw)
+        except Exception:
+            _bars = []                      # 讀不到就從空的開始，不中斷
+
+        # 以台灣時間對齊到 5 分鐘桶
+        _n = _now_tw()
+        _bkey = _n.strftime('%Y-%m-%d %H:') + f"{(_n.minute // 5) * 5:02d}"
+        if _bars and _bars[-1].get('t') == _bkey:
+            _b = _bars[-1]
+            _b['h'] = max(_b['h'], _px)
+            _b['l'] = min(_b['l'], _px)
+            _b['c'] = _px
+            _b['n'] = _b.get('n', 1) + 1
+        else:
+            _bars.append({'t': _bkey, 'o': _px, 'h': _px, 'l': _px, 'c': _px, 'n': 1})
+        _bars = _bars[-TXF_BAR_KEEP:]
+
+        _p = _req.patch(_url, headers=_hdr, timeout=15,
+                        json={"fields": {
+                            "bars":       {"stringValue": _json.dumps(_bars, ensure_ascii=False)},
+                            "updated_at": {"stringValue": _n.strftime('%Y-%m-%d %H:%M:%S')},
+                            "source":     {"stringValue": "taifex_mis_snapshot"}}})
+        if _p.status_code not in (200, 201):
+            print(f'  ⚠️ 台指期K棒累積：寫入失敗 HTTP {_p.status_code}')
+            return False
+        print(f"  📈 台指期K棒累積：{_bkey} 收{_px:.0f}（本棒第{_bars[-1]['n']}次取樣）"
+              f"　已累積 {len(_bars)}/{TXF_BAR_KEEP} 根")
+        if len(_bars) < 54:
+            print(f"     ⏳ 距可計算指標(54根)還差 {54 - len(_bars)} 根；"
+                  f"★階段一只累積不判斷，屬正常。")
+        return True
+    except Exception as _e:
+        print(f'  ⚠️ 台指期K棒累積異常（{str(_e)[:50]}）→ 略過，不影響掃描')
+        return False
+
+
+def check_tw_intraday_extreme():
+    """✅08092108【🆕E】台股白天大盤極端異動【盤中即時】偵測。
+    原本只有收盤後的日K版本（check_tw_daytime_extreme），主帥收到通知時
+    行情早已結束。本函式在台股交易時段內每輪執行，達門檻立即發信。
+    ★任何失敗都只印訊息並返回，絕不影響掃描與其他通知。
+    """
+    if not TW_INTRADAY_EXTREME_ENABLED:
+        return
+    try:
+        _n = _now_tw()
+        _tv = _n.hour * 60 + _n.minute
+        if not (9 * 60 <= _tv <= 13 * 60 + 35):
+            return                      # 非台股交易時段，直接跳過
+        if _n.weekday() > 4:
+            return                      # 週末不跑
+        _today_str = _n.strftime('%Y-%m-%d')
+
+        # ── 取昨收（加權指數日K）──
+        import yfinance as _yf
+        _d = _normalize_df(_yf.download('^TWII', period='7d', interval='1d', progress=False))
+        if _d is None or len(_d) < 2:
+            return
+        # 盤中時 yfinance 的日K最後一根是「今天的未完成棒」，昨收要取前一根。
+        _prev = None
+        try:
+            _last_day = str(_d.index[-1])[:10]
+            _prev = _safe_float(_d['Close'].iloc[-2] if _last_day == _today_str
+                                else _d['Close'].iloc[-1])
+        except Exception:
+            _prev = _safe_float(_d['Close'].iloc[-2])
+        if not _prev or _prev <= 0:
+            return
+
+        # ── 取現價：①期交所MIS臺指現貨（首選）②^TWII 5分K（備援）──
+        _cur, _src = None, ''
+        _snap = _taifex_index_snapshot()
+        if _snap and _snap.get('spot'):
+            _cur, _src = float(_snap['spot']), '期交所即時'
+        if _cur is None:
+            _f = _normalize_df(_yf.download('^TWII', period='1d', interval='5m', progress=False))
+            if _f is None or _f.empty:
+                return
+            if _bar_too_old(_f, '台股盤中極端偵測'):
+                return                  # 陳舊資料不得據以發信（鐵律AF2）
+            _cur, _src = _safe_float(_f['Close'].iloc[-1]), '^TWII 5分K'
+        if not _cur or _cur <= 0:
+            return
+
+        _pts = _cur - _prev
+        _pct = _pts / _prev * 100
+        print(f"  📊 台股盤中大盤：{_cur:.0f}（昨收{_prev:.0f}，{_pts:+.0f}點 {_pct:+.2f}%）"
+              f"　來源：{_src}")
+        if abs(_pts) < TW_EXTREME_PTS:
+            return
+
+        _dir = 'DOWN' if _pts < 0 else 'UP'
+        # 額度：同方向當日最多2次（與買賣訊號同為原子佔位，跨雲端並行安全）
+        # ✅08092144 本函式只在日盤執行，故採日盤上限
+        if not _claim_notify_slot(f"TWII_INTRADAY_{_dir}", _today_str, notified,
+                                  SIGNAL_MAX_DAY):
+            print(f"  🔕 台股盤中極端異動（{_dir}）今日額度已用完，靜音")
+            return
+
+        _emoji = '🔻' if _dir == 'DOWN' else '🚀'
+        _arr = '↘' if _dir == 'DOWN' else '↗'
+        _act = ('暴跌！考慮台指期做空或 buy put' if _dir == 'DOWN'
+                else '急漲！考慮台指期做多或 buy call')
+        _subject = (f"💻【本機】{_emoji}【盤中即時】台股極端異動！"
+                    f"{_arr}{int(abs(_pts))}點({_pct:+.1f}%)")
+        _body = '\n'.join([
+            f'⚠️ 台股大盤【盤中即時】極端異動（台灣時間 {_n.strftime("%H:%M")}）',
+            '=' * 35,
+            f'現在加權指數：{_cur:.0f}（昨收 {_prev:.0f}）',
+            f'漲跌幅：{_arr}{int(abs(_pts)):,}點（{_pct:+.2f}%）',
+            f'報價來源：{_src}',
+            '=' * 35,
+            f'💡 建議：{_act}',
+            '',
+            '★這是【盤中即時】通知，行情仍在進行中。',
+            '　收盤後若仍達門檻，會再收到一封【收盤確認】信（主旨不含「盤中即時」）。',
+        ])
+        _ok = send_gmail(_subject, _body)
+        print(f"  {'✅' if _ok else '❌'} 台股盤中極端異動通知"
+              f"{'已發送' if _ok else '發送失敗'}（{_dir} {_pts:+.0f}點）")
+    except Exception as _e:
+        print(f"  ⚠️ 台股盤中極端偵測異常（{str(_e)[:50]}）→ 略過，不影響掃描")
+
 
 def get_stock_data(ticker, period='5y', interval='1mo', cache=None):  # ✅ v05170856 預設改月K
     """
@@ -2355,6 +2589,15 @@ def check_tw_daytime_extreme(tse_mkt_result):
 
         print(f"  📊 台股大盤今日：{_cur:.0f}（前收{_prev:.0f}，漲跌{_chg_pts:+.0f}點，{_chg_pct:+.2f}%）")
         if abs(_chg_pts) < 750: return  # ✅ 07031936 台1000點下修至750點(更早警覺,同夜盤幅度)
+        # ✅08092144【主帥指示關閉】收盤確認信
+        #   主帥原話：「我的設計理念是【收到通知信就3分鐘內迅速進場下單】。
+        #   所以根本不需要【收盤確認】，請記得把它關掉。」
+        #   ★收盤後才發的信，行情已經結束，無法據以進場，屬「事後告知」＝狼來了預備軍。
+        #   ★盤中即時版 check_tw_intraday_extreme() 已完全涵蓋此需求。
+        #   ★保留 log 輸出供日後對照，只是不發信。
+        if not TW_CLOSE_CONFIRM_ENABLED:
+            print("  🔕 台股收盤確認信已依主帥指示關閉（盤中即時版已涵蓋）")
+            return
 
         _direction = 'DOWN' if _chg_pts < 0 else 'UP'
         _alert_key = f"TWII_DAYTIME_{_direction}_{_today_str}"
@@ -2366,7 +2609,8 @@ def check_tw_daytime_extreme(tse_mkt_result):
         _emoji = "🔻" if _direction == 'DOWN' else "🚀"
         _action = "暴跌！考慮台股期貨做空或buy put" if _direction == 'DOWN' else "急漲！考慮台股期貨做多或buy call"
         _arr = '↘' if _direction == 'DOWN' else '↗'
-        _subject = f'☁️【雲端】{_emoji}台股白天極端異動！{_arr}{int(abs(_chg_pts))}點({_chg_pct:+.1f}%)'
+        # ✅08092108 與盤中即時版區隔：本封為收盤後確認，主旨加註「收盤確認」
+        _subject = f'☁️【雲端】{_emoji}【收盤確認】台股白天極端異動！{_arr}{int(abs(_chg_pts))}點({_chg_pct:+.1f}%)'
         _lines = [
             f'⚠️ 台股白天大盤極端異動（台灣時間）',
             '='*35,
@@ -3334,6 +3578,7 @@ def scan_condition_w():
         df5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
         if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
             print('  ⚠️ 條件W：5分K資料不足，跳過'); return
+        accumulate_txf_bar()      # ✅08091843 階段一：先累積快照（即使K棒陳舊也要累積）
         if _bar_too_old(df5, '條件W'):
             _h = _taifex_hint_text()
             if _h:
@@ -4088,6 +4333,8 @@ def main_task():
                 if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
                     print(f'  ⚠️ {ticker} 5分K資料不足（需>={BUY_LOOKBACK_5MK+2}根），跳過')
                     continue
+                accumulate_txf_bar()   # ✅08091843 階段一：先累積快照
+                check_tw_intraday_extreme()   # ✅08092108【🆕E】台股盤中極端異動即時偵測
                 if _bar_too_old(df5, f'{ticker} 期貨5分K'):
                     _h = _taifex_hint_text()
                     if _h:
@@ -4381,17 +4628,25 @@ def main_task():
     # ✅ v06160503修復：補定義 _signal_label（原版未定義→買賣通知主旨會NameError）
     #    依SCAN_MODE決定K別，與內文_ml預設邏輯一致；_get_period_label再轉長期/中期投資
     _signal_label = '週K' if SCAN_MODE == 'daily' else '月K'
+    # ✅08091843 同一輪只判定一次時段，避免掃描跨越 15:00 時買賣被分到不同時段
+    _sess_now = _signal_session()
+    _sess_max = SIGNAL_MAX_DAY if _sess_now == 'day' else SIGNAL_MAX_NIGHT   # ✅08092144
+    print(f"  🕒 本輪通知時段判定：{'日盤' if _sess_now=='day' else '夜盤'}"
+          f"（每標的每方向上限 {_sess_max} 次）")
+
     if buy_signals:
         filtered = []
 
         for s in buy_signals:
             market, code, *_ = s
-            key = f"{market}_{code}_BUY"
+            # ✅08091843 額度改為【日盤/夜盤各自獨立】：key 帶時段標記，
+            #   夜盤用掉的槽位不會排擠日盤（主帥 08/09 14:37 定案）。
+            key = f"{market}_{code}_BUY_{_sess_now}"
 
             # ✅08091324【🔴A】改用 Firebase 原子佔位（跨雲端並行行程安全）
             #   原寫法只看本地 4_notified_today.json，雲端多個 job 各持一份，
-            #   彼此看不見 → 同一支會被重複寄出。額度語意維持每日2次不變。
-            if _claim_notify_slot(key, today, notified):
+            #   彼此看不見 → 同一支會被重複寄出。
+            if _claim_notify_slot(key, today, notified, _sess_max):
                 filtered.append(s)
 
         if filtered:
@@ -4428,11 +4683,12 @@ def main_task():
 
         for s in sell_signals:
             market, code, *_ = s
-            key = f"{market}_{code}_SELL"
+            # ✅08091843 賣出同步改為【日盤/夜盤各自獨立】（與買進對稱）
+            key = f"{market}_{code}_SELL_{_sess_now}"
 
             # ✅08091324【🔴A 對稱處理】賣出訊號有完全相同的雲端並行重複風險，
-            #   只修買進會留半套，故一併改用原子佔位（額度語意同樣維持每日2次）。
-            if _claim_notify_slot(key, today, notified):
+            #   只修買進會留半套，故一併改用原子佔位。
+            if _claim_notify_slot(key, today, notified, _sess_max):
                 filtered.append(s)
 
         if filtered:
