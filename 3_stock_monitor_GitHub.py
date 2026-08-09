@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08092144'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08100036'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -134,6 +134,24 @@ TXF_BAR_KEEP         = 120   # Firestore 只保留最近N根，避免文件無�
 TW_INTRADAY_EXTREME_ENABLED = True   # 盤中即時極端異動偵測總開關
 TW_EXTREME_PTS              = 750    # 門檻點數（沿用原值，與夜盤同幅度）
 TW_CLOSE_CONFIRM_ENABLED    = False  # ✅08092144 收盤後的「收盤確認」信：主帥指示關閉
+
+# ✅08100036【⚪F′】讀取【網頁版待買觀察清單】，命中時標記＋補掃描範圍外標的
+# ┌─ 決策註記：WATCHLIST_ENABLED（清單條目 F-14）────────────────────────
+# │ 查證結果（08/09）：程式全文搜尋 watchlist／待買觀察／觀察清單 → 0 次命中，
+# │   代表主帥在網頁版親手加入的觀察清單，雲端版【完全不知道它存在】。
+# │ 影響評估：清單內的台股/美股/虛擬幣/外匯多半已被全市場掃描涵蓋，
+# │   但信裡不會標明「這支是你自己加入觀察的」；真正會漏的是【掃描範圍外】的標的
+# │   （例：美股只掃道瓊30＋DRIP，主帥若觀察 NVDA 以外的中小型股就掃不到）。
+# │ 本次做兩件事：①命中時在信中標記 ⭐【你的觀察清單】 ②補掃範圍外標的。
+# │ ★資料來源：網頁版寫入的 Firestore 路徑
+# │   artifacts/{專案}/users/{email小寫並把@和.換成_}/data/stocks
+# │   欄位 watchlist 為陣列，元素格式 {code, cat}；
+# │   cat ∈ tw／us／fund／crypto／fx／gold／bond（與網頁版下拉選單一致）。
+# │ ★只讀不寫：本程式【絕不】修改觀察清單，避免與網頁版互相覆蓋。
+# └──────────────────────────────────────────────────────────────────────
+WATCHLIST_ENABLED    = True   # 觀察清單標記與補掃總開關
+WATCHLIST_OWNER      = 'shchyu61@gmail.com'   # 讀取誰的觀察清單（主帥本人）
+WATCHLIST_EXTRA_MAX  = 30     # 補掃範圍外標的的上限（防止清單過長拖垮掃描）
 FUTURES_5MK_OWNER    = 'shchyu61@gmail.com'  # 5分K模式專屬帳號
 _futures_is_holding = False   # ✅ 07031936 正式宣告為模組全域(取代原dir()守門)
 _holdings_sent = False        # ✅ (07130626) 持股每日健檢：本次執行是否已寄出(防迴圈重複寄)
@@ -921,6 +939,152 @@ def check_tw_intraday_extreme():
               f"{'已發送' if _ok else '發送失敗'}（{_dir} {_pts:+.0f}點）")
     except Exception as _e:
         print(f"  ⚠️ 台股盤中極端偵測異常（{str(_e)[:50]}）→ 略過，不影響掃描")
+
+
+_watchlist_cache = {'ts': 0, 'items': None}
+
+
+def _load_watchlist():
+    """✅08100036【⚪F′】讀取網頁版「待買觀察清單」。回傳 [{'code':..,'cat':..}, ...]。
+    ★只讀不寫，絕不修改，避免與網頁版互相覆蓋。
+    ★任何失敗都回空清單並印訊息，絕不影響掃描與通知。
+    """
+    global _watchlist_cache
+    if not WATCHLIST_ENABLED:
+        return []
+    import time as _t
+    if _watchlist_cache['items'] is not None and (_t.time() - _watchlist_cache['ts']) < 300:
+        return _watchlist_cache['items']
+    _items = []
+    try:
+        import json as _json, os as _os, requests as _req
+        _cred = _os.environ.get(FIREBASE_CRED_ENV)
+        if not _cred:
+            _cf = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if _os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as _f:
+                    _cred = _f.read()
+        if not _cred:
+            print('  ⏭️ 觀察清單：無 Firebase 憑證，略過（不影響掃描）')
+            _watchlist_cache = {'ts': _t.time(), 'items': []}
+            return []
+        import google.oauth2.service_account as _sa
+        import google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(
+            _json.loads(_cred), scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        # 文件ID規則與網頁版 getSafeDocId 完全一致：小寫後把 @ 和 . 換成 _
+        _safe = WATCHLIST_OWNER.lower().replace('@', '_').replace('.', '_')
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}"
+                f"/users/{_safe}/data/stocks")
+        _r = _req.get(_url, headers={"Authorization": f"Bearer {_c.token}"}, timeout=15)
+        if _r.status_code != 200:
+            print(f'  ⏭️ 觀察清單：讀取 HTTP {_r.status_code}，略過')
+            _watchlist_cache = {'ts': _t.time(), 'items': []}
+            return []
+        _arr = (((_r.json() or {}).get('fields') or {})
+                .get('watchlist', {}).get('arrayValue', {}).get('values', []))
+        for _v in _arr:
+            _mv = (_v or {}).get('mapValue', {}).get('fields', {})
+            _code = (_mv.get('code', {}) or {}).get('stringValue', '').strip()
+            _cat = (_mv.get('cat', {}) or {}).get('stringValue', '').strip().lower()
+            if _code:
+                _items.append({'code': _code.upper(), 'cat': _cat or 'tw'})
+        print(f'  ⭐ 觀察清單：讀到 {len(_items)} 檔（來源：網頁版待買觀察）')
+    except Exception as _e:
+        print(f'  ⚠️ 觀察清單讀取異常（{str(_e)[:45]}）→ 視為空清單，不影響掃描')
+        _items = []
+    _watchlist_cache = {'ts': _t.time(), 'items': _items}
+    return _items
+
+
+def _watchlist_codes():
+    """回傳觀察清單的純代碼集合（大寫、去除交易所後綴），供比對用。"""
+    _s = set()
+    for _it in _load_watchlist():
+        _c = _it['code'].upper()
+        _s.add(_c)
+        _s.add(_c.split('.')[0])            # 2330.TW → 2330
+        _s.add(_c.replace('-USD', ''))      # BTC-USD → BTC
+        _s.add(_c.replace('=X', ''))        # USDTWD=X → USDTWD
+    return _s
+
+
+def _wl_mark(code):
+    """若該代碼在觀察清單內，回傳標記字串；否則回空字串。"""
+    try:
+        if not WATCHLIST_ENABLED:
+            return ''
+        _c = str(code).upper()
+        _set = _watchlist_codes()
+        # ★傳入代碼也要做同樣的正規化，否則 BTC-USD／USDTWD=X 會比不到。
+        #   （本輪實測抓到：清單存 BTC，訊號傳 BTC-USD → 原寫法不命中）
+        _cands = {_c, _c.split('.')[0], _c.replace('-USD', ''), _c.replace('=X', '')}
+        if _cands & _set:
+            return '⭐【你的觀察清單】\n'
+    except Exception:
+        pass
+    return ''
+
+
+def _watchlist_to_ticker(item):
+    """把觀察清單項目換算成 yfinance 代碼。無法判斷回 None。"""
+    _c, _cat = item['code'].upper(), item.get('cat', 'tw')
+    if '.' in _c or '=' in _c or '-' in _c:
+        return _c                      # 已是完整代碼，直接用
+    if _cat == 'tw':
+        return _c + '.TW'              # 上櫃(.TWO)由呼叫端失敗後自動再試
+    if _cat == 'crypto':
+        return _c + '-USD'
+    if _cat == 'fx':
+        return _c + '=X'
+    return _c                          # us／fund／gold／bond 多為原代碼
+
+
+def scan_watchlist_extras(scanned_tickers):
+    """✅08100036【⚪F′】補掃【全市場掃描範圍外】的觀察清單標的。
+    ★只掃「主流程沒掃過」的，避免重複耗時。
+    ★任何單一標的失敗都跳過，絕不中斷整體掃描。
+    """
+    if not WATCHLIST_ENABLED:
+        return []
+    _out = []
+    try:
+        _items = _load_watchlist()
+        if not _items:
+            return []
+        _done = {str(t).upper() for t in (scanned_tickers or [])}
+        _done |= {str(t).upper().split('.')[0] for t in (scanned_tickers or [])}
+        _todo = []
+        for _it in _items:
+            _tk = _watchlist_to_ticker(_it)
+            if not _tk:
+                continue
+            if _tk.upper() in _done or _tk.upper().split('.')[0] in _done:
+                continue
+            _todo.append(_tk)
+        _todo = _todo[:WATCHLIST_EXTRA_MAX]
+        if not _todo:
+            print('  ⭐ 觀察清單：全部已在主掃描範圍內，無需補掃')
+            return []
+        print(f'  ⭐ 觀察清單補掃：{len(_todo)} 檔（主掃描範圍外）{_todo}')
+        for _tk in _todo:
+            try:
+                _raw = scan_stock_mixed(_tk, False) if SCAN_MODE == 'mixed' else scan_stock(_tk, False)
+                if not _raw:
+                    continue
+                _ml = _raw[-1] if isinstance(_raw[-1], str) and _raw[-1] in ('長期投資', '中期投資') else None
+                _res = _raw[:-1] if _ml else _raw
+                if _res and _res[0]:
+                    _out.append(('⭐觀察', _tk, *_res[1:], _ml if _ml else ''))
+                    print(f'    ✅ {_tk} 觀察清單補掃：買進訊號')
+            except Exception as _e:
+                print(f'    ⚠️ {_tk} 補掃失敗（{str(_e)[:40]}），跳過')
+        print(f'  ⭐ 觀察清單補掃完成：{len(_out)} 支觸發買進訊號')
+    except Exception as _e:
+        print(f'  ⚠️ 觀察清單補掃異常（{str(_e)[:45]}）→ 略過，不影響主掃描')
+    return _out
 
 
 def get_stock_data(ticker, period='5y', interval='1mo', cache=None):  # ✅ v05170856 預設改月K
@@ -4532,6 +4696,21 @@ def main_task():
     # ✅ v05172348：處理網頁版發起的Gmail通知請求
     process_pending_gmail_requests(now_str)
     print(f"\n{'='*55}")
+    # ✅08100036【⚪F′】補掃「全市場掃描範圍外」的觀察清單標的
+    #   ★_scanned_tickers_all 必須在此就地組出：
+    #     本輪實測抓到，原先寫在下方通知區會造成 undefined name（用在定義之前）。
+    try:
+        _scanned_tickers_all = [str(x[1]) for x in (buy_signals + sell_signals)]
+        try:
+            _scanned_tickers_all += list(US_STOCKS) + list(CRYPTO_LIST) + list(FX_LIST)
+        except Exception:
+            pass
+        _wl_extra = scan_watchlist_extras(_scanned_tickers_all)
+        if _wl_extra:
+            buy_signals.extend(_wl_extra)
+    except Exception as _e:
+        print(f'  ⚠️ 觀察清單補掃呼叫失敗（{str(_e)[:40]}），不影響主掃描')
+
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
     # ✅ 方案②(07061319) 掃描結束保存今日跨輪快取（成長才存）
@@ -4656,6 +4835,7 @@ def main_task():
                 market, code, c, l, bb, r, rp = s[:7]
                 _ml = s[7] if len(s) > 7 and isinstance(s[7], str) and s[7] in ('長期投資','中期投資') else ('中期投資' if SCAN_MODE=='daily' else '長期投資')
                 body += (
+                    f"{_wl_mark(code)}"          # ✅08100036【⚪F′】觀察清單命中標記
                     f"⭐【做多進場】⭐\n"
                     f"市場：{market}　代碼：{code}\n"
                     f"投資模式：{_ml}\n"
