@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08091258'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08091324'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -190,7 +190,7 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # │        主帥一度說「也要 buy put」，隨即自行更正回「不必動條件W」，
 # │        理由是【做空由期貨5分K空方負責】，兩者分工、不重疊。
 # │ 07/03 同輪定案【乙案】：把含空方的期貨5mk 時窗「加上」條件W 的夜盤時窗
-# │        （週二15:05~週三10:45／週四15:05~週五10:45），見 get_active_markets()。
+# │        （週二15:05~週三11:00／週四15:05~週五11:00），見 get_active_markets()。
 # │ 08/06 再補齊：週二~週五 09:05~13:30 日盤也納入期貨掃描時段。
 # │
 # │ ★★分工表（任何 AI 動手前必讀，避免再次搞混）★★
@@ -202,7 +202,7 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # │   正確做法是檢查 get_active_markets() 的期貨時窗有無涵蓋該時段。
 # └──────────────────────────────────────────────────────────────────────
 # ── 【條件W：週選擇權做多專屬設定】（TEST_MODE = 'condW' 時才啟用）✅ 07011049 純新增 ──
-# 執行時段：週二15:05~週三10:45、週四15:05~週五10:45（跨夜，含夜盤，主力夜盤為主戰場）
+# 執行時段：週二15:05~週三11:00、週四15:05~週五11:00（跨夜；★11:00為08091324主帥指定延伸）
 # 標的：台指（^TWII）；只做 buy call（不做空）；跳過第一二道、只跑第三道5分K V轉觸底翻揚
 # 防過頻：同一窗、同方向最多通知2次（主力煙霧彈/真發動順序會互換，故非1次）
 CONDW_TARGET         = '^TWII'
@@ -666,15 +666,15 @@ def get_active_markets():
         is_futures_time = True
 
     # ✅ 07030929 乙案新增：期貧5mk空方 加上週選夜盤時窗（含深夜，主力夜盤為主戰場）
-    #   週二15:05~週三10:45 ／ 週四15:05~週五10:45（不動原週一~週三窗）
+    #   週二15:05~週三11:00 ／ 週四15:05~週五11:00（08091324 由10:45延伸；不動原週一~週三窗）
     if not is_futures_time:
         if weekday == 1 and time_val >= 15*60+5:          # 週二15:05起
             is_futures_time = True
-        elif weekday == 2 and time_val <= 10*60+45:       # 週三10:45止
+        elif weekday == 2 and time_val <= 11*60+0:        # ✅08091324 週三11:00止（主帥指定由10:45延伸）
             is_futures_time = True
         elif weekday == 3 and time_val >= 15*60+5:        # 週四15:05起
             is_futures_time = True
-        elif weekday == 4 and time_val <= 10*60+45:       # 週五10:45止
+        elif weekday == 4 and time_val <= 11*60+0:        # ✅08091324 週五11:00止（主帥指定由10:45延伸）
             is_futures_time = True
 
     # ✅ 08060105【補齊上一輪未做完整之處】週選擇權多空推薦需涵蓋【日盤 09:05~13:30】。
@@ -872,6 +872,39 @@ def _claim_alert_firebase(alert_key, today_str):
     except Exception as _e:
         print(f"  ⚠️ _claim_alert_firebase異常：{str(_e)[:60]}")
         return None
+
+def _claim_notify_slot(key, today_str, notified, max_slots=2):
+    """✅08091324【🔴A】通知額度的【原子佔位】取得。回傳 True＝可發送。
+    ★問題背景：買/賣訊號彙整信原本只靠本地 4_notified_today.json 計數去重。
+      雲端 GitHub Actions 可能同時有多個 job 在跑（scan／futures-scan），
+      各自持有自己的 json，彼此看不見對方 → 同一支股票會被重複寄出。
+      漲停追蹤曾因同型問題「一晚重複發3封」，後改 Firebase 原子佔位才解決。
+    ★本函式把同樣的機制套用到買/賣訊號，並【保留原本每日2次的額度語意】：
+      逐一嘗試佔位 key#1、key#2，任一成功即可發送；兩個都被佔走才靜音。
+      （若直接用單一 key，額度會從 2 次變成 1 次，屬未經主帥同意的行為變更。）
+    ★Firebase 不可用時（無憑證／讀取失敗，回傳 None）自動退回本地計數後援，
+      確保沒有 Firebase 也能運作，不會因此漏發訊號。
+    """
+    try:
+        for _i in range(1, max_slots + 1):
+            _c = _claim_alert_firebase(f"{key}#{_i}", today_str)
+            if _c is True:
+                return True
+            if _c is None:                     # Firebase 不可用 → 本地後援
+                _lst = notified.setdefault(today_str, [])
+                if _lst.count(key) < max_slots:
+                    _lst.append(key)
+                    return True
+                return False
+        return False                            # 兩個槽位都已被別的行程佔走
+    except Exception as _e:
+        print(f"  ⚠️ 原子佔位異常（{str(_e)[:40]}）→ 退回本地計數")
+        _lst = notified.setdefault(today_str, [])
+        if _lst.count(key) < max_slots:
+            _lst.append(key)
+            return True
+        return False
+
 
 def load_notified():
     """✅ v05280750：本機版和GitHub都優先用Firebase（共享狀態防重複通知）"""
@@ -3266,7 +3299,7 @@ def scan_stock_mixed(ticker, is_holding=False):
 
 def _condw_current_window():
     """條件W時間窗判定：回傳當前所屬窗ID；不在窗內回None。✅ 07011049 純新增。
-    窗一：週二15:05 ~ 週三10:45；窗二：週四15:05 ~ 週五10:45（跨夜，含夜盤）。"""
+    窗一：週二15:05 ~ 週三11:00；窗二：週四15:05 ~ 週五11:00（跨夜，含夜盤）。"""
     from datetime import timedelta as _td
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
@@ -3276,14 +3309,14 @@ def _condw_current_window():
     # 窗一：週二(1)15:05起
     if wd == 1 and tv >= 15*60+5:
         return f'{d}_W2'
-    # 窗一延續：週三(2)10:45止（窗ID用前一日週二）
-    if wd == 2 and tv <= 10*60+45:
+    # 窗一延續：週三(2)11:00止（窗ID用前一日週二）
+    if wd == 2 and tv <= 11*60+0:          # ✅08091324 由10:45延伸至11:00（主帥指定）
         return f"{(now - _td(days=1)).strftime('%Y%m%d')}_W2"
     # 窗二：週四(3)15:05起
     if wd == 3 and tv >= 15*60+5:
         return f'{d}_W4'
-    # 窗二延續：週五(4)10:45止（窗ID用前一日週四）
-    if wd == 4 and tv <= 10*60+45:
+    # 窗二延續：週五(4)11:00止（窗ID用前一日週四）
+    if wd == 4 and tv <= 11*60+0:          # ✅08091324 由10:45延伸至11:00（主帥指定）
         return f"{(now - _td(days=1)).strftime('%Y%m%d')}_W4"
     return None
 
@@ -4355,9 +4388,11 @@ def main_task():
             market, code, *_ = s
             key = f"{market}_{code}_BUY"
 
-            if notified[today].count(key) < 2:
+            # ✅08091324【🔴A】改用 Firebase 原子佔位（跨雲端並行行程安全）
+            #   原寫法只看本地 4_notified_today.json，雲端多個 job 各持一份，
+            #   彼此看不見 → 同一支會被重複寄出。額度語意維持每日2次不變。
+            if _claim_notify_slot(key, today, notified):
                 filtered.append(s)
-                notified[today].append(key)
 
         if filtered:
             body = f"掃描時間：{now_str}\n\n"
@@ -4395,9 +4430,10 @@ def main_task():
             market, code, *_ = s
             key = f"{market}_{code}_SELL"
 
-            if notified[today].count(key) < 2:
+            # ✅08091324【🔴A 對稱處理】賣出訊號有完全相同的雲端並行重複風險，
+            #   只修買進會留半套，故一併改用原子佔位（額度語意同樣維持每日2次）。
+            if _claim_notify_slot(key, today, notified):
                 filtered.append(s)
-                notified[today].append(key)
 
         if filtered:
             body = f"掃描時間：{now_str}\n\n"
@@ -4461,7 +4497,7 @@ if __name__ == "__main__":
             (wd_f == 1 and (tv_f < 1*60 or tv_f >= 5*60)) or            # 週二（排除深夜01:00~05:00）
             (wd_f == 2 and tv_f <= 11*60+30) or                             # 週三11:30前
             (wd_f == 3 and tv_f >= 15*60+5) or                              # ✅ 07031447 週四15:05起(週選夜盤)
-            (wd_f == 4 and tv_f <= 10*60+45)                                # ✅ 週五10:45止
+            (wd_f == 4 and tv_f <= 11*60+0)                                 # ✅08091324 週五11:00止（由10:45延伸，主帥指定）
         )
 
         if not in_futures:
@@ -4484,7 +4520,7 @@ if __name__ == "__main__":
                 (wd_l == 1 and (tv_l < 1*60 or tv_l >= 5*60)) or  # 排除深夜01:00~05:00
                 (wd_l == 2 and tv_l <= 11*60+30) or
                 (wd_l == 3 and tv_l >= 15*60+5) or
-                (wd_l == 4 and tv_l <= 10*60+45) or
+                (wd_l == 4 and tv_l <= 11*60+0) or   # ✅08091324 週五11:00止（由10:45延伸）
                 (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉
             )
             if not in_f:
