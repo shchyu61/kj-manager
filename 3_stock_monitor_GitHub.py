@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08100036'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08100100'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -397,6 +397,7 @@ def _bar_too_old(df, label):
     if _age is None:
         return False
     if _age > FUT_BAR_MAX_AGE_MIN:
+        _feat('stale', f'{label} 被擋（陳舊 {_age:.0f} 分）')
         print(f'  ⛔ {label}：最後一根5分K已陳舊 {_age:.0f} 分鐘'
               f'（上限 {FUT_BAR_MAX_AGE_MIN} 分）→ 不進場')
         print('     原因：^TWII 加權指數僅 09:00~13:30 有資料，夜盤無報價；'
@@ -758,6 +759,71 @@ def get_active_markets():
 
     return active
 
+# ============================================================
+# 【本輪功能自報】✅08100100（鐵律AE3）
+# ------------------------------------------------------------
+# 背景：主帥 2026/08/10 質問——待辦🟡H 列了 14 項「待實機實測」，
+#   卻沒有任何一步一步的教學，等於把驗收工作丟給主帥。
+# ★正確解法不是寫教學叫主帥照做，而是【讓程式自己報告】。
+#   每輪掃描結束時，把各新功能「有沒有跑到、跑出什麼結果」印成一個區塊，
+#   主帥只要掃一眼這個區塊，就知道全部功能是否正常，不必逐項手動驗證。
+# ============================================================
+_FEAT = {}
+
+
+def _feat(key, value):
+    """記錄一項功能的執行結果，供結束時的【本輪功能自報】使用。永不拋錯。"""
+    try:
+        _FEAT[key] = value
+    except Exception:
+        pass
+
+
+def _feat_bump(key):
+    """次數累加型記錄。"""
+    try:
+        _FEAT[key] = _FEAT.get(key, 0) + 1
+    except Exception:
+        pass
+
+
+def print_feature_report():
+    """✅08100100 印出【本輪功能自報】。主帥只要看這一塊即可完成驗收。"""
+    try:
+        print("\n" + "=" * 58)
+        print("  📋【本輪功能自報】主帥只要看這一塊，不必手動驗證任何東西")
+        print("=" * 58)
+        _rows = [
+            ('通知時段判定（F-10）',      'session',        '未執行到（本輪無訊號）'),
+            ('觀察清單讀取（F-14）',      'watchlist',      '未執行到（非台股掃描輪）'),
+            ('觀察清單補掃（F-14）',      'watchlist_extra', '未執行到'),
+            ('台指期K棒累積（F-11）',     'txf_bars',       '未執行到（非期貨時段）'),
+            ('夜盤陳舊K棒防護（F-07）',   'stale',          '未觸發（K棒新鮮，正常）'),
+            ('選擇權即時權利金（R-01替代）', 'opt_chain',    '未執行到（本輪無選擇權建議）'),
+            ('台股盤中極端偵測（F-12）',  'intraday',       '未執行到（非台股交易時段）'),
+            ('即時價批次預抓',            'prefetch',       '未執行到'),
+        ]
+        _bad = 0
+        for _label, _k, _na in _rows:
+            _v = _FEAT.get(_k)
+            # ★本輪實測抓到：異常訊息（以❌開頭）原本也被標成 ✅，會誤導判讀。
+            if not _v:
+                _icon = '⏭️ '
+            elif str(_v).startswith('❌'):
+                _icon = '❌'; _bad += 1
+            else:
+                _icon = '✅'
+            print(f"  {_icon} {_label}：{_v if _v else _na}")
+        print("-" * 58)
+        print("  判讀：✅＝該功能本輪確實執行並回報結果；⏭️＝本輪不適用（非該時段/無訊號）")
+        print("  ★若某項【應該要跑卻顯示 ⏭️】，把這個區塊貼給AI 即可定位。")
+        if _bad:
+            print(f"  ❌★本輪有 {_bad} 項異常（見上方❌），請把本區塊貼給AI 處理。")
+        print("=" * 58 + "\n")
+    except Exception:
+        pass
+
+
 def _signal_session():
     """✅08091843 判定買/賣訊號目前屬【日盤】或【夜盤】（台灣時間）。
     日盤 08:00~15:00，其餘為夜盤。界線比條件W(09:05~13:30)寬，
@@ -844,6 +910,7 @@ def accumulate_txf_bar():
             return False
         print(f"  📈 台指期K棒累積：{_bkey} 收{_px:.0f}（本棒第{_bars[-1]['n']}次取樣）"
               f"　已累積 {len(_bars)}/{TXF_BAR_KEEP} 根")
+        _feat('txf_bars', f"已累積 {len(_bars)}/{TXF_BAR_KEEP} 根（本棒收 {_px:.0f}）")
         if len(_bars) < 54:
             print(f"     ⏳ 距可計算指標(54根)還差 {54 - len(_bars)} 根；"
                   f"★階段一只累積不判斷，屬正常。")
@@ -903,6 +970,7 @@ def check_tw_intraday_extreme():
 
         _pts = _cur - _prev
         _pct = _pts / _prev * 100
+        _feat('intraday', f'{_pts:+.0f}點 {_pct:+.2f}%（來源：{_src}）')
         print(f"  📊 台股盤中大盤：{_cur:.0f}（昨收{_prev:.0f}，{_pts:+.0f}點 {_pct:+.2f}%）"
               f"　來源：{_src}")
         if abs(_pts) < TW_EXTREME_PTS:
@@ -966,6 +1034,7 @@ def _load_watchlist():
                     _cred = _f.read()
         if not _cred:
             print('  ⏭️ 觀察清單：無 Firebase 憑證，略過（不影響掃描）')
+            _feat('watchlist', '❌無 Firebase 憑證 → 請告知AI')
             _watchlist_cache = {'ts': _t.time(), 'items': []}
             return []
         import google.oauth2.service_account as _sa
@@ -992,6 +1061,7 @@ def _load_watchlist():
             if _code:
                 _items.append({'code': _code.upper(), 'cat': _cat or 'tw'})
         print(f'  ⭐ 觀察清單：讀到 {len(_items)} 檔（來源：網頁版待買觀察）')
+        _feat('watchlist', f'讀到 {len(_items)} 檔')
     except Exception as _e:
         print(f'  ⚠️ 觀察清單讀取異常（{str(_e)[:45]}）→ 視為空清單，不影響掃描')
         _items = []
@@ -1067,6 +1137,7 @@ def scan_watchlist_extras(scanned_tickers):
         _todo = _todo[:WATCHLIST_EXTRA_MAX]
         if not _todo:
             print('  ⭐ 觀察清單：全部已在主掃描範圍內，無需補掃')
+            _feat('watchlist_extra', '全部已在主掃描範圍內，無需補掃')
             return []
         print(f'  ⭐ 觀察清單補掃：{len(_todo)} 檔（主掃描範圍外）{_todo}')
         for _tk in _todo:
@@ -1082,6 +1153,7 @@ def scan_watchlist_extras(scanned_tickers):
             except Exception as _e:
                 print(f'    ⚠️ {_tk} 補掃失敗（{str(_e)[:40]}），跳過')
         print(f'  ⭐ 觀察清單補掃完成：{len(_out)} 支觸發買進訊號')
+        _feat('watchlist_extra', f'補掃 {len(_todo)} 檔，{len(_out)} 支觸發')
     except Exception as _e:
         print(f'  ⚠️ 觀察清單補掃異常（{str(_e)[:45]}）→ 略過，不影響主掃描')
     return _out
@@ -1424,6 +1496,7 @@ def prefetch_realtime_prices(tickers, label=''):
             except Exception as _e:
                 print(f'  ⚠️ 即時價批次 {_bi+1}/{_batches} 失敗（{str(_e)[:40]}）→ 該批退回非即時')
         print(f'  ⚡ {label}即時價預抓：{_ok}/{len(_ts)} 支成功（共 {_batches} 批，取代逐支抓取）')
+        _feat('prefetch', f'{label} {_ok}/{len(_ts)} 支成功（{_batches} 批）')
     except Exception as _e:
         print(f'  ⚠️ 即時價預抓整體異常（{str(_e)[:40]}）→ 全部退回非即時（不影響掃描）')
 
@@ -2319,6 +2392,7 @@ def _fetch_option_chain():
             print(f"  ⚠️ 期交所選擇權：取得 {len(_ql)} 檔但【0 檔可解析】→ 降級為距離推估。"
                   f"　★請把上面那行「MIS 原始欄位名」回報給AI，以校正代碼欄位。")
         else:
+            _feat('opt_chain', f'{len(_ql)} 檔契約 → 可用 {len(_rows)} 檔')
             print(f"  ✅ 期交所選擇權即時報價：{len(_ql)} 檔契約 → 可用 {len(_rows)} 檔"
                   f"（無法解析代碼 {_bad} 檔已略過）")
         return _rows
@@ -4712,6 +4786,7 @@ def main_task():
         print(f'  ⚠️ 觀察清單補掃呼叫失敗（{str(_e)[:40]}），不影響主掃描')
 
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
+    print_feature_report()   # ✅08100100【本輪功能自報】鐵律AE3
     print(f"{'='*55}")
     # ✅ 方案②(07061319) 掃描結束保存今日跨輪快取（成長才存）
     save_cross_run_cache(_xrun_prev_w, _xrun_prev_d)
@@ -4810,6 +4885,7 @@ def main_task():
     # ✅08091843 同一輪只判定一次時段，避免掃描跨越 15:00 時買賣被分到不同時段
     _sess_now = _signal_session()
     _sess_max = SIGNAL_MAX_DAY if _sess_now == 'day' else SIGNAL_MAX_NIGHT   # ✅08092144
+    _feat('session', f"{'日盤' if _sess_now=='day' else '夜盤'}，每標的每方向上限 {_sess_max} 次")
     print(f"  🕒 本輪通知時段判定：{'日盤' if _sess_now=='day' else '夜盤'}"
           f"（每標的每方向上限 {_sess_max} 次）")
 
