@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08090349'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08090829'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -82,7 +82,18 @@ FINMIND_CACHE_HOURS = 168    # 財務資料快取7天（週報不常更新）
 # ── 週選擇權履約價推薦設定 ✅(08032126) ──
 OPT_PREMIUM_MAX      = 16    # ★主帥定案：以小博大，進場權利金上限(元)；>16 不推薦(歸零損失大)
 OPT_SNAPSHOT_TIMEOUT = 6     # 選擇權快照單次逾時秒數（失敗即放棄、不重抓）
-OPT_CHAIN_CACHE_SEC  = 60    # 同一分鐘內重用快照，節省 FinMind token（限600次/hr）
+OPT_CHAIN_CACHE_SEC  = 60    # 同一分鐘內重用快照，避免重複拉取（單次回應可達2MB）
+# ✅08090829【🔴B(b) 解鎖】選擇權權利金來源改用【期交所行情資訊網 MIS】官方免費即時源。
+#   ┌─ 決策註記：為何換掉 FinMind（清單條目 R-01）────────────────────────
+#   │ FinMind taiwan_options_snapshot 免費層回 HTTP 400「Your level is register」
+#   │ ＝需付費贊助會員 → 主帥 08/06 定案【放棄該來源】，並禁止再提付費方案。
+#   │ 2026/08/09 主帥實跑探測腳本證實：期交所 MIS 端點 HTTP 200，
+#   │ 一次取得 3487 檔契約，其中權利金 ≤16 元者 264 檔 → 付費牆完全繞開。
+#   │ ★本來源為期交所官網自己在用的 API：免費、免註冊、免 token。
+#   └────────────────────────────────────────────────────────────────────
+OPT_MIS_URL          = 'https://mis.taifex.com.tw/futures/api/getQuoteList'
+OPT_MIS_REFERER      = 'https://mis.taifex.com.tw/futures/'
+OPT_MIS_TIMEOUT      = 12    # MIS 單次回應可達 2MB，逾時需比一般請求寬鬆
 _opt_chain_cache     = {'ts': 0, 'rows': None}   # 模組頂層宣告，防 'not defined'
 _finmind_cache     = {}      # ✅ 模組頂層宣告，防止 'not defined' 錯誤
 
@@ -1673,37 +1684,108 @@ def analyse_market_index(ticker, label):
 # 【週選擇權履約價推薦】
 # 僅在週三/週五 09:05~10:45 期貨5分K觸發時附加在通知信中
 # ============================================================
+def _mis_parse_symbol(sym):
+    """由期交所契約代碼解析出（履約價, 買賣權）。解析不出回 (None, None)。
+    ★格式：前綴 + 履約價 + 月份字母 + 年份末碼，例如 TXO44000H6、TX144000T6。
+      月份字母慣例：A~L＝Call的1~12月；M~X＝Put的1~12月。
+      前綴長度不固定（TXO 月選／TX1~TX5 週三選／TXU~TXZ 週五選，部分含數字），
+      故【由字串尾端反向錨定】，避免前綴數字與履約價混淆。
+    """
+    try:
+        import re as _re
+        # ★前綴固定為3碼（TXO月選／TX1~TX5週三選／TXU~TXZ週五選），必須先錨定前綴，
+        #   否則 TX1 的「1」會被併進履約價：TX144500H6 會被誤讀成履約價 144500（實為 44500）。
+        #   ★此 bug 由 08090829 的真實契約代碼實測抓出，非事後補述。
+        _m = _re.match(r'^([A-Z]{2}[A-Z0-9])(\d{3,6})([A-X])(\d)$',
+                       str(sym).strip().upper())
+        if not _m:
+            return None, None
+        _strike = float(_m.group(2))
+        _mon = _m.group(3)
+        # 合理性防呆：台指履約價為50點整數倍，且落在合理區間；不符即視為解析失敗
+        if _strike % 50 != 0 or not (1000 <= _strike <= 200000):
+            return None, None
+        _is_put = _mon >= 'M'           # A~L=Call、M~X=Put
+        return _strike, ('put' if _is_put else 'call')
+    except Exception:
+        return None, None
+
+
 def _fetch_option_chain():
-    """✅ (08032126) 取得台指選擇權【即時快照】權利金（供履約價≤16元篩選）。
-    ★主帥定案之容錯原則：
+    """✅ (08090829) 取得台指選擇權【即時快照】權利金（供履約價≤OPT_PREMIUM_MAX 篩選）。
+    來源：期交所行情資訊網 MIS（官方、免費、免 token）——取代 FinMind 付費牆（R-01）。
+    ★主帥定案之容錯原則（沿用，未變）：
       ・只抓【一次】，失敗即放棄、回傳 None，由呼叫端降級為距離推估；【不重抓】。
-      ・同一分鐘內重用快取，避免爆掉 FinMind token 上限（600次/hr）。
+      ・同一分鐘內重用快取，避免重複拉取 2MB 回應。
       ・訊號本身照常發送，取不到報價【絕不】影響通知。
-    ★已查證：FinMind taiwan_options_snapshot 文件載明支援 TXO(月選)、TX1~TX5(週三選)；
-      data_id 留空＝一次全部。【週五選(TXU/TXV/TXX/TXY/TXZ) 是否涵蓋尚未實測】，
-      故採防禦式解析；請用 9_選擇權報價測試.py 實測後再據以微調。
+    ★回傳格式刻意沿用舊有欄位名（strike_price／call_put／close／contract_date），
+      使 _pick_strikes_by_premium() 完全不必修改（降低改動風險）。
     """
     global _opt_chain_cache
     try:
         import time as _t
         if _opt_chain_cache.get('rows') is not None and (_t.time() - _opt_chain_cache.get('ts', 0)) < OPT_CHAIN_CACHE_SEC:
             return _opt_chain_cache['rows']
-        if not FINMIND_TOKEN:
-            print("  ℹ️ 未設定 FINMIND_TOKEN → 履約價改用距離推估")
-            return None
         import requests as _req
-        _r = _req.get('https://api.finmindtrade.com/api/v4/taiwan_options_snapshot',
-                      headers={'Authorization': f'Bearer {FINMIND_TOKEN}'},
-                      params={'data_id': ''}, timeout=OPT_SNAPSHOT_TIMEOUT)
+        _payload = {"MarketType": "0", "SymbolType": "O", "KindID": "1", "CID": "TXO",
+                    "ExpireMonth": "", "RowSize": "全部", "PageNo": "",
+                    "SortColumn": "", "AscDesc": "A"}
+        _r = _req.post(OPT_MIS_URL, json=_payload, timeout=OPT_MIS_TIMEOUT,
+                       headers={'Referer': OPT_MIS_REFERER,
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         if _r.status_code != 200:
-            print(f"  ⚠️ 選擇權快照 HTTP {_r.status_code} → 降級為距離推估（不重抓）")
+            print(f"  ⚠️ 期交所選擇權報價 HTTP {_r.status_code} → 降級為距離推估（不重抓）")
             return None
-        _rows = (_r.json() or {}).get('data') or None
-        _opt_chain_cache = {'ts': _t.time(), 'rows': _rows}
-        print(f"  ✅ 選擇權快照取得 {len(_rows) if _rows else 0} 筆")
+        _ql = ((_r.json() or {}).get('RtData') or {}).get('QuoteList') or []
+        if not _ql:
+            print("  ⚠️ 期交所選擇權報價回傳空清單 → 降級為距離推估（不重抓）")
+            return None
+
+        # ★自動回報：第一次取得時把原始欄位名印進 log，日後對方改欄位可立即看出
+        if not _opt_chain_cache.get('logged_keys'):
+            try:
+                print(f"  ℹ️ MIS 原始欄位名（僅首次回報）：{sorted(list(_ql[0].keys()))[:18]}")
+            except Exception:
+                pass
+
+        # ── 正規化為舊有欄位名，並過濾掉無法解析／無成交價者 ──
+        _rows, _bad = [], 0
+        for _q in _ql:
+            if not isinstance(_q, dict):
+                continue
+            _sym = _q.get('SymbolID') or _q.get('Symbol') or _q.get('ProdID') or ''
+            _strike, _cp = _mis_parse_symbol(_sym)
+            if _strike is None:
+                # ★備援：欄位名若與預期不同，掃描本筆所有字串值找出契約代碼。
+                #   理由：主帥實測只證實 DispCName/CLastPrice 存在，代碼欄位名【未經實測】，
+                #   寫死單一欄位名風險過高（鐵律R-05：不可用臆測當成已驗證）。
+                for _v in _q.values():
+                    if isinstance(_v, str) and len(_v) <= 20 and _v[:2].upper() == 'TX':
+                        _strike, _cp = _mis_parse_symbol(_v)
+                        if _strike is not None:
+                            break
+            if _strike is None:
+                _bad += 1
+                continue
+            try:
+                _px = float(str(_q.get('CLastPrice', '')).replace(',', '').strip())
+            except Exception:
+                continue
+            if _px <= 0:
+                continue                       # 無成交價＝無流動性，排除
+            _rows.append({'strike_price': _strike, 'call_put': _cp, 'close': _px,
+                          'contract_date': str(_q.get('DispCName', '')).strip()})
+        _opt_chain_cache = {'ts': _t.time(), 'rows': _rows,
+                            'logged_keys': True}
+        if not _rows:
+            print(f"  ⚠️ 期交所選擇權：取得 {len(_ql)} 檔但【0 檔可解析】→ 降級為距離推估。"
+                  f"　★請把上面那行「MIS 原始欄位名」回報給AI，以校正代碼欄位。")
+        else:
+            print(f"  ✅ 期交所選擇權即時報價：{len(_ql)} 檔契約 → 可用 {len(_rows)} 檔"
+                  f"（無法解析代碼 {_bad} 檔已略過）")
         return _rows
     except Exception as _e:
-        print(f"  ⚠️ 選擇權快照取得失敗（{str(_e)[:40]}）→ 降級為距離推估（不重抓）")
+        print(f"  ⚠️ 期交所選擇權報價失敗（{str(_e)[:40]}）→ 降級為距離推估（不重抓）")
         return None
 
 
@@ -1812,7 +1894,7 @@ def get_weekly_option_hint(current_price, signal_type):
             f"建議標的：{_opt_type}（價外，以小博大）\n"
         )
         if _picks:
-            _hint += f"\n★依【實際權利金】篩選（上限 {OPT_PREMIUM_MAX} 元）：\n"
+            _hint += (f"\n★依【期交所即時權利金】篩選（上限 {OPT_PREMIUM_MAX} 元）：\n")
             for _s, _p, _c in _picks:
                 _hint += f"  → {int(_s)} {_opt_type}　權利金 {_p:g} 元" + (f"　[{_c}]" if _c else "") + "\n"
             _hint += "（排序：最接近價平者優先＝結算落入價內機率較高）\n"
