@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08100100'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08101455'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -792,12 +792,22 @@ def print_feature_report():
     try:
         print("\n" + "=" * 58)
         print("  📋【本輪功能自報】主帥只要看這一塊，不必手動驗證任何東西")
+        # ✅08101455 標示執行模式：同一個 workflow 有 scan 與 futures-scan 兩個 job，
+        #   各自只跑自己那條路徑。不標示的話，主帥會誤以為「該跑的沒跑」。
+        _mode = {'5mk': '期貨5分K（futures-scan job）',
+                 'condW': '條件W週選擇權（condw-scan job）'}.get(
+                     TEST_MODE, '全市場掃描（scan job）')
+        print(f"  執行模式：{_mode}　版本：{SCRIPT_VERSION}")
         print("=" * 58)
         _rows = [
             ('通知時段判定（F-10）',      'session',        '未執行到（本輪無訊號）'),
-            ('觀察清單讀取（F-14）',      'watchlist',      '未執行到（非台股掃描輪）'),
+            ('觀察清單讀取（F-14）',      'watchlist',
+             '本 job 不負責（只在全市場掃描執行）' if TEST_MODE in ('5mk', 'condW')
+             else '未執行到'),
             ('觀察清單補掃（F-14）',      'watchlist_extra', '未執行到'),
-            ('台指期K棒累積（F-11）',     'txf_bars',       '未執行到（非期貨時段）'),
+            ('台指期K棒累積（F-11）',     'txf_bars',
+             '本 job 不負責（請看 futures-scan job）' if TEST_MODE not in ('5mk', 'condW')
+             else '未執行到（非期貨時段）'),
             ('夜盤陳舊K棒防護（F-07）',   'stale',          '未觸發（K棒新鮮，正常）'),
             ('選擇權即時權利金（R-01替代）', 'opt_chain',    '未執行到（本輪無選擇權建議）'),
             ('台股盤中極端偵測（F-12）',  'intraday',       '未執行到（非台股交易時段）'),
@@ -4786,7 +4796,6 @@ def main_task():
         print(f'  ⚠️ 觀察清單補掃呼叫失敗（{str(_e)[:40]}），不影響主掃描')
 
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
-    print_feature_report()   # ✅08100100【本輪功能自報】鐵律AE3
     print(f"{'='*55}")
     # ✅ 方案②(07061319) 掃描結束保存今日跨輪快取（成長才存）
     save_cross_run_cache(_xrun_prev_w, _xrun_prev_d)
@@ -4972,6 +4981,13 @@ def main_task():
 # =====================
     if not buy_signals and not sell_signals and not delist_signals:
         print(f"📊 [{now_str}] 本次掃描無符合條件的股票，不發送通知。")
+
+    # ✅08101455【修正】自報區塊改到【所有通知處理完之後】才印。
+    #   真實事故：08100100 版把它掛在「掃描完成」那行後面，但通知處理（時段判定）
+    #   是再之後才跑，導致自報區塊印出「通知時段判定：未執行到」，
+    #   而 29 行之後它其實執行了 → ★自報區塊講了假話。
+    #   一個「回報用」的功能若報錯，比沒有這個功能更危險（主帥 08/10 實測 log 發現）。
+    print_feature_report()   # ✅08100100 新增／08101455 移位（鐵律AE3）
 
     print("\n✅ 全部完成！有訊號才會收到Gmail通知。")
 
