@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08101455'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08102047'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -4484,6 +4484,13 @@ def main_task():
         _pos_str = '多倉🔴' if _futures_is_holding else ('空倉🔵' if _futures_is_short else '空手⬜')
         _mode_str = f'SCAN_MODE={SCAN_MODE}' if 'SCAN_MODE' in dir() else SCAN_MODE
         print(f'\n📊 期貨5分K掃描：{FUTURES_5MK_TARGETS}')
+        # ✅08102047【修正·問題A】台指期K棒累積移到【所有關卡之前】無條件執行。
+        #   真實事故：08091843 起把它放在「下載df5之後、陳舊判定之前」，
+        #   但5分K路徑在更早的關卡就 return/continue，根本走不到那一行
+        #   → 主帥 08/10 15:08 實跑 futures-scan，自報顯示「未執行到」，
+        #     代表 🔴B(a) 階段二的資料【一根都沒累積到】。
+        #   ★累積快照是「記錄行情」，不該受任何策略關卡影響，故必須放最前面。
+        accumulate_txf_bar()
         print(f'   持倉狀態：{_pos_str}　掃描模式：{_mode_str}')
         # ✅ 08060105 新增：先跑15分K訊號（獨立流程，異常不影響下方5分K掃描）
         print(f'\n📊 期貨15分K掃描：{FUTURES_5MK_TARGETS}')
@@ -4581,7 +4588,6 @@ def main_task():
                 if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
                     print(f'  ⚠️ {ticker} 5分K資料不足（需>={BUY_LOOKBACK_5MK+2}根），跳過')
                     continue
-                accumulate_txf_bar()   # ✅08091843 階段一：先累積快照
                 check_tw_intraday_extreme()   # ✅08092108【🆕E】台股盤中極端異動即時偵測
                 if _bar_too_old(df5, f'{ticker} 期貨5分K'):
                     _h = _taifex_hint_text()
@@ -4783,17 +4789,23 @@ def main_task():
     # ✅08100036【⚪F′】補掃「全市場掃描範圍外」的觀察清單標的
     #   ★_scanned_tickers_all 必須在此就地組出：
     #     本輪實測抓到，原先寫在下方通知區會造成 undefined name（用在定義之前）。
-    try:
-        _scanned_tickers_all = [str(x[1]) for x in (buy_signals + sell_signals)]
+    # ✅08102047【修正·問題B】觀察清單只在【全市場掃描模式】執行。
+    #   真實事故：期貨5分K模式每5分鐘跑一次，原本會連帶每5分鐘讀一次 Firebase
+    #   並對14檔補掃標的重抓行情 → 一天數百次無謂呼叫，恐觸發 yfinance 限流。
+    if TEST_MODE in ('5mk', 'condW'):
+        print('  ⏭️ 觀察清單：期貨/條件W 模式不執行（只在全市場掃描執行，避免每5分鐘重抓）')
+    else:
         try:
-            _scanned_tickers_all += list(US_STOCKS) + list(CRYPTO_LIST) + list(FX_LIST)
-        except Exception:
-            pass
-        _wl_extra = scan_watchlist_extras(_scanned_tickers_all)
-        if _wl_extra:
-            buy_signals.extend(_wl_extra)
-    except Exception as _e:
-        print(f'  ⚠️ 觀察清單補掃呼叫失敗（{str(_e)[:40]}），不影響主掃描')
+            _scanned_tickers_all = [str(x[1]) for x in (buy_signals + sell_signals)]
+            try:
+                _scanned_tickers_all += list(US_STOCKS) + list(CRYPTO_LIST) + list(FX_LIST)
+            except Exception:
+                pass
+            _wl_extra = scan_watchlist_extras(_scanned_tickers_all)
+            if _wl_extra:
+                buy_signals.extend(_wl_extra)
+        except Exception as _e:
+            print(f'  ⚠️ 觀察清單補掃呼叫失敗（{str(_e)[:40]}），不影響主掃描')
 
     print(f"  掃描完成！買進訊號：{len(buy_signals)}支 / 賣出訊號：{len(sell_signals)}支 / 下市警報：{len(delist_signals)}支")
     print(f"{'='*55}")
