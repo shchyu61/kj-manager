@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08102047'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08160731'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -2454,6 +2454,50 @@ def _pick_strikes_by_premium(rows, want_put, spot):
         return []
 
 
+# ✅08160731【F-15】台股現貨指數標的「日盤時段守門」
+# ┌─ 決策註記：為何需要這道防護（凍結清單條目 F-15）──────────────────────
+# │ 真實事故：2026/08/11(週二) 13:38 發出「期貨15分K買進」、13:43 發出
+# │   「期貨15分K做空」——★同一根15分K(13:30-13:45)、方向相反、相隔5分鐘。
+# │   兩封信的「前一根」數值完全相同(RSI 64.1／MACD +13.76)，
+# │   只有「當根」不同(收盤 45190.86→45138.36、RSI 64.5↑→60.7↓)，
+# │   證明讀的是【同一根未完成K棒】，且標的 ^TWII 在 13:30 已收盤，
+# │   價格變動來自 yfinance 對最後一根的【回填修正】，不是真實行情。
+# │ ★為何既有防護擋不住：F-07 FUT_BAR_MAX_AGE_MIN=15 判定「陳舊」，
+# │   但 13:30~13:45 這段的K棒年齡只有 0~15 分鐘，【剛好躲過】該門檻。
+# │   夜盤(年齡數小時)本來就被 F-07 擋住，故本守門【不改變夜盤行為】，
+# │   淨效果＝只補上 13:30~13:45 這個盲區。
+# │ ★另一個矛盾：_opt_hint_if_window 的守門是 09:05~13:30，13:30後回傳空字串，
+# │   所以那兩封信【沒有履約價建議】——履約價模組知道收盤了，
+# │   發信模組卻不知道。兩個閘門的時間判斷不一致（鐵律AF4 的同型問題）。
+# │ ★適用範圍：僅限【台股現貨指數】類標的（^TW 開頭，如 ^TWII）。
+# │   若日後 FUTURES_5MK_TARGETS 加入真正的期貨代碼(如 TXFF)，
+# │   該標的夜盤有真實行情，【不受本守門限制】。
+# └──────────────────────────────────────────────────────────────
+TW_SPOT_SESSION_GUARD = True        # ★凍結開關 F-15：關閉將使 13:30~13:45 假訊號重現
+TW_SPOT_SESSION_START = 9 * 60      # 09:00（台股現貨開盤）
+TW_SPOT_SESSION_END   = 13 * 60 + 30  # 13:30（台股現貨收盤）★與 _opt_hint_if_window 對齊
+
+
+def _tw_spot_session_ok(ticker):
+    """台股現貨指數標的是否處於「有真實行情」的時段。
+    ・回傳 True  ＝ 可正常判斷訊號
+    ・回傳 False ＝ 該標的此刻沒有真實行情，呼叫端必須 continue（不得發信）
+    ★只約束 ^TW 開頭的現貨指數；其他標的一律放行，不影響未來接入真期貨。
+    """
+    if not TW_SPOT_SESSION_GUARD:
+        return True
+    try:
+        if not str(ticker).upper().startswith('^TW'):
+            return True                      # 非台股現貨指數（如 TXFF）→ 不受限
+        _n = datetime.now(pytz.timezone('Asia/Taipei'))
+        if _n.weekday() >= 5:                # 週六日無盤
+            return False
+        _m = _n.hour * 60 + _n.minute
+        return TW_SPOT_SESSION_START <= _m <= TW_SPOT_SESSION_END
+    except Exception:
+        return True                          # 判斷失敗時不擋，避免守門本身變成故障點
+
+
 def _opt_hint_if_window(current_price, signal_type):
     """✅ (08032126) 週選擇權推薦【時窗守門】——取代原分散於各訊號點的重複判斷。
     ・涵蓋週二~週五：週三選(週三結算)、週五選(週五結算) 及其【前一日】(週二/週四)。
@@ -4078,6 +4122,10 @@ def scan_futures_15mk():
         _n15 = max(3, int(round(BUY_LOOKBACK_5MK / 3)))    # 54根5分K → 18根15分K（等比換算）
         for _tk in FUTURES_5MK_TARGETS:
             try:
+                # ✅08160731【F-15】收盤後不得再產生訊號（見 _tw_spot_session_ok 決策註記）
+                if not _tw_spot_session_ok(_tk):
+                    print(f'  🔕 15分K：{_tk} 非現貨交易時段（09:00~13:30），跳過')
+                    continue
                 _df = _normalize_df(yf.download(_tk, period='5d', interval='15m', progress=False))
                 if _df is None or _df.empty or len(_df) < _n15 + 2:
                     print(f'  ⚠️ 15分K：{_tk} 資料不足，跳過'); continue
@@ -4497,6 +4545,10 @@ def main_task():
         scan_futures_15mk()
         for ticker in FUTURES_5MK_TARGETS:
             try:
+                # ✅08160731【F-15】收盤後不得再產生訊號（見 _tw_spot_session_ok 決策註記）
+                if not _tw_spot_session_ok(ticker):
+                    print(f'  🔕 5分K：{ticker} 非現貨交易時段（09:00~13:30），跳過')
+                    continue
                 # ══════════════════════════════════════════════
                 # 5分K掃描：RSI + MACD柱 轉折判斷
                 # 日K門檻：參考用（印出日K位階供參考，但不強制擋住）
