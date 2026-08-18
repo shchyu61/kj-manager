@@ -135,7 +135,7 @@
                 <i data-lucide="shield-check" class="w-6 h-6"></i>
             </div>
             <h2 class="text-xl font-black mb-1 tracking-tight">【科蓁股票PRO智能理財管家】成員身份驗證</h2>
-            <p class="text-slate-500 text-sm mb-3 leading-relaxed">請使用 Google 帳號登入。（每日密碼與 OTP 已於 08/18 停用）</p>
+            <p class="text-slate-500 text-sm mb-3 leading-relaxed">請輸入信箱帳號，選擇任一方式登入。</p>
 
             <!-- 信箱輸入 -->
             <div class="space-y-2 text-left mb-3">
@@ -150,35 +150,24 @@
                 </div>
             </div>
 
-            <!-- ✅ 08180814 W-3：Google 登入（唯一與 Firebase Auth 真實綁定的方式）-->
-            <div id="section-google" class="space-y-2 text-left mb-3">
-                <div class="divider">登入方式：Google 帳號</div>
-                <button id="btn-google-login"
-                        class="w-full py-3 bg-white text-slate-700 rounded-xl font-black shadow-lg border border-slate-300 hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
-                    <i data-lucide="log-in" class="w-4 h-4"></i>
-                    <span id="google-btn-text">使用 Google 帳號登入</span>
-                </button>
-                <p class="text-sm text-slate-400 ml-2 italic">※ 上方信箱欄可留空，一律以 Google 帳號的信箱為準</p>
-            </div>
-
-            <!-- 方式A：每日密碼（08180814 起停用，保留程式碼不刪除）-->
-            <div id="section-daily-key" class="space-y-2 text-left hide">
-                <div class="divider">方式 A：每日密碼</div>
+            <!-- 方式A：每日密碼 -->
+            <div id="section-daily-key" class="space-y-2 text-left">
+                <div class="divider">已註冊者：信箱 ＋ 密碼快速登入</div>
                 <div class="flex flex-col gap-1">
-                    <label class="text-base font-black text-slate-500 ml-2 tracking-tight uppercase">Daily Key / 每日密碼</label>
-                    <input type="password" id="access-key-input" placeholder="輸入每日密碼" 
+                    <label class="text-base font-black text-slate-500 ml-2 tracking-tight uppercase">Password / 密碼</label>
+                    <input type="password" id="access-key-input" placeholder="輸入您的密碼" 
                            class="w-full border-none rounded-xl py-2.5 px-6 text-xl font-bold tracking-widest focus:ring-2 focus:ring-amber-400 outline-none transition-all" style="background:#ede0cc;">
                 </div>
                 <button id="btn-verify-key" 
                         class="w-full py-2.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all flex items-center justify-center gap-2">
                     <i data-lucide="log-in" class="w-4 h-4"></i>
-                    <span id="login-btn-text">密碼登入</span>
+                    <span id="login-btn-text">登入</span>
                 </button>
             </div>
 
             <!-- 方式B：一次性OTP -->
-            <div id="section-otp" class="space-y-2 text-left mt-3 hide">
-                <div class="divider">方式 B：一次性密碼（OTP）</div>
+            <div id="section-otp" class="space-y-2 text-left mt-3">
+                <div class="divider">首次使用／換新裝置：信箱驗證</div>
                 <!-- ✅ 問題4修正：OTP輸入欄永遠顯示在發送按鈕上方 -->
                 <div id="otp-sent-notice" class="hide p-2 bg-emerald-50 rounded-xl text-center">
                     <p class="text-sm font-black text-emerald-700">✅ 密碼已發送！請查收信箱</p>
@@ -193,6 +182,20 @@
                         <span id="send-otp-text">發送6碼一次性密碼到信箱</span>
                     </button>
                 </div>
+                <!-- ✅ 08182248 新增：六碼驗證通過後才顯示，設定/輸入密碼完成註冊或登入 -->
+                <div id="otp-step3" class="hide space-y-2 p-2 bg-emerald-50 rounded-xl">
+                    <p id="otp-step3-hint" class="text-sm font-black text-emerald-700">✅ 信箱驗證成功！請設定您的登入密碼（至少6碼）</p>
+                    <input type="password" id="reg-pw1" placeholder="設定密碼（至少6碼）"
+                           class="w-full border-none rounded-xl py-2.5 px-4 focus:ring-2 focus:ring-emerald-400 outline-none" style="background:#ede0cc;">
+                    <input type="password" id="reg-pw2" placeholder="再輸入一次密碼"
+                           class="w-full border-none rounded-xl py-2.5 px-4 focus:ring-2 focus:ring-emerald-400 outline-none" style="background:#ede0cc;">
+                    <button id="btn-finish-reg"
+                            class="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-black hover:bg-emerald-700 shadow-lg transition-all">
+                        完成並進入
+                    </button>
+                    <p class="text-[12px] text-slate-500 ml-1 italic">※ 若此信箱先前已設過密碼，請直接輸入原密碼（兩欄填一樣即可）</p>
+                </div>
+
                 <div id="otp-step2" class="hide">
                     <div class="flex gap-2">
                         <button id="btn-verify-otp" 
@@ -225,7 +228,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v08180814</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v08182248</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1042,7 +1045,7 @@
 
     <script type="module">
         import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { signInAnonymously, signInWithCustomToken, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { signInAnonymously, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // ✅ 確保盾牌等圖示一定渲染（module script為defer，需手動補觸發）
         if (document.readyState === 'loading') {
@@ -1163,20 +1166,19 @@
 
         const getSafeDocId = (email) => email.toLowerCase().replace(/[@.]/g, '_');
 
-        // ✅ 08180814 W-3【身分唯一真實來源】
-        //   舊版用 currentUserEmail（普通 JS 變數，主控台一行即可竄改）組路徑，
-        //   此處改為一律取 Firebase Auth 的已驗證 email。
-        //   ★currentUserEmail 自本版起只供畫面顯示，不得再參與任何路徑組裝。
+        // ✅ 08182248【身分唯一真實來源】
+        //   舊版用 currentUserEmail（普通 JS 變數，主控台一行即可竄改）組路徑。
+        //   本版一律取 Firebase Auth 已驗證的 email。
+        //   ★currentUserEmail 自本版起只供畫面顯示，不再參與任何路徑組裝。
         const AUTH_EMAIL = () => {
             const u = window.auth && window.auth.currentUser;
             return (u && u.email) ? u.email.toLowerCase() : '';
         };
         const requireAuthEmail = () => {
             const a = AUTH_EMAIL();
-            if (!a) throw new Error('尚未完成 Google 登入，無法存取雲端資料');
+            if (!a) throw new Error('尚未登入，無法存取雲端資料');
             return a;
         };
-        // ★管理員判定改以 Auth 身分為準（函式層防呆，ＡＫ３）
         const isAdminAuth = () => AUTH_EMAIL() === 'shchyu61@gmail.com';
 
         const getSharedDocPath = (email) => {
@@ -1204,46 +1206,43 @@
 
         const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-        // ✅ 08180814 W-3：本函式【不再自行登入】，只確認身分是否已建立。
-        //   原本呼叫 signInAnonymously()，會給出一個與 email 完全無關的隨機 uid，
-        //   導致安全規則無法分辨「這筆資料是不是本人的」。
-        //   ★保留函式名稱，是為了不動到全檔 20 餘處呼叫端（縮小改動半徑）。
+        // ✅ 08182248：本函式【不再自行登入】，只確認身分是否已建立。
+        //   原本呼叫 signInAnonymously()，會給出與 email 完全無關的隨機 uid，
+        //   使安全規則無法分辨「這筆資料是不是本人的」。
+        //   ★保留函式名稱，避免動到全檔 20 餘處呼叫端（縮小改動半徑）。
         const initFirebaseAuth = async () => {
             const u = window.auth && window.auth.currentUser;
             if (u && u.email) return u;
-            throw new Error('尚未完成 Google 登入');
+            throw new Error('尚未登入');
         };
 
-        // ✅ 08180814 W-3：Google 登入（彈窗失敗時自動改用轉址，避免手機被擋而登不進去）
-        const _googleProvider = new GoogleAuthProvider();
-        _googleProvider.setCustomParameters({ prompt: 'select_account' });
-        window.googleLogin = async () => {
-            const btn = document.getElementById('btn-google-login');
-            if (btn) btn.disabled = true;
+        // ✅ 08182248【自助註冊 / 登入核心】
+        //   ★OTP 只負責「確認這個信箱真的收得到信」（主帥原設計，完全保留）；
+        //   ★誰能讀寫誰的資料，改由 Firebase 後端驗證的帳密決定。
+        //   ★流程：先試建立帳號 → 若已存在則改為登入。
+        const _finishAuth = async (email, pw) => {
             try {
-                const res = await signInWithPopup(window.auth, _googleProvider);
-                const em = (res && res.user && res.user.email) ? res.user.email.toLowerCase() : '';
-                if (!em) throw new Error('Google 帳號未提供信箱');
-                if (BLOCKED_EMAILS.includes(em)) {
-                    // ★順序很重要：_writeLoginLog 需要有效身分，故必須在 signOut 之前寫
-                    try { await _writeLoginLog(em, false, '黑名單封鎖'); } catch(e) {}
-                    _notifyBlacklist(em, 'Google登入');
-                    try { await signOut(window.auth); } catch(e) {}
-                    showError('此信箱已被停用，請聯絡管理員。');
-                    return;
-                }
-                await completeLogin(em, 'Google登入');
+                await createUserWithEmailAndPassword(window.auth, email, pw);
+                return 'created';
             } catch (e) {
-                const code = e && e.code ? e.code : '';
-                if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment' || code === 'auth/cancelled-popup-request') {
-                    try { await signInWithRedirect(window.auth, _googleProvider); return; } catch (e2) {}
+                const c = (e && e.code) ? e.code : '';
+                if (c === 'auth/email-already-in-use') {
+                    await signInWithEmailAndPassword(window.auth, email, pw);
+                    return 'signedin';
                 }
-                if (code !== 'auth/popup-closed-by-user') {
-                    window.showAlert('Google 登入失敗：' + (e && e.message ? e.message : code));
-                }
-            } finally {
-                if (btn) btn.disabled = false;
+                throw e;
             }
+        };
+        const _authErrMsg = (e) => {
+            const c = (e && e.code) ? e.code : '';
+            if (c === 'auth/weak-password')        return '密碼太短，請至少 6 碼。';
+            if (c === 'auth/invalid-credential' ||
+                c === 'auth/wrong-password')       return '此信箱已註冊過，但密碼不正確。忘記密碼請聯絡管理員重設。';
+            if (c === 'auth/too-many-requests')    return '嘗試次數過多，請稍後再試。';
+            if (c === 'auth/user-disabled')        return '此帳號已被停用，請聯絡管理員。';
+            if (c === 'auth/invalid-email')        return '信箱格式不正確。';
+            if (c === 'auth/network-request-failed') return '網路連線失敗，請檢查網路後再試。';
+            return '登入失敗：' + (e && e.message ? e.message : c);
         };
 
         const saveToCloud = async () => {
@@ -1384,57 +1383,37 @@
             setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
         };
 
-        // 方式A：每日密碼登入
+        // ✅ 08182248：已註冊者快速登入（Firebase 帳密，後端驗證）
+        //   ★舊版 checkCustomPassword／generateDailyKey 都在瀏覽器內比對，
+        //     讀得到記憶體就能繞過；本版交由 Firebase 後端驗證。
         document.getElementById('btn-verify-key').addEventListener('click', async () => {
-            // ✅ 08180814 W-3：每日密碼登入已停用（公式可公開推算，且不產生 Firebase 身分）
-            showError('每日密碼登入已停用，請改用上方 Google 帳號登入。'); return;
             const email = getEmailInput();
-            const keyInput = document.getElementById('access-key-input').value.trim();
-            const expected = generateDailyKey(email);
-
-            // ── 黑名單檢查（優先於一切驗證）──────────────────
+            const pw = document.getElementById('access-key-input').value;
+            if (!email || !email.includes('@')) { showError('請輸入有效信箱。'); return; }
+            if (!pw) { showError('請輸入密碼。'); return; }
             if (BLOCKED_EMAILS.includes(email.toLowerCase())) {
                 showError('此信箱已被停用，請聯絡管理員。');
-                _writeLoginLog(email, false, '黑名單封鎖');
-                // 即時通知管理員
-                _notifyBlacklist(email, '每日密碼');
+                _notifyBlacklist(email, '快速登入');
                 return;
             }
-            // ✅ 首次登入強制OTP驗證（未在Firebase記錄emailVerified的信箱不可用密碼登入）
-            const isVerified = await checkEmailVerified(email);
-            if (!isVerified) {
-                showError('首次登入請先完成信箱驗證！請使用下方「OTP一次性密碼」驗證您的信箱。');
-                return;
-            }
-
-            // ✅ 已移除白名單管控，任何信箱均可嘗試登入
-            // 需求4：優先驗證自訂密碼
-            const customResult = await checkCustomPassword(email, keyInput);
-            if (customResult === true) {
-                // 自訂密碼正確
-            } else if (customResult === false) {
-                showError('密碼錯誤。'); return;
-            } else {
-                // 無自訂密碼，回退到每日密碼
-                if (keyInput.toLowerCase() !== expected) { showError('每日密碼錯誤。'); return; }
-            }
-
             const btn = document.getElementById('btn-verify-key');
             btn.disabled = true;
-            // ✅ 問題5：5秒內防止連點（UI層面防呆）
-            setTimeout(() => { if (btn.disabled && !window.lastOtpSendTime) btn.disabled = false; }, 5000);
             try {
-                await completeLogin(email, '每日密碼');
+                await signInWithEmailAndPassword(window.auth, email, pw);
+                document.getElementById('access-key-input').value = '';
             } catch (e) {
                 btn.disabled = false;
-                window.showAlert('登入失敗：' + e.message);
+                const c = (e && e.code) ? e.code : '';
+                if (c === 'auth/invalid-credential' || c === 'auth/wrong-password' || c === 'auth/user-not-found') {
+                    showError('信箱或密碼錯誤。若是第一次使用，請改用下方「信箱驗證」註冊。');
+                } else {
+                    showError(_authErrMsg(e));
+                }
             }
         });
 
         // 方式B：發送OTP（移除白名單，改為1小時3次限制）
         document.getElementById('btn-send-otp').addEventListener('click', async () => {
-            // ✅ 08180814 W-3：OTP 登入已停用
-            showError('OTP 登入已停用，請改用上方 Google 帳號登入。'); return;
             const email = getEmailInput();
             if (!email || !email.includes('@')) { showError('請輸入有效信箱。'); return; }
 
@@ -1488,8 +1467,6 @@
 
         // 方式B：驗證OTP
         document.getElementById('btn-verify-otp').addEventListener('click', async () => {
-            // ✅ 08180814 W-3：OTP 登入已停用（驗證碼在瀏覽器產生與比對，可被繞過）
-            showError('OTP 登入已停用，請改用上方 Google 帳號登入。'); return;
             const inputOtp = document.getElementById('otp-input').value.trim();
             if (Date.now() > otpExpireTime) { showError('密碼已過期。'); return; }
 
@@ -1506,20 +1483,40 @@
                 return;
             }
 
-            // ✅ 使用發送時鎖定的 otpEmail
-            const email = otpEmail || getEmailInput();
-            const btn = document.getElementById('btn-verify-otp');
+            // ✅ 08182248：六碼正確【不再直接放行】，改為進入步驟3 設定/輸入密碼。
+            //   ★原因：六碼在瀏覽器產生與比對，繞得過去；
+            //   ★真正決定能讀寫誰的資料的，是下一步的 Firebase 帳密。
+            //   ★原本這裡會寫 users/{safeId}/data/settings 的 emailVerified，
+            //     ★已移除——因為當下還沒有 Firebase 身分，該寫入必然失敗。
+            window._otpVerifiedEmail = otpEmail || getEmailInput();
+            otpFailCount = 0;
+            document.getElementById('otp-step1').classList.add('hide');
+            document.getElementById('otp-step2').classList.add('hide');
+            document.getElementById('otp-sent-notice').classList.add('hide');
+            document.getElementById('otp-input').classList.add('hide');
+            document.getElementById('otp-step3').classList.remove('hide');
+            document.getElementById('reg-pw1').focus();
+        });
+
+        // ✅ 08182248：步驟3 —— 完成註冊或登入
+        document.getElementById('btn-finish-reg').addEventListener('click', async () => {
+            const email = (window._otpVerifiedEmail || '').toLowerCase();
+            const p1 = document.getElementById('reg-pw1').value;
+            const p2 = document.getElementById('reg-pw2').value;
+            if (!email) { showError('請先完成信箱驗證。'); return; }
+            if (!p1 || p1.length < 6) { showError('密碼至少 6 碼。'); return; }
+            if (p1 !== p2) { showError('兩次輸入的密碼不一致。'); return; }
+            const btn = document.getElementById('btn-finish-reg');
             btn.disabled = true;
-            otpFailCount = 0;    // 成功登入，重置錯誤次數
             try {
-                // ✅ OTP驗證成功 → 標記此信箱為「已驗證」，日後可用密碼登入
-                await initFirebaseAuth();
-                const verifyPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
-                await setDoc(verifyPath, { emailVerified: true }, { merge: true });
-                await completeLogin(email, 'OTP一次性密碼');
+                const r = await _finishAuth(email, p1);
+                document.getElementById('reg-pw1').value = '';
+                document.getElementById('reg-pw2').value = '';
+                // ★登入成功後由 onAuthStateChanged 統一呼叫 completeLogin
+                if (r === 'created') console.log('新帳號建立成功');
             } catch (e) {
                 btn.disabled = false;
-                window.showAlert('登入失敗：' + e.message);
+                showError(_authErrMsg(e));
             }
         });
 
@@ -2787,8 +2784,8 @@
         let _futuresHoldingManual = false;  // 手動持倉開關
 
         window.toggleFuturesHolding = async () => {
-            // ✅ 08180814 修-3（ＡＫ３）：原本只有畫面層擋，函式層完全沒擋。
-            //   此開關被雲端版讀取用於決定深夜是否跳過買進掃描，任何人翻動都會影響主帥。
+            // ✅ 08182248 修-3（ＡＫ３）：原本只有畫面層擋，函式層完全沒擋。
+            //   此開關被雲端版讀取，用於決定深夜是否跳過買進掃描。
             if (!isAdminAuth()) { window.showAlert('此開關僅限管理員操作'); return; }
             _futuresHoldingManual = !_futuresHoldingManual;
             const btn   = document.getElementById('btn-futures-holding');
@@ -2869,7 +2866,7 @@
         let _futuresShortManual = false;
 
         window.toggleFuturesShort = async () => {
-            // ✅ 08180814 修-3（ＡＫ３）：同上，補函式層防呆
+            // ✅ 08182248 修-3（ＡＫ３）：同上
             if (!isAdminAuth()) { window.showAlert('此開關僅限管理員操作'); return; }
             _futuresShortManual = !_futuresShortManual;
             const btn  = document.getElementById('btn-futures-short');
@@ -3551,7 +3548,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                         ticker:_c, signal:'BUY', price:_r.close,
                                         condition:_r._mixedLabel||'做多進場',
                                         time:new Date().toLocaleString('zh-TW'),
-                                        user:(AUTH_EMAIL()||'unknown'),   // ✅ 08180814 修-2：原為 window._userEmail（全檔從未指派）
+                                        user:(AUTH_EMAIL()||'unknown'),   // ✅ 08182248 修-2：原為 window._userEmail（全檔從未指派）
                                         sent:false
                                     });
                                 }
@@ -4040,8 +4037,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
 
         window.clearLoginLog = async () => {
-            // ✅ 08180814 修-1（ＡＫ３）：原本只有畫面層擋（區塊僅管理員可見），
-            //   但函式掛在 window 上，任何人在主控台打 clearLoginLog() 即可清空稽核紀錄。
+            // ✅ 08182248 修-1（ＡＫ３）：原本只有畫面層擋，函式掛在 window 上，
+            //   任何人在主控台打 clearLoginLog() 即可清空全部稽核紀錄。
             if (!isAdminAuth()) { window.showAlert('僅限管理員操作'); return; }
             if (!confirm('確定要清除所有登入紀錄嗎？')) return;
             try {
@@ -4258,30 +4255,37 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         });
 
         document.getElementById('btn-logout').addEventListener('click', () => {
-            // ✅ 08180814 W-3：舊版只清 localStorage，Firebase 身分仍留著；此處一併登出
+            // ✅ 08182248：舊版只清 localStorage，Firebase 身分仍留著；此處一併登出
             try { signOut(window.auth); } catch(e) {}
             localStorage.removeItem('kj_email');
             location.reload();
         });
 
-        // ✅ 08180814 W-3：自動登入改由 Firebase 身分狀態決定。
-        //   舊版只看 localStorage 的 kj_email，那是使用者自己可以改的值，
-        //   等於「自稱是誰就是誰」；改為以 Auth 已驗證的 email 為準。
+        // ✅ 08182248：自動登入改由 Firebase 身分狀態決定。
+        //   ★舊版只看 localStorage 的 kj_email——那是使用者自己可改的值，
+        //     等於「自稱是誰就是誰」。
+        //   ★Firebase 登入狀態會保存在瀏覽器，
+        //     所以每台裝置只需要完成一次註冊，之後開網頁就直接進來。
         (async () => {
-            try { await getRedirectResult(window.auth); } catch(e) {}
             onAuthStateChanged(window.auth, async (u) => {
                 if (u && u.email) {
                     const em = u.email.toLowerCase();
-                    if (BLOCKED_EMAILS.includes(em)) { try { await signOut(window.auth); } catch(e){} return; }
-                    if (currentUserEmail === em) return;   // 已登入同一人，不重複執行
-                    try { await completeLogin(em, '自動登入'); } catch(e) { console.error(e); }
+                    if (BLOCKED_EMAILS.includes(em)) {
+                        try { await _writeLoginLog(em, false, '黑名單封鎖'); } catch(e) {}
+                        try { await signOut(window.auth); } catch(e) {}
+                        return;
+                    }
+                    if (currentUserEmail === em) return;
+                    try { await completeLogin(em, '信箱驗證＋密碼'); } catch(e) { console.error(e); }
                 } else {
                     localStorage.removeItem('kj_email');
+                    const b1 = document.getElementById('btn-verify-key');
+                    const b2 = document.getElementById('btn-finish-reg');
+                    if (b1) b1.disabled = false;
+                    if (b2) b2.disabled = false;
                 }
             });
         })();
-
-        document.getElementById('btn-google-login').addEventListener('click', () => window.googleLogin());
 
         // ══ 零股計算機 ════════════════════════════════════════════
         window.calcBudget = function() {
