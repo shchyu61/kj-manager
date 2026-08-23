@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08160731'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08231006'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -443,6 +443,20 @@ def _taifex_index_snapshot():
                 _ftime = str(_q.get('CTime', ''))
         if _fut is None:
             return None
+        # ✅08231006【甲案·欄位探測．★暫時性診斷，取得結果後即移除】
+        #   目的：確認期交所 MIS 的 QuoteList 是否提供【當日最高／最低價】。
+        #   若有，甲案可用「當日高低的差分」還原棒內真實極值，
+        #   而不是只靠取樣價 max/min（那會漏掉樣本之間的極端）。
+        #   ★只印出【欄位名稱與值】，不改變任何回傳值、不影響任何判斷。
+        try:
+            for _q in _ql:
+                if isinstance(_q, dict) and '期' in str(_q.get('DispCName', '')):
+                    print('  🔎[08231006欄位探測] MIS 期貨首檔可用欄位：')
+                    for _k in sorted(_q.keys()):
+                        print(f'      {_k} = {_q.get(_k)}')
+                    break
+        except Exception:
+            pass
         return {'spot': _spot, 'fut': _fut, 'time': _ftime,
                 'basis': (None if _spot is None else _fut - _spot)}
     except Exception:
