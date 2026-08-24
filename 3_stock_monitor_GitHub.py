@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08241013'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08241728'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -4002,15 +4002,17 @@ def check_holdings_health():
     ・雲端版由 GitHub Actions 觸發 → 筆電未開機也收得到；本機版策略相同。
     """
     print("\n📋 【持股每日健檢】啟動...")
-    _items = []   # (顯示名, 代號, 是否空單)
+    # ✅08241728【主帥指定】tuple 加入第4欄【市場別】，
+    #   ★原本主旨只寫「N 檔觸發出場條件」，★完全看不出是台股還是美股。
+    _items = []   # (顯示名, 代號, 是否空單, 市場別)
     for _c in HOLDINGS_TW:
-        _items.append((_c, _c + '.TW', (_c in HOLDINGS_SHORT)))
+        _items.append((_c, _c + '.TW', (_c in HOLDINGS_SHORT), '台股'))
     for _c in HOLDINGS_US:
-        _items.append((_c, _c, (_c in HOLDINGS_SHORT)))
+        _items.append((_c, _c, (_c in HOLDINGS_SHORT), '美股'))
     for _c in HOLDINGS_CRYPTO:
-        _items.append((_c, _c, (_c in HOLDINGS_SHORT)))
+        _items.append((_c, _c, (_c in HOLDINGS_SHORT), '虛擬幣'))
     for _c in HOLDINGS_FX:
-        _items.append((_c, _c, (_c in HOLDINGS_SHORT)))
+        _items.append((_c, _c, (_c in HOLDINGS_SHORT), '外匯'))
 
     if not _items:
         print("📋 目前無持股，略過健檢")
@@ -4018,7 +4020,8 @@ def check_holdings_health():
 
     _lines, _alert_cnt, _ok_cnt, _fail_cnt = [], 0, 0, 0
     _fail_names = []   # ✅ (08031611) 失敗標的名稱（僅在有示警而發信時，於信末附註）
-    for _name, _tk, _is_short in _items:
+    _alert_mkt = {}   # ✅08241728 各市場別的示警檔數，供主旨組裝
+    for _name, _tk, _is_short, _mkt in _items:
         try:
             # 長期＝月K(5y/1mo)；台股 .TW 無資料時自動改試 .TWO（上櫃）
             _dm = get_stock_data(_tk, period='5y', interval='1mo')
@@ -4065,12 +4068,13 @@ def check_holdings_health():
                 #    _hh_snapshot」，若 _hh_snapshot 拋錯，計數已加卻又落入 except 計入失敗，
                 #    造成主旨與內文不符（截圖實證：主旨「示警2檔／持有9檔」但內文全為健檢失敗）。
                 _row = (
-                    f"・{_name}{'（空單）' if _is_short else ''}　現價 {_px:,.2f}\n"
+                    f"・[{_mkt}] {_name}{'（空單）' if _is_short else ''}　現價 {_px:,.2f}\n"
                     f"{_hh_snapshot(_im, '長期(月K)')}\n"
                     f"{_hh_snapshot(_iw, '中期(週K)')}\n"
                     f"　　👉 🔴 {_act}\n　　　　觸發：" + "；".join(_hits) + "\n"
                 )
                 _alert_cnt += 1
+                _alert_mkt[_mkt] = _alert_mkt.get(_mkt, 0) + 1   # ✅08241728
                 _lines.append(_row)
             else:
                 _ok_cnt += 1   # ✅ (08031611) 未觸發者不列入信中，僅計數（避免無效資訊稀釋警覺）
@@ -4087,7 +4091,12 @@ def check_holdings_health():
         return
 
     _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
-    _subject = f"☁️【雲端】📋 持股健檢示警！{_alert_cnt} 檔觸發出場條件"
+    # ✅08241728【主帥指定】主旨標明市場別，★一眼分辨台股／美股／虛擬幣／外匯。
+    #   ・單一市場 → 「台股2檔」；★多市場 → 「台股2檔／美股1檔」
+    #   ・順序固定為 台股→美股→虛擬幣→外匯，★不隨字典順序浮動
+    _mk_order = ['台股', '美股', '虛擬幣', '外匯']
+    _mk_txt = '／'.join(f'{_m}{_alert_mkt[_m]}檔' for _m in _mk_order if _alert_mkt.get(_m))
+    _subject = f"☁️【雲端】📋 持股健檢示警！{_mk_txt} 觸發出場條件"
     _body = (
         f"【持股健檢・出場示警】{_now}（台灣時間）\n"
         f"{'='*46}\n"
@@ -4193,34 +4202,6 @@ def scan_futures_15mk():
 
 def main_task():
 
-    # ✅08241013【甲案·欄位探測．★暫時性診斷，取得結果後即移除】
-    #   ★放在 main_task() 最開頭【無條件執行一次】——
-    #   ★上一版放在 _taifex_index_snapshot() 內，而條件W 不在時間窗時
-    #     會提前 return，★根本走不到（08241011 截圖為證）。
-    try:
-        import requests as _pq
-        _pr = _pq.post(OPT_MIS_URL,
-                       json={"MarketType": "0", "SymbolType": "F", "KindID": "1",
-                              "CID": "TXF", "ExpireMonth": "", "RowSize": "全部",
-                              "PageNo": "", "SortColumn": "", "AscDesc": "A"},
-                       timeout=OPT_MIS_TIMEOUT,
-                       headers={'Referer': OPT_MIS_REFERER,
-                                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        print(f'  🔎[08241013欄位探測] MIS HTTP={_pr.status_code}')
-        _pl = ((_pr.json() or {}).get('RtData') or {}).get('QuoteList') or []
-        print(f'  🔎[08241013欄位探測] QuoteList 筆數={len(_pl)}')
-        _hit = False
-        for _q2 in _pl:
-            if isinstance(_q2, dict) and '期' in str(_q2.get('DispCName', '')):
-                print(f'  🔎[08241013欄位探測] 期貨首檔＝{_q2.get("DispCName")}　全部欄位：')
-                for _k in sorted(_q2.keys()):
-                    print(f'      {_k} = {_q2.get(_k)}')
-                _hit = True
-                break
-        if not _hit:
-            print(f'  🔎[08241013欄位探測] ★清單無期貨項目（可能非交易時段）')
-    except Exception as _pe:
-        print(f'  🔎[08241013欄位探測] ★失敗：{_pe}')
     # 🔥 宣告 global 確保全域共用
     global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
     global _holdings_sent   # ✅ (07130626) 持股每日健檢
@@ -5098,6 +5079,37 @@ if __name__ == "__main__":
     test_now = now.strftime('%H:%M:%S')
 
     # === [條件W 週選擇權做多模式]：TEST_MODE = 'condW' ✅ 07011049 純新增分支 ===
+    # ✅08241728【甲案·欄位探測．★暫時性診斷，取得結果後即移除】
+    #   ★★放在所有 TEST_MODE 分支【之前】——這是主流程唯一必經處。
+    #   ★前兩版失敗原因（08241011／08241251 截圖為證）：
+    #     ①放 _taifex_index_snapshot() 內 → 條件W 不在時間窗時提前 return，走不到；
+    #     ②放 main_task() 開頭 → ★condW 分支跑完 scan_condition_w() 就 exit()，
+    #       ★★根本不會呼叫 main_task()。
+    try:
+        import requests as _pq
+        _pr = _pq.post(OPT_MIS_URL,
+                       json={"MarketType": "0", "SymbolType": "F", "KindID": "1",
+                              "CID": "TXF", "ExpireMonth": "", "RowSize": "全部",
+                              "PageNo": "", "SortColumn": "", "AscDesc": "A"},
+                       timeout=OPT_MIS_TIMEOUT,
+                       headers={'Referer': OPT_MIS_REFERER,
+                                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        print(f'  🔎[08241728欄位探測] MIS HTTP={_pr.status_code}')
+        _pl = ((_pr.json() or {}).get('RtData') or {}).get('QuoteList') or []
+        print(f'  🔎[08241728欄位探測] QuoteList 筆數={len(_pl)}')
+        _hit = False
+        for _q2 in _pl:
+            if isinstance(_q2, dict) and '期' in str(_q2.get('DispCName', '')):
+                print(f'  🔎[08241728欄位探測] 期貨首檔＝{_q2.get("DispCName")}　全部欄位：')
+                for _k in sorted(_q2.keys()):
+                    print(f'      {_k} = {_q2.get(_k)}')
+                _hit = True
+                break
+        if not _hit:
+            print(f'  🔎[08241728欄位探測] ★清單無期貨項目（可能非交易時段）')
+    except Exception as _pe:
+        print(f'  🔎[08241728欄位探測] ★失敗：{_pe}')
+
     if TEST_MODE == 'condW':
         print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三11:00／週四15:05~週五11:00）")
         scan_condition_w()
