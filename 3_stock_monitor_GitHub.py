@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08242251'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08250451'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -117,6 +117,18 @@ SIGNAL_DAY_END_MIN     = 15*60   # 日盤迄 15:00（台灣時間）
 # │   深夜 cron 為每15分鐘一次，會有缺口。這兩點決定它【不能等同真實5分K】。
 # └──────────────────────────────────────────────────────────────────────
 TXF_BAR_ENABLED      = True  # 台指期5分K快照累積器總開關
+# ┌─ 決策註記：TXF_LOOP_SAMPLING（08250451 新增）────────────────────────────
+# │ 主帥 08/24 已確認 kj-manager 為 public repo → GitHub Actions 分鐘數無限，
+# │ 故「單次 job 內迴圈取樣」在成本上已無障礙。
+# │ ★但預設仍為 False，原因是【工作流重疊】尚未查證：
+# │   futures-scan 每 5 分鐘啟動一次，若單次執行拉長到 4.5 分鐘，
+# │   ★前後兩次可能重疊，兩個行程同時寫同一份 Firestore 文件 → 互相覆蓋。
+# │ ★開啟前必須先在 yml 加 concurrency 設定（cancel-in-progress: false）。
+# │ ★★這一項列為待辦，主帥確認後改 True 即可，程式碼已備妥。
+# └──────────────────────────────────────────────────────────────────
+TXF_LOOP_SAMPLING    = False # ★迴圈取樣總開關（見上方決策註記）
+TXF_LOOP_SECONDS     = 270   # 單次 job 內迴圈取樣總時長（秒）
+TXF_LOOP_INTERVAL    = 20    # 迴圈取樣間隔（秒）
 TXF_BAR_KEEP         = 120   # Firestore 只保留最近N根，避免文件無限膨脹
 
 # ✅08092108【🆕E】台股白天極端異動：由「收盤後才知道」改為【盤中即時偵測】
@@ -896,6 +908,30 @@ def accumulate_txf_bar():
     if (not TXF_BAR_ENABLED) or _txf_acc_done:
         return False
     _txf_acc_done = True
+    # ✅08250451【迴圈取樣】開啟後，本次 job 內每 TXF_LOOP_INTERVAL 秒取樣一次，
+    #   ★持續 TXF_LOOP_SECONDS 秒，★讓每根 5 分K 有 13~18 個樣本，
+    #   ★補強「極值不是當日新高低」那些根的 h/l 估計。
+    if TXF_LOOP_SAMPLING:
+        import time as _tm
+        _t0 = _tm.time()
+        _cnt = 0
+        while _tm.time() - _t0 < TXF_LOOP_SECONDS:
+            _txf_acc_done = False
+            try:
+                _one_txf_sample()
+                _cnt += 1
+            except Exception as _le:
+                print(f'  ⚠️ 迴圈取樣第{_cnt+1}次異常：{str(_le)[:40]}')
+            _tm.sleep(TXF_LOOP_INTERVAL)
+        _txf_acc_done = True
+        print(f'  🔁 迴圈取樣完成：本次 job 共取樣 {_cnt} 次'
+              f'（每{TXF_LOOP_INTERVAL}秒／共{TXF_LOOP_SECONDS}秒）')
+        return True
+    return _one_txf_sample()
+
+
+def _one_txf_sample():
+    """✅08250451 單次取樣＋寫入（由 accumulate_txf_bar 呼叫，★不再自行檢查旗標）。"""
     try:
         _snap = _taifex_index_snapshot()
         if not _snap or not _snap.get('fut'):
@@ -3922,6 +3958,18 @@ def _condw_current_window():
 
 
 def scan_condition_w():
+    # ✅08250451【修正·與 08102047 同型】★台指期K棒累積移到【所有關卡之前】無條件執行。
+    #   ★真實事故：08102047 已為 futures-scan 修過完全一樣的問題，
+    #     ★當時的結論是「累積快照是記錄行情，不該受任何策略關卡影響」，
+    #     ★★但那次只改了 futures-scan，★條件W 這條路徑【沒有一起改】。
+    #   ★後果：condw_scan 每 15 分鐘跑一次，但只要不在進場時間窗就 return，
+    #     ★★累積器一次都沒被呼叫到（08242325 截圖為證：只印「跳過」）。
+    #   ★這是 ＡＫ１８（單一修正必須推及所有同型位置）的違反。
+    try:
+        accumulate_txf_bar()
+    except Exception as _e:
+        print(f'  ⚠️ 台指期K棒累積異常（{str(_e)[:50]}）→ 不影響條件W')
+
     """條件W：週選擇權做多進場（雲端專用）。跳過第一二道，只跑第三道5分K V轉觸底翻揚→buy call。
     同窗同向最多2次（Firebase 2-slot 原子認領跨cron行程去重）。✅ 07011049 純新增，不影響既有掃描。"""
     wid = _condw_current_window()
@@ -3934,7 +3982,6 @@ def scan_condition_w():
         df5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
         if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
             print('  ⚠️ 條件W：5分K資料不足，跳過'); return
-        accumulate_txf_bar()      # ✅08091843 階段一：先累積快照（即使K棒陳舊也要累積）
         if _bar_too_old(df5, '條件W'):
             _h = _taifex_hint_text()
             if _h:
