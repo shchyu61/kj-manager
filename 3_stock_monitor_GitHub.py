@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08241728'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08242251'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -406,6 +406,24 @@ def _bar_too_old(df, label):
     return False
 
 
+def _mk_summary(_rows, _unit='支'):
+    """✅08242251【主帥指定】由訊號清單彙整出「台股2支／美股1支」這種市場別字串。
+    ★_rows 每一列的第 0 欄即為市場別（既有結構，未新增欄位）。
+    ★順序固定，不隨字典順序浮動；★遇到預期外的市場別也會列出，不會漏。
+    """
+    try:
+        _c = {}
+        for _r in _rows:
+            _k = str(_r[0]) if (isinstance(_r, (list, tuple)) and _r) else '其他'
+            _c[_k] = _c.get(_k, 0) + 1
+        _pref = ['台股', '美股', '虛擬幣', '外匯', '基金', '期貨']
+        _keys = [k for k in _pref if k in _c] + [k for k in _c if k not in _pref]
+        _s = '／'.join(f'{k}{_c[k]}{_unit}' for k in _keys)
+        return _s or f'{len(_rows)}{_unit}'
+    except Exception:
+        return f'{len(_rows)}{_unit}'
+
+
 def _taifex_index_snapshot():
     """由期交所 MIS 取得【臺指現貨】與【臺指期近月】即時報價，供對照顯示。
     ★用途限定為「顯示與對照」，不參與進場判斷——因為 MIS 只有即時快照、
@@ -426,6 +444,13 @@ def _taifex_index_snapshot():
             return None
         _ql = ((_r.json() or {}).get('RtData') or {}).get('QuoteList') or []
         _spot = _fut = _ftime = None
+        _fhigh = _flow = _fopen = _fvol = None      # ✅08242251 甲案新增
+        def _f2(_v):
+            try:
+                _x = float(str(_v).replace(',', ''))
+                return _x if _x > 0 else None
+            except Exception:
+                return None
         for _q in _ql:
             if not isinstance(_q, dict):
                 continue
@@ -441,10 +466,21 @@ def _taifex_index_snapshot():
             elif '期' in _nm and _fut is None:      # 清單首檔期貨＝近月
                 _fut = _px
                 _ftime = str(_q.get('CTime', ''))
+                # ✅08242251【甲案核心】★MIS 有提供【當日】最高/最低/開盤/累計量，
+                #   ★這四個是【累計值】，其【變化量】即為本根K棒內的真實極值與成交量。
+                #   ★08241800 實測欄位：CHighPrice/CLowPrice/COpenPrice/CTotalVolume
+                _fhigh = _f2(_q.get('CHighPrice'))
+                _flow  = _f2(_q.get('CLowPrice'))
+                _fopen = _f2(_q.get('COpenPrice'))
+                try:
+                    _fvol = int(float(str(_q.get('CTotalVolume', '0')).replace(',', '')))
+                except Exception:
+                    _fvol = None
         if _fut is None:
             return None
         return {'spot': _spot, 'fut': _fut, 'time': _ftime,
-                'basis': (None if _spot is None else _fut - _spot)}
+                'basis': (None if _spot is None else _fut - _spot),
+                'd_high': _fhigh, 'd_low': _flow, 'd_open': _fopen, 'd_vol': _fvol}
     except Exception:
         return None
 
@@ -900,14 +936,39 @@ def accumulate_txf_bar():
         # 以台灣時間對齊到 5 分鐘桶
         _n = _now_tw()
         _bkey = _n.strftime('%Y-%m-%d %H:') + f"{(_n.minute // 5) * 5:02d}"
+        # ✅08242251【甲案核心】★用【當日最高/最低的差分】還原棒內真實極值。
+        #   ★舊版只用取樣價 max/min：兩次取樣之間的極端【一定漏掉】，
+        #     ★單次取樣時更會變成 o=h=l=c 的「無高度棒」，
+        #     ★而條件W 的判斷正是「任一最低價 ≤ 下軌／任一最高價 ≥ 上軌」。
+        #   ★新版邏輯：
+        #     ・當日最高 CHighPrice 若比本棒開始時上升 → ★本棒內確實成交過那個新高
+        #     ・當日最低 CLowPrice  若比本棒開始時下降 → ★本棒內確實成交過那個新低
+        #     ★這是【真實成交價】，不是取樣運氣。
+        #   ★★已知限制（主帥 08/24 18:19 明示【可接受】）：
+        #     若某根的極值不是當日新高/新低，差分抓不到，退回取樣價 max/min（會低估）。
+        #     ★條件W 是「近5根【任一】」，只要5根裡有一根創當日新高/低即可成立。
+        _dh = _snap.get('d_high') if isinstance(_snap, dict) else None
+        _dl = _snap.get('d_low')  if isinstance(_snap, dict) else None
+        _dv = _snap.get('d_vol')  if isinstance(_snap, dict) else None
         if _bars and _bars[-1].get('t') == _bkey:
             _b = _bars[-1]
             _b['h'] = max(_b['h'], _px)
             _b['l'] = min(_b['l'], _px)
+            # ★差分還原：當日高/低若在本棒期間推進，該極值必然發生於本棒內
+            if _dh is not None and _b.get('dh0') is not None and _dh > _b['dh0']:
+                _b['h'] = max(_b['h'], _dh)
+            if _dl is not None and _b.get('dl0') is not None and _dl < _b['dl0']:
+                _b['l'] = min(_b['l'], _dl)
+            if _dv is not None and _b.get('dv0') is not None and _dv >= _b['dv0']:
+                _b['v'] = _dv - _b['dv0']          # ★本棒真實成交量
             _b['c'] = _px
             _b['n'] = _b.get('n', 1) + 1
+            _b['src'] = 'diff' if (_dh is not None and _dl is not None) else 'sample'
         else:
-            _bars.append({'t': _bkey, 'o': _px, 'h': _px, 'l': _px, 'c': _px, 'n': 1})
+            # ★新棒起始：記下當下的「當日高/低/累計量」作為差分基準（dh0/dl0/dv0）
+            _bars.append({'t': _bkey, 'o': _px, 'h': _px, 'l': _px, 'c': _px, 'n': 1,
+                          'v': 0, 'dh0': _dh, 'dl0': _dl, 'dv0': _dv,
+                          'src': 'diff' if (_dh is not None and _dl is not None) else 'sample'})
         _bars = _bars[-TXF_BAR_KEEP:]
 
         _p = _req.patch(_url, headers=_hdr, timeout=15,
@@ -918,8 +979,11 @@ def accumulate_txf_bar():
         if _p.status_code not in (200, 201):
             print(f'  ⚠️ 台指期K棒累積：寫入失敗 HTTP {_p.status_code}')
             return False
-        print(f"  📈 台指期K棒累積：{_bkey} 收{_px:.0f}（本棒第{_bars[-1]['n']}次取樣）"
-              f"　已累積 {len(_bars)}/{TXF_BAR_KEEP} 根")
+        _bb = _bars[-1]
+        print(f"  📈 台指期K棒累積：{_bkey} "
+              f"O{_bb['o']:.0f} H{_bb['h']:.0f} L{_bb['l']:.0f} C{_bb['c']:.0f} "
+              f"V{_bb.get('v', 0)}（第{_bb['n']}次取樣．來源={_bb.get('src', '?')}）"
+              f"　已累積 {len(_bars)}/{TXF_BAR_KEEP} 根")   # ✅08242251 印出完整OHLCV供主帥核對
         _feat('txf_bars', f"已累積 {len(_bars)}/{TXF_BAR_KEEP} 根（本棒收 {_px:.0f}）")
         if len(_bars) < 54:
             print(f"     ⏳ 距可計算指標(54根)還差 {54 - len(_bars)} 根；"
@@ -5005,7 +5069,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】⭐【{_get_period_label(_signal_label)}】做多進場 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】⭐【{_get_period_label(_signal_label)}】做多進場 {_mk_summary(filtered)} - {now_str}", body)
             save_notified(notified)
             # ✅ 05111049：寫入買進訊號到Firebase供網頁版T+2追蹤
             for _s in filtered:
@@ -5045,7 +5109,7 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】🔔【{_get_period_label(_signal_label)}】出場訊號 {len(filtered)}支 - {now_str}", body)
+            send_gmail(f"☁️【雲端】🔔【{_get_period_label(_signal_label)}】出場訊號 {_mk_summary(filtered)} - {now_str}", body)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
@@ -5079,36 +5143,6 @@ if __name__ == "__main__":
     test_now = now.strftime('%H:%M:%S')
 
     # === [條件W 週選擇權做多模式]：TEST_MODE = 'condW' ✅ 07011049 純新增分支 ===
-    # ✅08241728【甲案·欄位探測．★暫時性診斷，取得結果後即移除】
-    #   ★★放在所有 TEST_MODE 分支【之前】——這是主流程唯一必經處。
-    #   ★前兩版失敗原因（08241011／08241251 截圖為證）：
-    #     ①放 _taifex_index_snapshot() 內 → 條件W 不在時間窗時提前 return，走不到；
-    #     ②放 main_task() 開頭 → ★condW 分支跑完 scan_condition_w() 就 exit()，
-    #       ★★根本不會呼叫 main_task()。
-    try:
-        import requests as _pq
-        _pr = _pq.post(OPT_MIS_URL,
-                       json={"MarketType": "0", "SymbolType": "F", "KindID": "1",
-                              "CID": "TXF", "ExpireMonth": "", "RowSize": "全部",
-                              "PageNo": "", "SortColumn": "", "AscDesc": "A"},
-                       timeout=OPT_MIS_TIMEOUT,
-                       headers={'Referer': OPT_MIS_REFERER,
-                                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        print(f'  🔎[08241728欄位探測] MIS HTTP={_pr.status_code}')
-        _pl = ((_pr.json() or {}).get('RtData') or {}).get('QuoteList') or []
-        print(f'  🔎[08241728欄位探測] QuoteList 筆數={len(_pl)}')
-        _hit = False
-        for _q2 in _pl:
-            if isinstance(_q2, dict) and '期' in str(_q2.get('DispCName', '')):
-                print(f'  🔎[08241728欄位探測] 期貨首檔＝{_q2.get("DispCName")}　全部欄位：')
-                for _k in sorted(_q2.keys()):
-                    print(f'      {_k} = {_q2.get(_k)}')
-                _hit = True
-                break
-        if not _hit:
-            print(f'  🔎[08241728欄位探測] ★清單無期貨項目（可能非交易時段）')
-    except Exception as _pe:
-        print(f'  🔎[08241728欄位探測] ★失敗：{_pe}')
 
     if TEST_MODE == 'condW':
         print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三11:00／週四15:05~週五11:00）")
