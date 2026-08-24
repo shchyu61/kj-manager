@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08250451'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08250517'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -986,25 +986,56 @@ def _one_txf_sample():
         _dh = _snap.get('d_high') if isinstance(_snap, dict) else None
         _dl = _snap.get('d_low')  if isinstance(_snap, dict) else None
         _dv = _snap.get('d_vol')  if isinstance(_snap, dict) else None
+        # ✅08250517【★★跨棒差分．重大修正】
+        #   ★08250513 實測（主帥截圖）暴露一個致命問題：
+        #     「台指期K棒累積：05:05 O44762 H44762 L44762 C44762 V0（第1次取樣）」
+        #     ★★O=H=L=C 且 V=0，★因為 dh0/dl0/dv0 是在【建棒當下】才設定，
+        #     ★同一根棒要有【第2次以上取樣】才算得出差分。
+        #   ★★而 condw_scan 每 15 分鐘才跑一次 → ★每次都落在不同的 5 分桶
+        #     → ★★★每根棒永遠只有「第1次取樣」→ ★差分永遠算不出來。
+        #   ★★★所以我上一輪說「迴圈取樣只是補強、缺它不影響核心」是【錯的】，
+        #     ★★差分要生效，必須有「同一根棒內≥2次取樣」或「跨棒基準」。
+        #   ★本次修正：★建新棒時，基準改取【上一根棒最後看到的當日高/低/量】
+        #     （dh1/dl1/dv1），★而不是建棒當下的值。
+        #     ★這樣即使每根只取樣一次，也能抓到「自上次取樣以來的當日高低推進」。
+        #   ★★已知限制（★據實列出，不誇大）：
+        #     取樣間隔越長，極值的【歸屬誤差】越大——
+        #     15 分鐘間隔下，極值可能實際發生在中間某根，卻被歸給取樣當下那根。
+        #     ★所以迴圈取樣仍然必要，★它是把誤差從 15 分鐘縮到 20 秒。
+        _prev = _bars[-1] if _bars else None
         if _bars and _bars[-1].get('t') == _bkey:
             _b = _bars[-1]
             _b['h'] = max(_b['h'], _px)
             _b['l'] = min(_b['l'], _px)
-            # ★差分還原：當日高/低若在本棒期間推進，該極值必然發生於本棒內
             if _dh is not None and _b.get('dh0') is not None and _dh > _b['dh0']:
                 _b['h'] = max(_b['h'], _dh)
             if _dl is not None and _b.get('dl0') is not None and _dl < _b['dl0']:
                 _b['l'] = min(_b['l'], _dl)
             if _dv is not None and _b.get('dv0') is not None and _dv >= _b['dv0']:
-                _b['v'] = _dv - _b['dv0']          # ★本棒真實成交量
+                _b['v'] = _dv - _b['dv0']
             _b['c'] = _px
             _b['n'] = _b.get('n', 1) + 1
             _b['src'] = 'diff' if (_dh is not None and _dl is not None) else 'sample'
         else:
-            # ★新棒起始：記下當下的「當日高/低/累計量」作為差分基準（dh0/dl0/dv0）
-            _bars.append({'t': _bkey, 'o': _px, 'h': _px, 'l': _px, 'c': _px, 'n': 1,
-                          'v': 0, 'dh0': _dh, 'dl0': _dl, 'dv0': _dv,
-                          'src': 'diff' if (_dh is not None and _dl is not None) else 'sample'})
+            # ★★新棒起始：基準取【前一根最後看到的當日高/低/量】，★不是當下值
+            _h0 = _prev.get('dh1') if (_prev and _prev.get('dh1') is not None) else _dh
+            _l0 = _prev.get('dl1') if (_prev and _prev.get('dl1') is not None) else _dl
+            _v0 = _prev.get('dv1') if (_prev and _prev.get('dv1') is not None) else _dv
+            _nb = {'t': _bkey, 'o': _px, 'h': _px, 'l': _px, 'c': _px, 'n': 1,
+                   'v': 0, 'dh0': _h0, 'dl0': _l0, 'dv0': _v0,
+                   'src': 'diff' if (_dh is not None and _dl is not None) else 'sample'}
+            # ★建棒當下就先做一次差分（相對於前一根的基準）
+            if _dh is not None and _h0 is not None and _dh > _h0:
+                _nb['h'] = max(_nb['h'], _dh)
+            if _dl is not None and _l0 is not None and _dl < _l0:
+                _nb['l'] = min(_nb['l'], _dl)
+            if _dv is not None and _v0 is not None and _dv >= _v0:
+                _nb['v'] = _dv - _v0
+            _bars.append(_nb)
+        # ★★每次取樣都記下「當下的當日高/低/量」，供【下一根】當基準
+        _bars[-1]['dh1'] = _dh
+        _bars[-1]['dl1'] = _dl
+        _bars[-1]['dv1'] = _dv
         _bars = _bars[-TXF_BAR_KEEP:]
 
         _p = _req.patch(_url, headers=_hdr, timeout=15,
