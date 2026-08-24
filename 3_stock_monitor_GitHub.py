@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08231006'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08241013'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -443,20 +443,6 @@ def _taifex_index_snapshot():
                 _ftime = str(_q.get('CTime', ''))
         if _fut is None:
             return None
-        # ✅08231006【甲案·欄位探測．★暫時性診斷，取得結果後即移除】
-        #   目的：確認期交所 MIS 的 QuoteList 是否提供【當日最高／最低價】。
-        #   若有，甲案可用「當日高低的差分」還原棒內真實極值，
-        #   而不是只靠取樣價 max/min（那會漏掉樣本之間的極端）。
-        #   ★只印出【欄位名稱與值】，不改變任何回傳值、不影響任何判斷。
-        try:
-            for _q in _ql:
-                if isinstance(_q, dict) and '期' in str(_q.get('DispCName', '')):
-                    print('  🔎[08231006欄位探測] MIS 期貨首檔可用欄位：')
-                    for _k in sorted(_q.keys()):
-                        print(f'      {_k} = {_q.get(_k)}')
-                    break
-        except Exception:
-            pass
         return {'spot': _spot, 'fut': _fut, 'time': _ftime,
                 'basis': (None if _spot is None else _fut - _spot)}
     except Exception:
@@ -3877,7 +3863,7 @@ def scan_condition_w():
     wid = _condw_current_window()
     now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
     if wid is None:
-        print('  ℹ️ 條件W：目前不在進場時間窗（週二15:05~週三10:45／週四15:05~週五10:45），跳過')
+        print('  ℹ️ 條件W：目前不在進場時間窗（週二15:05~週三11:00／週四15:05~週五11:00），跳過')   # ✅08241013 訊息與判定同步（原誤植10:45）
         return
     print(f'\n📊 條件W 週選擇權做多掃描：{CONDW_TARGET}（窗 {wid}）')
     try:
@@ -4206,6 +4192,35 @@ def scan_futures_15mk():
 
 
 def main_task():
+
+    # ✅08241013【甲案·欄位探測．★暫時性診斷，取得結果後即移除】
+    #   ★放在 main_task() 最開頭【無條件執行一次】——
+    #   ★上一版放在 _taifex_index_snapshot() 內，而條件W 不在時間窗時
+    #     會提前 return，★根本走不到（08241011 截圖為證）。
+    try:
+        import requests as _pq
+        _pr = _pq.post(OPT_MIS_URL,
+                       json={"MarketType": "0", "SymbolType": "F", "KindID": "1",
+                              "CID": "TXF", "ExpireMonth": "", "RowSize": "全部",
+                              "PageNo": "", "SortColumn": "", "AscDesc": "A"},
+                       timeout=OPT_MIS_TIMEOUT,
+                       headers={'Referer': OPT_MIS_REFERER,
+                                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        print(f'  🔎[08241013欄位探測] MIS HTTP={_pr.status_code}')
+        _pl = ((_pr.json() or {}).get('RtData') or {}).get('QuoteList') or []
+        print(f'  🔎[08241013欄位探測] QuoteList 筆數={len(_pl)}')
+        _hit = False
+        for _q2 in _pl:
+            if isinstance(_q2, dict) and '期' in str(_q2.get('DispCName', '')):
+                print(f'  🔎[08241013欄位探測] 期貨首檔＝{_q2.get("DispCName")}　全部欄位：')
+                for _k in sorted(_q2.keys()):
+                    print(f'      {_k} = {_q2.get(_k)}')
+                _hit = True
+                break
+        if not _hit:
+            print(f'  🔎[08241013欄位探測] ★清單無期貨項目（可能非交易時段）')
+    except Exception as _pe:
+        print(f'  🔎[08241013欄位探測] ★失敗：{_pe}')
     # 🔥 宣告 global 確保全域共用
     global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
     global _holdings_sent   # ✅ (07130626) 持股每日健檢
@@ -5084,7 +5099,7 @@ if __name__ == "__main__":
 
     # === [條件W 週選擇權做多模式]：TEST_MODE = 'condW' ✅ 07011049 純新增分支 ===
     if TEST_MODE == 'condW':
-        print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三10:45／週四15:05~週五10:45）")
+        print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三11:00／週四15:05~週五11:00）")
         scan_condition_w()
         time.sleep(3)
         exit()
