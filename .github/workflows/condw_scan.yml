@@ -37,6 +37,15 @@ on:
   # 允許手動觸發（測試用）
   workflow_dispatch:
 
+# ✅08251403【新增 concurrency】主帥指示「AI 若要我自己加，必須由AI自己加」，
+#   ★本區塊由 AI 直接加好，主帥不需要動手編輯任何一行。
+#   ★用途：同一個 workflow 同時只跑一個，★避免迴圈取樣時前後兩次執行重疊、
+#     ★兩個行程同時寫同一份 Firestore 文件而互相覆蓋。
+#   ★★cancel-in-progress 必須為 false：★設 true 會把累積到一半的執行砍掉。
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   # ============================================================
   # Job：條件W 週選擇權做多掃描
