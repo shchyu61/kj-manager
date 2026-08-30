@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08301755'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08301905'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -350,6 +350,41 @@ DIGEST_WINDOW_MIN  = 20         # 20:30起 20 分鐘內視為可寄發窗
 #   新制改為【距離軌線 ≤ 半通道寬 × BAND_NEAR_RATIO】，與價格絕對值無關，
 #   任何K棒週期都成立（半通道寬＝2σ，0.25 即「距軌線 0.5σ 以內」）。
 BAND_NEAR_RATIO    = 0.25       # 多空共用，★修改時兩側同步（ＡＫ１８）
+# ✅08301905【容忍度全面改綁通道寬度】主帥 08/30 19:05 核准「一併改」
+#   ★★關鍵設計：★取【百分比制】與【通道制】兩者中【較嚴】者，★不是直接換掉。
+#   ★理由（實測）：★短週期(5分/15分K)通道窄 → 通道制較嚴 → ★修好誤訊號；
+#     ★★長週期(月K)通道寬(±15%) → 百分比制較嚴 → ★★沿用舊制，行為不變。
+#   ★★★若一律換成通道制，★月K 反而會被【放寬】——★那是新的錯，不是修正。
+#   ★★凍結開關：★★若主帥實測後認為訊號變太少，
+#     ★★★把 BAND_GATE_ENABLED 改成 False 即可【完全回到 08301755 前的行為】。
+BAND_GATE_ENABLED  = True       # ★一行回滾開關
+
+def _gate_upper(bt, bb):
+    """✅08301905【近上軌門檻】回傳價格門檻；★取百分比制與通道制中【較嚴】者（較高者）。
+    ★支援純量與 pandas Series（向量化比較用）。"""
+    if not BAND_GATE_ENABLED:
+        return bt * SELL_BOLL_TOLERANCE
+    _half = (bt - bb) / 2.0
+    _pct  = bt * SELL_BOLL_TOLERANCE
+    _band = bt - _half * BAND_NEAR_RATIO
+    try:                                   # Series：逐元素取較嚴者
+        return _pct.combine(_band, max)
+    except AttributeError:                 # 純量
+        return max(float(_pct), float(_band))
+
+def _gate_lower(bt, bb, tol=None):
+    """✅08301905【近下軌門檻】回傳價格門檻；★取兩制中【較嚴】者（較低者）。"""
+    _t = BUY_BOLL_TOLERANCE if tol is None else tol
+    if not BAND_GATE_ENABLED:
+        return bb * _t
+    _half = (bt - bb) / 2.0
+    _pct  = bb * _t
+    _band = bb + _half * BAND_NEAR_RATIO
+    try:
+        return _pct.combine(_band, min)
+    except AttributeError:
+        return min(float(_pct), float(_band))
+
 SHORT_BOLL_TOLERANCE  = 0.98    # 布林上緣容忍度（0.98=允許在上緣下方2%內觸發）
 SHORT_LOOKBACK_BARS   = 3       # 做空回看根數（與買進策略對稱）
 
@@ -1850,7 +1885,8 @@ def check_buy_precondition(df, is_weekly=False):
 
         # ── 條件A（截圖3、4）──────────────────────────────────
         # 1. 近N根(含當根)任一最低價 <= 布林下緣
-        price_near_lower = (l.iloc[-n:] <= bb.iloc[-n:] * BUY_BOLL_TOLERANCE).any()
+        # ✅08301905 容忍度改綁通道寬度（取兩制較嚴者）；原式：bb.iloc[-n:] * BUY_BOLL_TOLERANCE
+        price_near_lower = (l.iloc[-n:] <= _gate_lower(bt.iloc[-n:], bb.iloc[-n:])).any()
         # 2. 當根 RSI 上升
         rsi_rising       = float(rsi.iloc[-1]) > float(rsi.iloc[-2])
         # 3. 當根 MACD 柱上升
@@ -2053,7 +2089,8 @@ def check_sell_condition(df):
         bt  = df['boll_top20']
         mh  = df['macd_hist']
 
-        price_near_upper = float(h.iloc[-1])   >= float(bt.iloc[-1]) * SELL_BOLL_TOLERANCE  # 引用第2-3章
+        # ✅08301905 容忍度改綁通道寬度；原式：float(bt.iloc[-1]) * SELL_BOLL_TOLERANCE
+        price_near_upper = float(h.iloc[-1])   >= _gate_upper(float(bt.iloc[-1]), float(bb.iloc[-1]))  # 引用第2-3章
         rsi_falling      = float(rsi.iloc[-1]) <  float(rsi.iloc[-2])
         macd_falling     = float(mh.iloc[-1])  <  float(mh.iloc[-2])
 
@@ -2104,7 +2141,8 @@ def check_cover_condition(df):
         rsi = df['rsi14']
         bb  = df['boll_bot20']
         mh  = df['macd_hist']
-        price_near_lower = float(l.iloc[-1])   <= float(bb.iloc[-1]) * COVER_BOLL_TOLERANCE
+        # ✅08301905 容忍度改綁通道寬度；原式：float(bb.iloc[-1]) * COVER_BOLL_TOLERANCE
+        price_near_lower = float(l.iloc[-1])   <= _gate_lower(float(bt.iloc[-1]), float(bb.iloc[-1]), COVER_BOLL_TOLERANCE)
         rsi_rising       = float(rsi.iloc[-1]) >  float(rsi.iloc[-2])
         macd_rising      = float(mh.iloc[-1])  >  float(mh.iloc[-2])
         return price_near_lower and rsi_rising and macd_rising
@@ -2162,7 +2200,8 @@ def check_short_precondition(df, is_weekly=False):
         n   = BUY_LOOKBACK_BARS
 
         # 鏡像條件A：近N根任一最高價 >= 布林上軌 AND RSI↓ AND MACD柱↓
-        price_near_upper = (h.iloc[-n:] >= bt.iloc[-n:] * SELL_BOLL_TOLERANCE).any()
+        # ✅08301905 容忍度改綁通道寬度；原式：bt.iloc[-n:] * SELL_BOLL_TOLERANCE
+        price_near_upper = (h.iloc[-n:] >= _gate_upper(bt.iloc[-n:], bb.iloc[-n:])).any()
         rsi_falling      = float(rsi.iloc[-1]) < float(rsi.iloc[-2])
         macd_falling     = float(mh.iloc[-1])  < float(mh.iloc[-2])
         cond_A = price_near_upper and rsi_falling and macd_falling
@@ -4102,13 +4141,14 @@ def scan_condition_w():
         rsi_rising  = rsi_now > rsi_prev
         macd_rising = mh_now  > mh_prev
         # ── 只跑第三道：5分K V轉觸底翻揚做多（條件A/B或E）+ RSI↑ + MACD柱↑ + 近下軌 ──
-        _condA = (l5.iloc[-n5:] <= bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE).any() and rsi_rising and macd_rising
+        # ✅08301905 容忍度改綁通道寬度；原式：bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE
+        _condA = (l5.iloc[-n5:] <= _gate_lower(bt5.iloc[-n5:], bb5.iloc[-n5:])).any() and rsi_rising and macd_rising
         _low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
         _high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
         _macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
         _condB = _low_mid and _high_top and _macd_shr and macd_rising
         _condE = check_condE_long(df5) if df5 is not None else False
-        near_lower = close <= boll_bot * BUY_BOLL_TOLERANCE
+        near_lower = close <= _gate_lower(boll_top, boll_bot)   # ✅08301905 原式：boll_bot * BUY_BOLL_TOLERANCE
         _buy = (_condA or _condB or _condE) and rsi_rising and macd_rising and near_lower and rsi_now > BUY_RSI_MIN
         if not _buy:
             print('  ❌ 條件W：第三道5分K V轉觸底翻揚未成立，不進場'); return
@@ -4368,11 +4408,11 @@ def scan_futures_15mk():
 
                 # ✅08301755【15分K 容忍度改綁通道寬度】多空兩側同步（ＡＫ１８）
                 #   半通道寬 = (上軌-下軌)/2 = 2σ；不依賴 boll_mid20 欄位（部分路徑未建）
-                _half      = max((_boll_top - _boll_bot) / 2.0, 1e-9)
-                _buy_gate  = _boll_bot + _half * BAND_NEAR_RATIO    # 距下軌 0.5σ 以內
-                _sell_gate = _boll_top - _half * BAND_NEAR_RATIO    # 距上軌 0.5σ 以內
-                _bb_gate   = _bb.iloc[-_n15:] + ((_bt.iloc[-_n15:] - _bb.iloc[-_n15:]) / 2.0) * BAND_NEAR_RATIO
-                _bt_gate   = _bt.iloc[-_n15:] - ((_bt.iloc[-_n15:] - _bb.iloc[-_n15:]) / 2.0) * BAND_NEAR_RATIO
+                # ✅08301905 改用全檔統一的 _gate_lower/_gate_upper（取兩制較嚴者）
+                _buy_gate  = _gate_lower(_boll_top, _boll_bot)
+                _sell_gate = _gate_upper(_boll_top, _boll_bot)
+                _bb_gate   = _gate_lower(_bt.iloc[-_n15:], _bb.iloc[-_n15:])
+                _bt_gate   = _gate_upper(_bt.iloc[-_n15:], _bb.iloc[-_n15:])
 
                 # 多方：近18根任一最低價觸及布林下軌帶 AND 當根RSI↑ AND MACD柱↑ AND 現價仍近下軌
                 _near_low  = (_l.iloc[-_n15:] <= _bb_gate).any()
@@ -4910,15 +4950,16 @@ def main_task():
                 macd_falling = mh_now  < mh_prev
 
                 # ── 條件A：近54根任一最低價<=布林下緣 AND RSI↑ AND MACD柱↑
-                _5mk_cond_A = (l5.iloc[-n5:] <= bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE).any() and rsi_rising and macd_rising
+                # ✅08301905 容忍度改綁通道寬度；原式：bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE
+                _5mk_cond_A = (l5.iloc[-n5:] <= _gate_lower(bt5.iloc[-n5:], bb5.iloc[-n5:])).any() and rsi_rising and macd_rising
                 # ── 條件B：近54根最低均<布林中軌 AND 最高均<布林上軌 AND 前N根MACD縮 AND 當根MACD放大
                 _5mk_low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
                 _5mk_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
                 _5mk_macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
                 _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and macd_rising
                 # ✅ v06160503修復：near_lower/near_upper 原定義在使用之後(use-before-def)，上移至此
-                near_lower   = close  <= boll_bot * BUY_BOLL_TOLERANCE
-                near_upper   = close  >= boll_top * SELL_BOLL_TOLERANCE   # ✅08060130 原硬寫1.00，改用常數以維持多空對稱
+                near_lower   = close  <= _gate_lower(boll_top, boll_bot)   # ✅08301905 原式：boll_bot * BUY_BOLL_TOLERANCE
+                near_upper   = close  >= _gate_upper(boll_top, boll_bot)   # ✅08301905 原式：boll_top * SELL_BOLL_TOLERANCE
                 # ✅ v05192313：5分K進場加入條件D（追高/追空）
                 _5mk_cond_D_long  = getattr(df5.iloc[-1],'rsi14',0) > getattr(df5.iloc[-2],'rsi14',0) and near_upper
                 _5mk_cond_D_short = getattr(df5.iloc[-1],'rsi14',0) < getattr(df5.iloc[-2],'rsi14',0) and near_lower
