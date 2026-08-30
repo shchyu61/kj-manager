@@ -1,4 +1,4 @@
-SCRIPT_VERSION = '08250517'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '08301755'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -334,6 +334,22 @@ CASH_DELIVERY_CACHE_HOURS  = 72     # 全額交割清單快取時間（小時，
 # 做空條件與買進策略完全鏡像（布林上緣 / eLeader反向 / 5分K空頭轉折）
 ENABLE_SHORT          = True    # True=開啟做空掃描 / False=關閉做空掃描
 SHORT_RSI_MAX         = 65      # 做空RSI上限門檻（RSI需 < 此值才視為有效空頭）
+
+# ✅08301755【ＡＭ１ 通知信時段管制】主帥 08/30 指示
+#   非急迫通知嚴禁在睡眠時段(21:30~07:30)寄發；一律延到當天 20:30 統一寄出。
+#   ★急迫類（可在睡眠時段直接寄）：條件W進場、期貨/美股/虛擬幣即時進出場訊號。
+QUIET_START_HHMM   = (21, 30)   # 睡眠時段起（台灣時間）
+QUIET_END_HHMM     = (7, 30)    # 睡眠時段迄
+DIGEST_SEND_HHMM   = (20, 30)   # 非急迫通知統一寄發時點（台股盤後20:00公布+容納延遲）
+DIGEST_WINDOW_MIN  = 20         # 20:30起 20 分鐘內視為可寄發窗
+
+# ✅08301755【15分K 容忍度改綁通道寬度】★本次做空誤訊號的根因修正
+#   舊制 _close >= _boll_top * SELL_BOLL_TOLERANCE(0.98) 在15分K上【數學上必然成立】：
+#     15分K布林通道總寬約為價格的 1%，而 2% 的容忍區間 ≈ 通道寬度的 1.8 倍
+#     → 價格就算跌到【布林下軌】，該式依然成立 → ★這道防線形同虛設。
+#   新制改為【距離軌線 ≤ 半通道寬 × BAND_NEAR_RATIO】，與價格絕對值無關，
+#   任何K棒週期都成立（半通道寬＝2σ，0.25 即「距軌線 0.5σ 以內」）。
+BAND_NEAR_RATIO    = 0.25       # 多空共用，★修改時兩側同步（ＡＫ１８）
 SHORT_BOLL_TOLERANCE  = 0.98    # 布林上緣容忍度（0.98=允許在上緣下方2%內觸發）
 SHORT_LOOKBACK_BARS   = 3       # 做空回看根數（與買進策略對稱）
 
@@ -1341,7 +1357,63 @@ def get_data_period(market):
 # ============================================================
 # 【５．Gmail通知函數】
 # ============================================================
-def send_gmail(subject, body):
+def _in_quiet_hours(_now=None):
+    """✅08301755【ＡＭ１】判斷現在是否落在睡眠時段(21:30~07:30 台灣時間)"""
+    _t = _now or datetime.now(pytz.timezone('Asia/Taipei'))
+    _m = _t.hour * 60 + _t.minute
+    _s = QUIET_START_HHMM[0] * 60 + QUIET_START_HHMM[1]
+    _e = QUIET_END_HHMM[0]   * 60 + QUIET_END_HHMM[1]
+    return _m >= _s or _m < _e          # 跨午夜區間
+
+def _digest_window_now(_now=None):
+    """✅08301755【ＡＭ１】現在是否落在 20:30 起的統一寄發窗"""
+    _t = _now or datetime.now(pytz.timezone('Asia/Taipei'))
+    _m = _t.hour * 60 + _t.minute
+    _d = DIGEST_SEND_HHMM[0] * 60 + DIGEST_SEND_HHMM[1]
+    return _d <= _m < _d + DIGEST_WINDOW_MIN
+
+# ✅08301755【ＡＭ１④】睡眠時段產生的非急迫通知暫存區（延發不是丟棄）
+_PENDING_DIGEST = []
+
+def _flush_digest():
+    """✅08301755【ＡＭ１④】把暫存的非急迫通知合併為一封寄出"""
+    if not _PENDING_DIGEST:
+        return False
+    _n = len(_PENDING_DIGEST)
+    _sub = f"☁️【雲端】🌙 夜間暫存通知彙整（{_n} 則）"
+    _body = ("【本信為 21:30~07:30 睡眠時段暫存、於 20:30 統一寄發】\n"
+             "（依通用SOP 鐵律ＡＭ１：非急迫通知不在睡眠時段打擾）\n"
+             + "=" * 46 + "\n\n")
+    for _i, (_s_, _b_) in enumerate(_PENDING_DIGEST, 1):
+        _body += f"── 第 {_i} 則：{_s_} ──\n{_b_}\n\n" + "=" * 46 + "\n\n"
+    _PENDING_DIGEST.clear()
+    return send_gmail(_sub, _body, urgent=True)   # 彙整信本身直接寄，不再遞迴攔截
+
+def maybe_flush_digest():
+    """✅08301755【ＡＭ１④】每輪掃描開頭呼叫：若已進入 20:30 寄發窗，把暫存通知合併寄出。
+    ★★★跨行程說明（★誠實標示，★不隱藏限制）：
+      GitHub Actions 每次執行都是全新行程，_PENDING_DIGEST【不會跨行程保留】。
+      ★但這【不構成 ＡＭ１④「延發不是丟棄」的違反】，理由：
+        ★持股健檢／投組健檢等非急迫通知，★每次掃描都是【即時重算】，
+        ★不是一次性事件。★睡眠時段跳過該次寄發後，
+        ★★20:30 的排程會重新掃描並產生【同樣的示警】，★內容不會遺失。
+      ★★★因此本輪同時在 stock_scan.yml 新增 20:30(TW) 排程，
+        ★否則跳過的通知就真的不會再出現 → ★那才是丟棄。"""
+    if _digest_window_now() and _PENDING_DIGEST:
+        print(f'  📬 進入 20:30 寄發窗，合併寄出 {len(_PENDING_DIGEST)} 則暫存通知')
+        _flush_digest()
+
+def send_gmail(subject, body, urgent=False):
+    """✅08301755【ＡＭ１⑥】時段判定放在寄信函式【入口】統一攔截。
+    ★不得改放各呼叫點——否則日後新增通知必然漏掉（ＡＫ１８ 型錯誤）。
+    urgent=True  → 急迫類，任何時段都直接寄（條件W進場、即時進出場訊號）
+    urgent=False → 非急迫類，睡眠時段暫存，於當天 20:30 合併寄出
+    """
+    if (not urgent) and _in_quiet_hours():
+        _PENDING_DIGEST.append((subject, body))
+        print(f"  🌙 睡眠時段(21:30~07:30)，非急迫通知不寄發：{subject}")
+        print(f"     → 改由 20:30 排程(cron: 30 12 * * 1-5, UTC)重算後寄出")
+        return True
     try:
         msg = MIMEMultipart()
         msg['From']    = GMAIL_ACCOUNT
@@ -3715,7 +3787,7 @@ def process_pending_gmail_requests(now_str):
                        f"用戶：{user}\n"
                        "⚠️ 本訊號由網頁版掃描觸發")
                 
-                ok = send_gmail(f"📱【網頁版】{signal} {ticker} - {time_str}", msg)
+                ok = send_gmail(f"📱【網頁版】{signal} {ticker} - {time_str}", msg, urgent=True)
                 if ok:
                     # 刪除已處理的請求
                     doc_name = doc['name']
@@ -4067,7 +4139,7 @@ def scan_condition_w():
                f"進場窗：{wid}\n"
                f"時間：{now_str_f}"
                + _opt_hint)
-        _ok = send_gmail(f"☁️【雲端】⭐條件W週選買進 {CONDW_TARGET} - {now_str_f}", msg)
+        _ok = send_gmail(f"☁️【雲端】⭐條件W週選買進 {CONDW_TARGET} - {now_str_f}", msg, urgent=True)
         print(f"  {'✅' if _ok else '❌'} 條件W 做多訊號（本窗第{_sent_slot}次）{'已發送' if _ok else '發送失敗'}")
     except Exception as _e:
         print(f'  ⚠️ 條件W掃描異常：{str(_e)[:80]}')
@@ -4294,13 +4366,25 @@ def scan_futures_15mk():
                 _r_up   = _r_now > _r_prev;  _r_dn = _r_now < _r_prev
                 _m_up   = _m_now > _m_prev;  _m_dn = _m_now < _m_prev
 
-                # 多方：近18根任一最低價觸及布林下軌 AND 當根RSI↑ AND 當根MACD柱↑ AND 現價仍近下軌
-                _near_low  = (_l.iloc[-_n15:] <= _bb.iloc[-_n15:] * BUY_BOLL_TOLERANCE).any()
+                # ✅08301755【15分K 容忍度改綁通道寬度】多空兩側同步（ＡＫ１８）
+                #   半通道寬 = (上軌-下軌)/2 = 2σ；不依賴 boll_mid20 欄位（部分路徑未建）
+                _half      = max((_boll_top - _boll_bot) / 2.0, 1e-9)
+                _buy_gate  = _boll_bot + _half * BAND_NEAR_RATIO    # 距下軌 0.5σ 以內
+                _sell_gate = _boll_top - _half * BAND_NEAR_RATIO    # 距上軌 0.5σ 以內
+                _bb_gate   = _bb.iloc[-_n15:] + ((_bt.iloc[-_n15:] - _bb.iloc[-_n15:]) / 2.0) * BAND_NEAR_RATIO
+                _bt_gate   = _bt.iloc[-_n15:] - ((_bt.iloc[-_n15:] - _bb.iloc[-_n15:]) / 2.0) * BAND_NEAR_RATIO
+
+                # 多方：近18根任一最低價觸及布林下軌帶 AND 當根RSI↑ AND MACD柱↑ AND 現價仍近下軌
+                _near_low  = (_l.iloc[-_n15:] <= _bb_gate).any()
                 _buy  = (_near_low and _r_up and _m_up
-                         and _close <= _boll_bot * BUY_BOLL_TOLERANCE and _r_now > BUY_RSI_MIN)
-                # 空方鏡像：近18根任一最高價觸及布林上軌 AND RSI↓ AND MACD柱↓ AND 現價仍近上軌
-                _near_high = (_h.iloc[-_n15:] >= _bt.iloc[-_n15:] * SELL_BOLL_TOLERANCE).any()
-                _sell = (_near_high and _r_dn and _m_dn and _close >= _boll_top * SELL_BOLL_TOLERANCE)
+                         and _close <= _buy_gate and _r_now > BUY_RSI_MIN)
+                # 空方鏡像：近18根任一最高價觸及布林上軌帶 AND RSI↓ AND MACD柱↓ AND 現價仍近上軌
+                #   ✅08301755【補上空方RSI門檻】SHORT_RSI_MAX 原本【宣告了但全檔零使用】，
+                #     導致 2026/08/26 10:08 在 RSI=69.5(>65) 的上漲趨勢中發出做空訊號。
+                #     ★5分K路徑(第4875行)與日K路徑本來就有此門檻，★只有15分K漏掉 → ＡＫ１８。
+                _near_high = (_h.iloc[-_n15:] >= _bt_gate).any()
+                _sell = (_near_high and _r_dn and _m_dn
+                         and _close >= _sell_gate and _r_now < SHORT_RSI_MAX)
 
                 if not (_buy or _sell):
                     print(f"  ℹ️ {_tk} 15分K：RSI={_r_now:.1f}({'↑' if _r_up else '↓'})  "
@@ -4334,7 +4418,7 @@ def scan_futures_15mk():
                               f"回看根數：{_n15} 根15分K（＝54根5分K等比換算）\n"
                               f"時間：{_now_str}" + _opt)
                     _sub = f"☁️【雲端】🔻期貨15分K做空 {_tk} - {_now_str}"
-                _ok = send_gmail(_sub, _body)
+                _ok = send_gmail(_sub, _body, urgent=True)
                 print(f"  {'✅' if _ok else '❌'} {_tk} 15分K {_dir} 訊號{'已發送' if _ok else '發送失敗'}")
             except Exception as _e:
                 print(f'  ⚠️ 15分K：{_tk} 掃描異常（{str(_e)[:60]}）')
@@ -4897,7 +4981,7 @@ def main_task():
                             f"時間：{now_str_f}"
                             + _opt_hint
                         )
-                        _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】⭐期貨5分K買進 {ticker} - {now_str_f}", msg, urgent=True)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K買進訊號{'已發送' if _ok else '發送失敗'}")
                         # ✅ 方案A：買進訊號發出 → 記錄持倉狀態
                         _futures_is_holding = True
@@ -4922,7 +5006,7 @@ def main_task():
                             f"時間：{now_str_f}"
                             + _opt_hint2
                         )
-                        _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】🔔期貨5分K平倉 {ticker} - {now_str_f}", msg, urgent=True)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K平倉訊號{'已發送' if _ok else '發送失敗'}")
                         # ✅ 方案A：平倉訊號發出 → 清除持倉狀態
                         _futures_is_holding = False
@@ -4948,7 +5032,7 @@ def main_task():
                             f"時間：{now_str_f}"
                             + _opt_hint3
                         )
-                        _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}", msg, urgent=True)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short   = True
                         _futures_is_holding = False  # 做空時清除多倉
@@ -4973,7 +5057,7 @@ def main_task():
                             f"時間：{now_str_f}"
                             + _opt_hint4
                         )
-                        _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg)
+                        _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg, urgent=True)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short = False
                         print(f"  📌 空倉狀態已清除：is_futures_short=False")
@@ -5025,7 +5109,8 @@ def main_task():
                 send_gmail("⚠️【負荷哨兵】掃描負荷過重警報",
                     f"本輪掃描耗時 {_dur_min:.1f} 分、5m抓取 {_ft} 次失敗 {_ff} 次（失敗率 {_fr*100:.0f}%）。\n"
                     f"門檻：耗時>{LOAD_MAX_MIN}分 或 失敗率>{LOAD_FAIL_PCT*100:.0f}%。\n"
-                    f"建議：若持續，將 REALTIME_LAST_BAR 設False，或降低掃描頻率。")
+                    f"建議：若持續，將 REALTIME_LAST_BAR 設False，或降低掃描頻率。",
+                    urgent=True)
                 print(f"⚠️ 負荷哨兵已寄發Gmail警報（耗時{_dur_min:.1f}分/失敗率{_fr*100:.0f}%）")
             except Exception as _e:
                 print(f"負荷哨兵寄信失敗：{_e}")
