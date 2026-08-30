@@ -35,6 +35,10 @@ on:
     #    健檢無急迫性(收盤後靜態資料)，改用20:00專屬班次；證交所20:00後資料已更新。
     #    ★此cron僅供 Job3，Job1/Job2 已加 if 守門排除之（見下方各Job）→ 不會誤觸發全量掃描。
     - cron: '0 12 * * 1-5'
+    # ✅08301755【ＡＭ１④】台灣 20:30 —— 非急迫通知統一寄發時點
+    #   台股盤後資訊 20:00 公布（可能延遲），20:30 重算並寄出睡眠時段跳過的示警。
+    #   ★主帥指示：非急迫通知一律避開 21:30~07:30，改為當天 20:30。
+    - cron: '30 12 * * 1-5'
 
     # ══ 期貨5分K：日盤/夜盤每5分鐘，深夜01~05每15分鐘（K線週期固定5分K不變）══
     #
@@ -82,7 +86,7 @@ jobs:
     # ✅ 08031611：排除持股健檢專屬班次(台灣20:00)，避免新增cron誤觸發1827支全量掃描。
     # ✅ 08032126：再排除三個【期貨日盤補班次】(週三/四/五 至13:30)，該三班僅供 Job2。
     #    其餘所有既有cron與手動觸發(schedule為null)行為完全不變。
-    if: github.event.schedule != '0 12 * * 1-5' && github.event.schedule != '*/5 4-5 * * 3' && github.event.schedule != '5/5 1-5 * * 4' && github.event.schedule != '*/5 3-5 * * 5'
+    if: github.event.schedule != '0 12 * * 1-5' && github.event.schedule != '30 12 * * 1-5' && github.event.schedule != '*/5 4-5 * * 3' && github.event.schedule != '5/5 1-5 * * 4' && github.event.schedule != '*/5 3-5 * * 5'
     runs-on: ubuntu-latest
     timeout-minutes: 55    # 台股1827支掃描需要約45分鐘，設55分鐘避免超時
 
@@ -136,7 +140,7 @@ jobs:
   # ============================================================
   futures-scan:
     # ✅ 08031611：同上，排除持股健檢專屬班次(台灣20:00)，行為其餘不變。
-    if: github.event.schedule != '0 12 * * 1-5'
+    if: github.event.schedule != '0 12 * * 1-5' && github.event.schedule != '30 12 * * 1-5'
     runs-on: ubuntu-latest
     timeout-minutes: 10     # 單次最多8分鐘（5分K一次掃描足夠）
 
@@ -177,7 +181,8 @@ jobs:
   #   ・手動 workflow_dispatch 亦可隨時執行（測試用）
   # ============================================================
   holdings-health:
-    if: github.event.schedule == '0 12 * * 1-5' || github.event_name == 'workflow_dispatch'
+    # ✅08301755【ＡＭ１④】新增 '30 12'（台灣20:30）班次，否則睡眠時段跳過的通知不會再出現。
+    if: github.event.schedule == '0 12 * * 1-5' || github.event.schedule == '30 12 * * 1-5' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
