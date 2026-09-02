@@ -1,6 +1,25 @@
 # ══════════════════════════════════════════════════════════════
 # ★★★【自我舉證表】(09021330)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
 # ══════════════════════════════════════════════════════════════
+# ★★★【09022155 新增結論．★依主帥指令補讀交接文件後發現】
+# 結論⑲：條件W 兩個方向的 K 棒根數一律 N＝5
+#   來源＝交接文件(09020802) 第六章②（★★本輪依主帥 09/02 21:20 指令補讀全文）
+#   → ★★★程式原本用 BUY_LOOKBACK_5MK＝54，★09021330 又推出 15分K＝18，★兩者皆錯
+# 結論⑳：條件W 的 buy call 與 buy put【共用同一組配額】
+#   來源＝交接文件(09020802) 第六章⑧
+#   → ★★★09021330 我寫成多空各自獨立，★日盤會變 6 封（定稿為 3 封）
+# 結論㉑：條件W【不需要出場通知】
+#   來源＝交接文件第六章⑨，★主帥原話「買進後放到結算，就像買彩券，以小博大」
+#   → ★本輪確認：★★scan_condition_w() 未加任何出場邏輯，★★★符合定稿
+# 結論㉒：未平倉提醒信不需要行情資料
+#   來源＝該功能只讀「時間」與「持倉狀態」兩個變數（本檔 _futures_close_alert）
+#   → ★★★故不受 ^TWII 只到 13:30 的限制，★可涵蓋到 13:45
+# 結論㉓：Firestore 規則已於 2026/09/01 20:39 重新發布
+#   來源＝截圖 Firestore規則_09012039.jpg 的版本歷史（最上方「昨天 8:39 下午」）
+#   ★★【但必須誠實說明】：★截圖可見範圍僅到第 32 行（isAuthed/safeId 段），
+#     ★★★【未涵蓋 public 段】→ ★我無法逐字驗證 read 是否已改回 true，
+#     ★只能確認「有一次新發布，時間晚於修正版產出時間 09/01 16:21」
+#
 # ★★★【09022055 新增結論】
 # 結論⑭：_futures_is_holding 原本只是模組層級變數（第225行），不跨執行保存
 #   來源＝本檔第225行（實讀）＋ 全檔 grep 無任何 futures_pos 讀寫函式
@@ -79,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09022055'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09022155'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -388,8 +407,15 @@ CONDW_OWNER          = 'shchyu61@gmail.com'
 #     ★★★撤銷後明文「不得再據以拒絕 buy put」→ 本次實作不牴觸凍結清單。
 CONDW_ENABLE_15MK    = True   # 條件W 是否併用15分K（與5分K 為 OR，非 AND）
 CONDW_ENABLE_SHORT   = True   # 條件W 是否做空方（Λ轉→建議 buy PUT）
-CONDW_LOOKBACK_15MK  = 18     # ★K棒等比換算：5分K 54根(＝一個台股日盤270分) ÷3 ＝ 15分K 18根
-                              #   ★★嚴禁直接沿用54（那等於3個交易日，時間長度錯3倍）
+# ── ✅09022155【★★★依交接文件第六章「條件W 定稿規格」回正】────────────
+#   ★交接文件(09020802) 第六章②白紙黑字：
+#     「★★兩個方向的 K 棒根數一律 ★N ＝ 5（★不是事不過三的 3）」
+#   ★★但程式一直借用 BUY_LOOKBACK_5MK = 54（那是【期貨5分K】的根數），
+#     ★★★而 09021330 我加 15分K 時又依 54÷3 推出 18 —— ★兩個都不是 5。
+#   ★這不是我這幾天新造的錯，★★是既有偏差而我【沿用且擴大】了它。
+#   ★★★一行回滾：★若主帥要回到 54/18，把 CONDW_LOOKBACK 改回 BUY_LOOKBACK_5MK 即可。
+CONDW_LOOKBACK       = 5      # ★條件W 專用回看根數（定稿規格②：N＝5，多空共用）
+CONDW_LOOKBACK_15MK  = 5      # ✅09022155 由18改為5（定稿規格②：★兩週期一律N＝5）
 # ── ✅09021330【測試開關】主帥 2026/09/02 指示：★要能不管行情有沒有觸發都測得到 ──
 #   ★主帥原話：「既然要測試，你應該要讓測試不論行情有沒有觸發，
 #     要放寬某個條件成極度寬鬆，這樣才好測試吧？」
@@ -397,6 +423,16 @@ CONDW_LOOKBACK_15MK  = 18     # ★K棒等比換算：5分K 54根(＝一個台�
 #   ★★★安全設計：①預設 False ②信件主旨強制冠上【測試】
 #     ③不寫入 Firebase 認領槽（不佔用真實訊號額度）④已納入凍結清單 F-16。
 CONDW_FORCE_TEST     = False  # ★True＝強制寄一封測試信後結束；★平時必須為 False
+# ── ✅09022155【期貨未平倉·收盤前提醒信】主帥 2026/09/02 21:20 指令 ──────
+#   ★主帥原話：「我期貨進場，極少放任到收盤，幾乎9成次數會在13:20前平倉！
+#     若沒有平倉，則由AI和雲端版協助寄發gmail通知信給我，提醒我期貨還有口數
+#     未平倉，務必在收盤前平倉的通知信。」
+#   ★★★關鍵設計：★本提醒信【不需要任何行情資料】，★★只需要「時間」與「持倉狀態」。
+#     ★所以它【不受 ^TWII 只到 13:30 的限制】，★★可一路涵蓋到台指期日盤收盤 13:45。
+#   ★每日最多一封（Firebase 認領槽防重複）。
+FUTURES_CLOSE_ALERT_ENABLED = True
+FUTURES_CLOSE_ALERT_START   = 13*60+20   # 13:20 起（★主帥自陳9成在此前已平倉）
+FUTURES_CLOSE_ALERT_END     = 13*60+44   # 13:44 止（★台指期日盤 13:45 收盤）
 SCAN_MODE = 'mixed'   # 切換：'weekly' / 'daily' / 'mixed'
 _tw_prescreened = []   # 模組層級全域預篩清單（scan_stock 用 global 存取）
 _prescreened_ind = {}  # ✅ 05041037新增：第一+第二道指標快取（供Firebase上傳）
@@ -4295,6 +4331,43 @@ def _txf_data_window(wd, tv):
     return (0 <= wd <= 4) and ((9*60+5) <= tv <= (13*60+30))
 
 
+
+def _futures_close_alert(now_tw):
+    """✅09022155【期貨未平倉·收盤前提醒信】主帥 2026/09/02 21:20 指令。
+    ★★★本函式【不需要任何行情資料】——★只看「時間」與「持倉狀態」，
+      ★★所以不受 ^TWII 只到 13:30 的限制，★★★可涵蓋到台指期日盤收盤 13:45。
+    ★每日最多一封（Firebase 認領槽防重複）。★★空手則不寄（ＡＭ１：不觸發不寄）。"""
+    if not FUTURES_CLOSE_ALERT_ENABLED:
+        return
+    _wd = now_tw.weekday()
+    _tv = now_tw.hour * 60 + now_tw.minute
+    if not (0 <= _wd <= 4):
+        return
+    if not (FUTURES_CLOSE_ALERT_START <= _tv <= FUTURES_CLOSE_ALERT_END):
+        return
+    if not (_futures_is_holding or _futures_is_short):
+        return   # ★空手 → 不寄（★嚴禁每日固定發信，狼來了效應）
+    _today = now_tw.strftime('%Y-%m-%d')
+    _claim = _claim_alert_firebase(f'futures_close_alert_{_today}', _today)
+    if _claim is False:
+        print("  ⏭️  未平倉提醒信今日已寄過，靜音")
+        return
+    _dir = '多倉🔴（買進在手）' if _futures_is_holding else '空倉🔵（放空在手）'
+    _act = '賣出平倉' if _futures_is_holding else '買進回補'
+    _msg = (f"☁️【雲端】⚠️【期貨未平倉·收盤前提醒】⚠️\n"
+            f"目前持倉：{_dir}\n"
+            f"建議動作：★{_act}\n"
+            f"台指期日盤收盤時間：13:45\n"
+            f"現在時間：{now_tw.strftime('%Y/%m/%d %H:%M')}\n\n"
+            f"★本信只在【仍有未平倉部位】時寄出，★★空手不會收到。\n"
+            f"★★若您已在券商端平倉，請忽略本信；\n"
+            f"★★★系統的持倉狀態以【本程式發出的進出場訊號】為準，\n"
+            f"　　不會自動得知您在元大 eLeader 手動下的單。")
+    _ok = send_gmail(f"☁️【雲端】⚠️期貨未平倉提醒 - {now_tw.strftime('%m/%d %H:%M')}",
+                     _msg, urgent=True)
+    print(f"  {'✅' if _ok else '❌'} 期貨未平倉提醒信{'已發送' if _ok else '發送失敗'}")
+
+
 def _condw_gate3(df, nbars, label):
     """✅09021330【條件W 第三道關卡】★只跑這一道，★不看第一道、不看第二道。
     ★抽出為共用函式，★★供 5分K 與 15分K 共用（ＡＫ１８：同型邏輯單一實作，
@@ -4368,6 +4441,9 @@ def scan_condition_w():
     #   ★這是 ＡＫ１８（單一修正必須推及所有同型位置）的違反。
     try:
         accumulate_txf_bar()
+        # ✅09022155 收盤前提醒信放在【所有策略關卡之前】無條件執行。
+        #   ★理由同 08102047 累積器事故：★★放在關卡後面會被 return/continue 跳掉。
+        _futures_close_alert(datetime.now(pytz.timezone('Asia/Taipei')))
     except Exception as _e:
         print(f'  ⚠️ 台指期K棒累積異常（{str(_e)[:50]}）→ 不影響條件W')
 
@@ -4413,7 +4489,7 @@ def scan_condition_w():
             if _h:
                 print(f'  ℹ️ 供參考：{_h.strip()}')
             return
-        _r5 = _condw_gate3(df5, BUY_LOOKBACK_5MK, '5分K')
+        _r5 = _condw_gate3(df5, CONDW_LOOKBACK, '5分K')   # ✅09022155 54→5（定稿規格②）
         if _r5:
             _res.append(_r5)
         if CONDW_ENABLE_15MK:
@@ -4448,15 +4524,23 @@ def scan_condition_w():
             _tv_w   = _now_tw.hour * 60 + _now_tw.minute
             _sess   = 'day' if (9*60+5 <= _tv_w <= 13*60+30) else 'night'
             _max_slot = CONDW_MAX_DAY if _sess == 'day' else CONDW_MAX_PER_WINDOW
-            # ✅09021330 多空【各自獨立】認領槽，★互不排擠（同 08060105 日夜盤分離的教訓）
-            _kind = 'buycall' if _dir == 'buy' else 'buyput'
+            # ✅09022155【★★★回正：多空【共用】同一組配額】
+            #   ★交接文件(09020802) 第六章⑧白紙黑字：
+            #     「⑧配額　★buy call 與 buy put【共用同一組】；
+            #       ★★日盤（3 次）與夜盤（2 次）★必須分開計算，不互相扣抵」
+            #   ★★而我在 09021330 寫成【多空各自獨立槽位】，
+            #     ★★★日盤會變成最多 6 封（多3＋空3），★超出主帥定稿的 3 封。
+            #   ★我當時還在註解裡寫「同 08060105 日夜盤分離的教訓」——
+            #     ★★那條教訓講的是【日盤與夜盤】要分離，★★★不是【多方與空方】要分離。
+            #   ★這是把一條真實的教訓，★★套用到它管不到的地方。
+            #   ★★★保留的分離：★日盤／夜盤仍各自獨立（這才是 08060105 的教訓）。
             _sent_slot = None
             for _slot in range(1, _max_slot + 1):
-                _claim = _claim_alert_firebase(f'condW_{_kind}_{wid}_{_sess}#{_slot}', _today)
+                _claim = _claim_alert_firebase(f'condW_{wid}_{_sess}#{_slot}', _today)
                 if _claim is True or _claim is None:
                     _sent_slot = _slot; break
             if _sent_slot is None:
-                print(f'  ⚠️ 條件W：本{_sess}時段{_kind}已達{_max_slot}次上限，靜音'); continue
+                print(f'  ⚠️ 條件W：本{_sess}時段已達{_max_slot}次上限（★多空共用配額），靜音'); continue
             _opt_hint = get_weekly_option_hint(r['close'], _dir)
             _title = '做多進場（buy CALL）' if _dir == 'buy' else '做空進場（buy PUT）'
             _band  = f"布林下緣：{r['boll_bot']:.2f}" if _dir == 'buy' else f"布林上緣：{r['boll_top']:.2f}"
@@ -5704,6 +5788,12 @@ if __name__ == "__main__":
         _load_futures_position()
         _can_exit = ((_futures_is_holding or _futures_is_short)
                      and _txf_data_window(wd_f, tv_f))
+        # ✅09022155 收盤前提醒信專屬時窗：★13:20~13:44，★★不需行情資料，
+        #   ★★★故【不受 _txf_data_window 的 13:30 上限限制】。
+        _can_alert = (FUTURES_CLOSE_ALERT_ENABLED
+                      and (_futures_is_holding or _futures_is_short)
+                      and 0 <= wd_f <= 4
+                      and FUTURES_CLOSE_ALERT_START <= tv_f <= FUTURES_CLOSE_ALERT_END)
         if _can_exit and not in_futures:
             print(f"[{test_now}] 📌 不在條件W窗內，★但有持倉 → 【只掃平倉，不掃進場】")
 
@@ -5718,7 +5808,7 @@ if __name__ == "__main__":
                          and 0 <= wd_f <= 4
                          and (9*60+5) <= tv_f <= (13*60+30))
 
-        if not (in_futures or in_tw_extreme or _can_exit):
+        if not (in_futures or in_tw_extreme or _can_exit or _can_alert):
             print(f"[{test_now}] ❌ 非條件W時窗、亦非台股日盤，直接結束"
                   f"（條件W窗：週二15:05~週三11:30／週四15:05~週五11:30）")
             time.sleep(5)
@@ -5743,10 +5833,15 @@ if __name__ == "__main__":
             #   ★★★原式只保留「深夜有持倉」一種情形，★日盤 11:31~13:30 有持倉會斷線。
             _exit_l = ((_futures_is_holding or _futures_is_short)
                        and _txf_data_window(wd_l, tv_l))
+            _alert_l = (FUTURES_CLOSE_ALERT_ENABLED
+                        and (_futures_is_holding or _futures_is_short)
+                        and 0 <= wd_l <= 4
+                        and FUTURES_CLOSE_ALERT_START <= tv_l <= FUTURES_CLOSE_ALERT_END)
             in_f  = (
                 (_condw_current_window() is not None) or
                 _tw_ext_l or
                 _exit_l or                           # ✅09022055 有持倉→繼續掃平倉
+                _alert_l or                          # ✅09022155 收盤前未平倉提醒
                 (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉（原有，保留）
             )
             if not in_f:
