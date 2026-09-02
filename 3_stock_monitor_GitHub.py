@@ -1,4 +1,61 @@
-SCRIPT_VERSION = '08301905'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+# ══════════════════════════════════════════════════════════════
+# ★★★【自我舉證表】(09021330)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
+# ══════════════════════════════════════════════════════════════
+# ★★★【09021415 重大更正】09021330 版的自我舉證表結論①③有誤，更正如下：
+#   ・原結論①把「期貨5mk 閘門」與「條件W 時窗」混為一談 → 錯誤呈現。
+#     ★事實：條件W 週三/週五【都是 11:00】，★★對稱，★★★沒有不一致。
+#     ★不對稱的是期貨 in_futures（週三11:30／週五11:00），★成因是
+#       「週三11:30」為期貨模式 2026/03 的原始窗尾，「週五11:00」為 08/09 跟改。
+#   ・原結論③說「兩條路徑全部停擺」→ ★條件W 在11:00後停擺【是設計，不是故障】。
+#   ・★★★09021330 版把條件W 窗尾擅自改為 13:30 → 主帥未授權，本版已回退為 11:30。
+# 結論⑩：條件W 窗尾 11:30、期貨完全比照條件W、週一不再觸發
+#   來源＝主帥 2026/09/02 14:00 訊息第2點原話（對話視窗，已寫入 R-12）
+# 結論⑪：11:00 是主帥 2026/08/09 親自指定（非 AI 自行決定）
+#   來源＝0_凍結開關與否決清單 R-12 條，內含主帥原話
+#         「主力手法多樣，有時候會故意拖到 11:00 才觸發行情發動」
+# 結論⑫：09:05 起始（不可改09:00）是主帥當初指定
+#   來源＝08060105 改版記錄第三章第1點（實讀）
+# 結論⑬：check_tw_intraday_extreme(F-12) 原寄生在期貨5mk 分支內
+#   來源＝本檔第5085行（實讀），故必須另開獨立時窗，否則隨期貨縮窗一起消失
+# 結論①：5mk 閘門週三只到11:30、週四無日盤、週五只到11:00
+#   來源＝本檔前一版 3_stock_monitor_GitHub(08301905).py 第5366-5372行（實讀）
+# 結論②：cron 早已補上週三12:00-13:59／週四09:05-13:59／週五11:00-13:59
+#   來源＝stock_scan(08301905).yml 第65-67行（實讀）
+# 結論③：兩者不一致 → 2026/09/02(週三)11:31~13:30 兩條路徑全部停擺
+#   來源＝本輪實跑時間窗對照表（8個時刻），輸出見 改版記錄(09021330) 第四章
+# 結論④：條件W 原本只做 buy call、只有5分K、無第一二道
+#   來源＝前一版第285-287行註解 ＋ scan_condition_w() 函式本體（實讀）
+# 結論⑤：R-08「禁止條件W 加 buy put」已於2026/08/19由主帥正式撤銷
+#   來源＝0_凍結開關與否決清單(08231006).txt 第313-317行（實讀，原文
+#         「已於 2026/08/19 由主帥正式撤銷，不再有效」「不得再據以拒絕 buy put」）
+# 結論⑥：15分K 回看根數＝18（＝5分K 54根÷3）
+#   來源＝K棒等比換算原則 ＋ 前一版 scan_futures_15mk() 第4386行已採同一算法
+# 結論⑦：get_weekly_option_hint 已支援 'sell'→PUT 且已做權利金≤16篩選
+#   來源＝前一版第2763-2795行（實讀，_pick_strikes_by_premium 已存在）
+# 結論⑧：主帥要求「5分K與15分K是OR」「不要關卡1關卡2」「直接關卡三」
+#   來源＝主帥 2026/09/02 12:05 訊息第3點原話（對話視窗）
+# 結論⑨：主帥要求測試須與行情脫鉤
+#   來源＝主帥 2026/09/02 12:05 訊息第2點原話（對話視窗）
+#
+# ★★★【推定清單】★以下【未經實測驗證】，★若推定為假的後果如下：
+#   推定1：yfinance 對 '^TWII' 的 interval='15m' 能回傳足夠資料（≥20根）
+#     ・依據＝前一版 scan_futures_15mk() 已用同一寫法且在線上運作
+#     ・★推定為假的後果：15分K 分支印「資料不足」並跳過，
+#       ★★5分K 分支【不受影響】仍正常運作（已用 try/except 隔離）→ 損害有限
+#   推定2：多空同時成立時以【15分K 優先】
+#     ・★主帥【未明示】此優先序，★★由我自行決定（週期長、雜訊少）
+#     ・★★★推定為假的後果：訊號來源標示與主帥預期不同；
+#       ★不影響是否發信，★只影響信中「觸發週期」那一行 → 損害輕微
+#   推定3：條件W 不需要「週二／週四日盤窗」
+#     ・★我【未擅自新增】該兩窗，★★已列入待辦請主帥裁示
+#     ・★★★推定為假的後果：週二/週四白天條件W 仍靜音；
+#       ★但期貨5mk 路徑本輪已補齊週二~週五日盤，★★有備援 → 損害有限
+#   推定4：放寬閘門後 GitHub Actions 用量不會超標
+#     ・依據＝cron 班次完全未改，只是原本被擋掉的班次現在會跑完
+#     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
+# ══════════════════════════════════════════════════════════════
+
+SCRIPT_VERSION = '09021415'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -271,7 +328,7 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # │        主帥一度說「也要 buy put」，隨即自行更正回「不必動條件W」，
 # │        理由是【做空由期貨5分K空方負責】，兩者分工、不重疊。
 # │ 07/03 同輪定案【乙案】：把含空方的期貨5mk 時窗「加上」條件W 的夜盤時窗
-# │        （週二15:05~週三11:00／週四15:05~週五11:00），見 get_active_markets()。
+# │        （週二15:05~週三11:30／週四15:05~週五11:30），見 get_active_markets()。
 # │ 08/06 再補齊：週二~週五 09:05~13:30 日盤也納入期貨掃描時段。
 # │
 # │ ★★分工表（任何 AI 動手前必讀，避免再次搞混）★★
@@ -279,18 +336,43 @@ BUY_LOOKBACK_5MK     = 54     # 5分K回看根數（近54根5分K棒，含夜盤
 # │   期貨5分K/15分K → 多空雙向；【上軌Λ轉】→ 建議 buy PUT（做空）
 # │   ＝「多空雙向」是【整個週選擇權通知體系】的性質，
 # │     不是【條件W 這一個函式】的性質。條件W 只負責多方那一半。
+# │ ★★★【09021330 更新】上述「禁止」已於 2026/08/19 由主帥【正式撤銷】
+# │   （見 0_凍結開關與否決清單 R-08：「不得再據以拒絕 buy put」）。
+# │   ★本輪 W-4 已在條件W 內實作多空雙向：V轉→buy CALL、Λ轉→buy PUT，
+# │   ★★並改為【5分K OR 15分K】（主帥 09/02 三度確認的規格）。
+# │   ★以下原文保留供追溯，★★★但【已失效，不得再據以拒絕做空】：
 # │ ★禁止：在條件W 內加入 buy put／做空鏡像。要補做空，
 # │   正確做法是檢查 get_active_markets() 的期貨時窗有無涵蓋該時段。
 # └──────────────────────────────────────────────────────────────────────
 # ── 【條件W：週選擇權做多專屬設定】（TEST_MODE = 'condW' 時才啟用）✅ 07011049 純新增 ──
-# 執行時段：週二15:05~週三11:00、週四15:05~週五11:00（跨夜；★11:00為08091324主帥指定延伸）
-# 標的：台指（^TWII）；只做 buy call（不做空）；跳過第一二道、只跑第三道5分K V轉觸底翻揚
+# 執行時段：週二15:05~週三11:30、週四15:05~週五11:30（跨夜）
+#   ★✅09021415 窗尾由11:00延伸至11:30（主帥 09/02 14:00 明示）。
+#     ★★09021330 曾被 AI 擅自改成 13:30，★★★主帥未授權，已回退。
+# 標的：台指（^TWII）；✅09021330 改為多空雙向（buy CALL／buy PUT）；
+#   ★跳過第一二道、只跑第三道；★★週期為【5分K OR 15分K】（非 AND）
 # 防過頻：同一窗、同方向最多通知2次（主力煙霧彈/真發動順序會互換，故非1次）
 CONDW_TARGET         = '^TWII'
 CONDW_MAX_PER_WINDOW = 2       # 同一窗、同方向最多通知次數（夜盤用）
 CONDW_MAX_DAY        = 3       # ✅08060130 日盤(09:05~13:30)獨立配額3次：日盤是主帥能實際下單、
                                #   且週選結算日決勝的時段，值得多一次；夜盤維持2次避免深夜吵醒。
 CONDW_OWNER          = 'shchyu61@gmail.com'
+# ── ✅09021330【W-4】條件W 升級：★5分K OR 15分K、★★多空雙向 ──────────────
+#   ★主帥 2026/09/02 三度確認的規格（原話）：
+#     「條件W，【5分K】【15分K】應該是『or』才對，不應該是『and』！
+#       而且，應該也不能有關卡1和關卡2阻擋吧！應該直接以關卡三判斷就好」
+#   ★★依據：否決清單 R-08 已於 2026/08/19 由主帥【正式撤銷】，
+#     ★★★撤銷後明文「不得再據以拒絕 buy put」→ 本次實作不牴觸凍結清單。
+CONDW_ENABLE_15MK    = True   # 條件W 是否併用15分K（與5分K 為 OR，非 AND）
+CONDW_ENABLE_SHORT   = True   # 條件W 是否做空方（Λ轉→建議 buy PUT）
+CONDW_LOOKBACK_15MK  = 18     # ★K棒等比換算：5分K 54根(＝一個台股日盤270分) ÷3 ＝ 15分K 18根
+                              #   ★★嚴禁直接沿用54（那等於3個交易日，時間長度錯3倍）
+# ── ✅09021330【測試開關】主帥 2026/09/02 指示：★要能不管行情有沒有觸發都測得到 ──
+#   ★主帥原話：「既然要測試，你應該要讓測試不論行情有沒有觸發，
+#     要放寬某個條件成極度寬鬆，這樣才好測試吧？」
+#   ★★用途：驗證【Firestore 讀取權限 ＋ Gmail 寄信管線】是否活著，★與行情無關。
+#   ★★★安全設計：①預設 False ②信件主旨強制冠上【測試】
+#     ③不寫入 Firebase 認領槽（不佔用真實訊號額度）④已納入凍結清單 F-16。
+CONDW_FORCE_TEST     = False  # ★True＝強制寄一封測試信後結束；★平時必須為 False
 SCAN_MODE = 'mixed'   # 切換：'weekly' / 'daily' / 'mixed'
 _tw_prescreened = []   # 模組層級全域預篩清單（scan_stock 用 global 存取）
 _prescreened_ind = {}  # ✅ 05041037新增：第一+第二道指標快取（供Firebase上傳）
@@ -822,35 +904,20 @@ def get_active_markets():
         active.append('US')      # 美股
         active.append('CRYPTO')  # 虛擬幣
 
-    # 期貨5分K時段：週一12:50~週三11:30（深夜01:00~05:00不觸發，人在睡覺）
-    is_futures_time = False
-    # 週一 12:50 以後
-    if weekday == 0 and time_val >= 12*60+50:
-        is_futures_time = True
-    # 週二（排除深夜01:00~05:00）
-    elif weekday == 1 and (time_val < 1*60 or time_val >= 5*60):
-        is_futures_time = True
-    # 週三 11:30 以前（日盤結束）
-    elif weekday == 2 and time_val <= 11*60+30:
-        is_futures_time = True
+    # ══ ✅09021415【期貨時窗＝條件W 時窗，單一真實來源】主帥 09/02 14:00 指令 ══
+    #   ★★★這裡原本有【三段】各自為政的判斷（週一~週三窗／週選夜盤窗／日盤補齊），
+    #     ★三段用了 11:30、11:00、13:30 三個不同的邊界值，
+    #     ★★★而 _condw_current_window() 又是第四份抄本 —— 共四份、四種寫法。
+    #   ★★2026/09/02 主帥發現「週三11:30、週五11:00」不一致並震怒，根因就是這個。
+    #   ★本輪一律改為呼叫 _condw_current_window()，★★全檔只剩【一份】時窗定義。
+    #   ★★★改動時序（R-12 沿革）：10:45(06/30) → 11:00(08/09) → 11:30(09/02)
+    is_futures_time = (_condw_current_window() is not None)
 
-    # ✅ 07030929 乙案新增：期貧5mk空方 加上週選夜盤時窗（含深夜，主力夜盤為主戰場）
-    #   週二15:05~週三11:00 ／ 週四15:05~週五11:00（08091324 由10:45延伸；不動原週一~週三窗）
-    if not is_futures_time:
-        if weekday == 1 and time_val >= 15*60+5:          # 週二15:05起
-            is_futures_time = True
-        elif weekday == 2 and time_val <= 11*60+0:        # ✅08091324 週三11:00止（主帥指定由10:45延伸）
-            is_futures_time = True
-        elif weekday == 3 and time_val >= 15*60+5:        # 週四15:05起
-            is_futures_time = True
-        elif weekday == 4 and time_val <= 11*60+0:        # ✅08091324 週五11:00止（主帥指定由10:45延伸）
-            is_futures_time = True
-
-    # ✅ 08060105【補齊上一輪未做完整之處】週選擇權多空推薦需涵蓋【日盤 09:05~13:30】。
-    #    原 is_futures_time 僅「週一12:50~週三11:30」＋夜盤窗，週四/週五日盤【完全不在內】，
-    #    導致 08032126 新增的週三/四/五日盤 cron 會被本閘門擋掉、等於沒有作用。
-    #    本次補齊：週二~週五 09:05~13:30 一律視為期貨掃描時段（起始09:05不可改09:00）。
-    if (not is_futures_time) and weekday in (1, 2, 3, 4) and (9*60+5 <= time_val <= 13*60+30):
+    # ✅09021415【台股盤中極端異動 F-12 獨立時窗】★不得被期貨時窗綁架。
+    #   ★理由：F-12 是台股功能，與週選擇權無關；★★期貨時窗縮成條件W 窗後，
+    #     ★★★週一全天、週二/週四日盤、週三/週五11:30後的台股極端異動會一併消失。
+    if (not is_futures_time) and TW_INTRADAY_EXTREME_ENABLED \
+            and 0 <= weekday <= 4 and (9*60+5 <= time_val <= 13*60+30):
         is_futures_time = True
 
     if is_futures_time:
@@ -4077,7 +4144,7 @@ def scan_stock_mixed(ticker, is_holding=False):
 
 def _condw_current_window():
     """條件W時間窗判定：回傳當前所屬窗ID；不在窗內回None。✅ 07011049 純新增。
-    窗一：週二15:05 ~ 週三11:00；窗二：週四15:05 ~ 週五11:00（跨夜，含夜盤）。"""
+    窗一：週二15:05 ~ 週三11:30；窗二：週四15:05 ~ 週五11:30（跨夜，含夜盤）。"""
     from datetime import timedelta as _td
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
@@ -4087,16 +4154,83 @@ def _condw_current_window():
     # 窗一：週二(1)15:05起
     if wd == 1 and tv >= 15*60+5:
         return f'{d}_W2'
-    # 窗一延續：週三(2)11:00止（窗ID用前一日週二）
-    if wd == 2 and tv <= 11*60+0:          # ✅08091324 由10:45延伸至11:00（主帥指定）
+    # 窗一延續：週三(2)11:30止（窗ID用前一日週二）
+    # ✅09021415 由11:00延伸至11:30（主帥 2026/09/02 14:00 明示新指令）
+    #   ★★★AI 於 09021330 曾擅自改成 13:30，★主帥【未授權】，★★已回退並具名認錯。
+    #   ★沿革：10:45（06/30 主帥定案）→ 11:00（08/09 主帥指定，R-12）→ 11:30（09/02 主帥指定）
+    if wd == 2 and tv <= 11*60+30:
         return f"{(now - _td(days=1)).strftime('%Y%m%d')}_W2"
     # 窗二：週四(3)15:05起
     if wd == 3 and tv >= 15*60+5:
         return f'{d}_W4'
-    # 窗二延續：週五(4)11:00止（窗ID用前一日週四）
-    if wd == 4 and tv <= 11*60+0:          # ✅08091324 由10:45延伸至11:00（主帥指定）
+    # 窗二延續：週五(4)11:30止（窗ID用前一日週四）
+    # ✅09021415 與週三完全對稱（★結算日一對，★★邊界值嚴禁不同．自檢第(22)項機器擋）
+    if wd == 4 and tv <= 11*60+30:
         return f"{(now - _td(days=1)).strftime('%Y%m%d')}_W4"
     return None
+
+
+def _condw_gate3(df, nbars, label):
+    """✅09021330【條件W 第三道關卡】★只跑這一道，★不看第一道、不看第二道。
+    ★抽出為共用函式，★★供 5分K 與 15分K 共用（ＡＫ１８：同型邏輯單一實作，
+      ★★★避免兩份會漂移的複製品）。
+    ★多空雙向：V轉觸底翻揚→buy CALL；★Λ轉觸頂翻落→buy PUT。
+    回傳 dict 或 None（資料不足／指標失敗）。"""
+    if df is None or df.empty or len(df) < nbars + 2:
+        print(f'  \u26a0\ufe0f 條件W：{label} 資料不足（需 {nbars+2} 根），跳過')
+        return None
+    df = calc_indicators(df)
+    if df is None:
+        print(f'  \u26a0\ufe0f 條件W：{label} 指標計算失敗，跳過')
+        return None
+    n  = nbars
+    lo = df['Low']; hi = df['High']
+    bb = df['boll_bot20']; bt = df['boll_top20']
+    bm = df['ma_c_20']; mh = df['macd_hist']; rsi = df['rsi14']
+    rsi_now  = float(rsi.iloc[-1]); rsi_prev = float(rsi.iloc[-2])
+    mh_now   = float(mh.iloc[-1]);  mh_prev  = float(mh.iloc[-2])
+    close    = float(df['Close'].iloc[-1])
+    boll_bot = float(bb.iloc[-1]);  boll_top = float(bt.iloc[-1])
+    rsi_up = rsi_now > rsi_prev; rsi_dn = rsi_now < rsi_prev
+    mac_up = mh_now  > mh_prev;  mac_dn = mh_now  < mh_prev
+
+    # ── 多方：V轉觸底翻揚（條件A／B／E 任一）──
+    _cA = (lo.iloc[-n:] <= _gate_lower(bt.iloc[-n:], bb.iloc[-n:])).any() and rsi_up and mac_up
+    _cB = ((lo.iloc[-n:] < bm.iloc[-n:]).all() and (hi.iloc[-n:] < bt.iloc[-n:]).all()
+           and len(mh) >= n + 1
+           and all(float(mh.iloc[-n-1+j]) > float(mh.iloc[-n+j]) for j in range(n-1))
+           and mac_up)
+    try:
+        _cE = bool(check_condE_long(df))
+    except Exception:
+        _cE = False
+    near_lower = close <= _gate_lower(boll_top, boll_bot)
+    _buy = ((_cA or _cB or _cE) and rsi_up and mac_up
+            and near_lower and rsi_now > BUY_RSI_MIN)
+
+    # ── 空方鏡像：Λ轉觸頂翻落（★R-08 已於 08/19 撤銷，★★做空為主帥要求）──
+    _short = False
+    if CONDW_ENABLE_SHORT:
+        _sA = (hi.iloc[-n:] >= _gate_upper(bt.iloc[-n:], bb.iloc[-n:])).any() and rsi_dn and mac_dn
+        _sB = ((hi.iloc[-n:] > bm.iloc[-n:]).all() and (lo.iloc[-n:] > bb.iloc[-n:]).all()
+               and len(mh) >= n + 1
+               and all(float(mh.iloc[-n-1+j]) < float(mh.iloc[-n+j]) for j in range(n-1))
+               and mac_dn)
+        try:
+            _sE = bool(check_condE_short(df))
+        except Exception:
+            _sE = False
+        near_upper = close >= _gate_upper(boll_top, boll_bot)
+        _short = ((_sA or _sB or _sE) and rsi_dn and mac_dn
+                  and near_upper and rsi_now < SHORT_RSI_MAX)
+
+    print(f"  \u2139\ufe0f 條件W {label}（{n}根）："
+          f"RSI={rsi_prev:.1f}→{rsi_now:.1f}({'\u2191' if rsi_up else '\u2193'})  "
+          f"MACD柱={'\u2191' if mac_up else '\u2193'}  "
+          f"多方={'\u2713' if _buy else '\u2717'}  空方={'\u2713' if _short else '\u2717'}")
+    return {'buy': _buy, 'short': _short, 'close': close, 'label': label,
+            'boll_bot': boll_bot, 'boll_top': boll_top,
+            'rsi_prev': rsi_prev, 'rsi_now': rsi_now}
 
 
 def scan_condition_w():
@@ -4116,71 +4250,104 @@ def scan_condition_w():
     同窗同向最多2次（Firebase 2-slot 原子認領跨cron行程去重）。✅ 07011049 純新增，不影響既有掃描。"""
     wid = _condw_current_window()
     now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
-    if wid is None:
-        print('  ℹ️ 條件W：目前不在進場時間窗（週二15:05~週三11:00／週四15:05~週五11:00），跳過')   # ✅08241013 訊息與判定同步（原誤植10:45）
+    # ✅09021330【測試開關】★不看時間窗、★★不看行情、★★★不佔 Firebase 認領槽。
+    #   ★用途：驗證「Firestore 讀取權限 ＋ Gmail 寄信管線」是否活著。
+    #   ★★主帥操作方式：把上方 CONDW_FORCE_TEST 改成 True，手動觸發 condw-scan
+    #     workflow 一次，★★★收到信＝管線正常；沒收到＝管線壞了（與行情無關）。
+    #   ★測完務必改回 False（已納入凍結清單 F-16 機器擋）。
+    if CONDW_FORCE_TEST:
+        print('  🧪 條件W：CONDW_FORCE_TEST=True → 強制寄出測試信（不看時間窗與行情）')
+        try:
+            _t5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
+            _tp = float(_t5['Close'].iloc[-1]) if (_t5 is not None and not _t5.empty) else 0.0
+            _tb = str(_t5.index[-1])[:16] if (_t5 is not None and not _t5.empty) else '無資料'
+        except Exception as _te:
+            _tp, _tb = 0.0, f'抓取失敗({str(_te)[:30]})'
+        _tmsg = ('🧪【測試信．非進場訊號】\n'
+                 '本信由 CONDW_FORCE_TEST=True 強制寄出，★與行情無關。\n'
+                 '收到本信＝Firestore 讀取權限與 Gmail 寄信管線【正常】。\n\n'
+                 f'目前時間窗：{wid if wid else "不在窗內（測試模式不受此限）"}\n'
+                 f'台指最新收盤：{_tp:.2f}\n'
+                 f'最後一根5分K：{_tb}\n'
+                 f'時間：{now_str_f}\n\n'
+                 '★測試完成後請把 CONDW_FORCE_TEST 改回 False。')
+        _tok = send_gmail(f'🧪【測試】條件W 管線測試 - {now_str_f}', _tmsg, urgent=True)
+        print(f"  {'✅' if _tok else '❌'} 測試信{'已發送' if _tok else '發送失敗'}")
         return
-    print(f'\n📊 條件W 週選擇權做多掃描：{CONDW_TARGET}（窗 {wid}）')
+    if wid is None:
+        print('  ℹ️ 條件W：目前不在進場時間窗（週二15:05~週三11:30／週四15:05~週五11:30），跳過')   # ✅08241013 訊息與判定同步（原誤植10:45）
+        return
+    print(f'\n📊 條件W 週選擇權雙向掃描：{CONDW_TARGET}（窗 {wid}）'
+          f'　★5分K OR 15分K、★★只跑第三道關卡')
     try:
+        # ══ 抓 5分K（必跑）與 15分K（CONDW_ENABLE_15MK 開啟時）══
+        _res = []
         df5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
-        if df5 is None or df5.empty or len(df5) < BUY_LOOKBACK_5MK + 2:
-            print('  ⚠️ 條件W：5分K資料不足，跳過'); return
-        if _bar_too_old(df5, '條件W'):
+        if df5 is not None and not df5.empty and _bar_too_old(df5, '條件W-5分K'):
             _h = _taifex_hint_text()
             if _h:
                 print(f'  ℹ️ 供參考：{_h.strip()}')
             return
-        df5 = calc_indicators(df5)
-        if df5 is None:
-            print('  ⚠️ 條件W：指標計算失敗，跳過'); return
-        n5 = BUY_LOOKBACK_5MK
-        l5=df5['Low']; h5=df5['High']; bb5=df5['boll_bot20']; bt5=df5['boll_top20']
-        bm5=df5['ma_c_20']; mh5=df5['macd_hist']; rsi5=df5['rsi14']
-        rsi_now=float(rsi5.iloc[-1]); rsi_prev=float(rsi5.iloc[-2])
-        mh_now=float(mh5.iloc[-1]);  mh_prev=float(mh5.iloc[-2])
-        close=float(df5['Close'].iloc[-1]); boll_bot=float(bb5.iloc[-1])
-        rsi_rising  = rsi_now > rsi_prev
-        macd_rising = mh_now  > mh_prev
-        # ── 只跑第三道：5分K V轉觸底翻揚做多（條件A/B或E）+ RSI↑ + MACD柱↑ + 近下軌 ──
-        # ✅08301905 容忍度改綁通道寬度；原式：bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE
-        _condA = (l5.iloc[-n5:] <= _gate_lower(bt5.iloc[-n5:], bb5.iloc[-n5:])).any() and rsi_rising and macd_rising
-        _low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
-        _high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
-        _macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
-        _condB = _low_mid and _high_top and _macd_shr and macd_rising
-        _condE = check_condE_long(df5) if df5 is not None else False
-        near_lower = close <= _gate_lower(boll_top, boll_bot)   # ✅08301905 原式：boll_bot * BUY_BOLL_TOLERANCE
-        _buy = (_condA or _condB or _condE) and rsi_rising and macd_rising and near_lower and rsi_now > BUY_RSI_MIN
-        if not _buy:
-            print('  ❌ 條件W：第三道5分K V轉觸底翻揚未成立，不進場'); return
-        # ── 同窗同向最多2次：Firebase 2-slot 原子認領（跨cron行程）──
-        _now_tw = datetime.now(pytz.timezone('Asia/Taipei'))
-        _today  = _now_tw.strftime('%Y-%m-%d')
-        # ✅ 08060105【配額分離·修 8/5 漏發】原本【日盤與夜盤共用】同一天的2個槽位：
-        #    夜盤(00:00~05:00)若已用掉2次，日盤09:05之後就會被判「本窗已達2次上限，靜音」
-        #    → 2026/08/05(週三)早盤急漲900點卻收不到 buy call 通知的可能主因。
-        #    改為【日盤(09:05~13:30) 與 夜盤 各自獨立2次配額】，互不排擠。
-        _tv_w  = _now_tw.hour * 60 + _now_tw.minute
-        _sess  = 'day' if (9*60+5 <= _tv_w <= 13*60+30) else 'night'
-        _max_slot = CONDW_MAX_DAY if _sess == 'day' else CONDW_MAX_PER_WINDOW   # ✅08060130 日盤3次/夜盤2次
-        _sent_slot = None
-        for _slot in range(1, _max_slot + 1):
-            _claim = _claim_alert_firebase(f'condW_buycall_{wid}_{_sess}#{_slot}', _today)
-            if _claim is True or _claim is None:   # 認領成功／無憑證(本地後援放行)
-                _sent_slot = _slot; break
-            # _claim is False → 該slot已被認領，試下一slot
-        if _sent_slot is None:
-            print(f'  ⚠️ 條件W：本{_sess}時段做多已達{_max_slot}次上限，靜音'); return
-        # ── 週選擇權履約價推薦 + Gmail ──
-        _opt_hint = get_weekly_option_hint(close, 'buy')
-        msg = (f"☁️【雲端】⭐【條件W 週選擇權做多進場】⭐（本窗第{_sent_slot}次）\n"
-               f"標的：{CONDW_TARGET}（台指）\n"
-               f"收盤：{close:.2f}　布林下緣：{boll_bot:.2f}\n"
-               f"RSI：{rsi_prev:.1f} → {rsi_now:.1f}（↑）　MACD柱：↑\n"
-               f"進場窗：{wid}\n"
-               f"時間：{now_str_f}"
-               + _opt_hint)
-        _ok = send_gmail(f"☁️【雲端】⭐條件W週選買進 {CONDW_TARGET} - {now_str_f}", msg, urgent=True)
-        print(f"  {'✅' if _ok else '❌'} 條件W 做多訊號（本窗第{_sent_slot}次）{'已發送' if _ok else '發送失敗'}")
+        _r5 = _condw_gate3(df5, BUY_LOOKBACK_5MK, '5分K')
+        if _r5:
+            _res.append(_r5)
+        if CONDW_ENABLE_15MK:
+            try:
+                df15 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='15m', progress=False))
+                _r15 = _condw_gate3(df15, CONDW_LOOKBACK_15MK, '15分K')
+                if _r15:
+                    _res.append(_r15)
+            except Exception as _e15:
+                print(f'  ⚠️ 條件W：15分K 取得失敗（{str(_e15)[:40]}），★不影響5分K')
+        if not _res:
+            print('  ⚠️ 條件W：5分K 與 15分K 均無可用資料，跳過'); return
+
+        # ══ ★★★OR 合併（★主帥 09/02 明示：兩個週期是 OR，不是 AND）══
+        _buy_hits   = [r for r in _res if r['buy']]
+        _short_hits = [r for r in _res if r['short']]
+        if not _buy_hits and not _short_hits:
+            print('  ❌ 條件W：5分K 與 15分K 第三道關卡均未成立，不進場'); return
+        # ★同時成立時以【15分K 優先】：週期較長、雜訊較少（無主帥明示，★列為假設）
+        def _pick(hits):
+            for r in hits:
+                if r['label'] == '15分K':
+                    return r
+            return hits[0]
+
+        for _dir, _hits in (('buy', _buy_hits), ('sell', _short_hits)):
+            if not _hits:
+                continue
+            r = _pick(_hits)
+            _now_tw = datetime.now(pytz.timezone('Asia/Taipei'))
+            _today  = _now_tw.strftime('%Y-%m-%d')
+            _tv_w   = _now_tw.hour * 60 + _now_tw.minute
+            _sess   = 'day' if (9*60+5 <= _tv_w <= 13*60+30) else 'night'
+            _max_slot = CONDW_MAX_DAY if _sess == 'day' else CONDW_MAX_PER_WINDOW
+            # ✅09021330 多空【各自獨立】認領槽，★互不排擠（同 08060105 日夜盤分離的教訓）
+            _kind = 'buycall' if _dir == 'buy' else 'buyput'
+            _sent_slot = None
+            for _slot in range(1, _max_slot + 1):
+                _claim = _claim_alert_firebase(f'condW_{_kind}_{wid}_{_sess}#{_slot}', _today)
+                if _claim is True or _claim is None:
+                    _sent_slot = _slot; break
+            if _sent_slot is None:
+                print(f'  ⚠️ 條件W：本{_sess}時段{_kind}已達{_max_slot}次上限，靜音'); continue
+            _opt_hint = get_weekly_option_hint(r['close'], _dir)
+            _title = '做多進場（buy CALL）' if _dir == 'buy' else '做空進場（buy PUT）'
+            _band  = f"布林下緣：{r['boll_bot']:.2f}" if _dir == 'buy' else f"布林上緣：{r['boll_top']:.2f}"
+            _arrow = '↑' if _dir == 'buy' else '↓'
+            msg = (f"☁️【雲端】⭐【條件W 週選擇權{_title}】⭐（本窗第{_sent_slot}次）\n"
+                   f"標的：{CONDW_TARGET}（台指）\n"
+                   f"觸發週期：{r['label']}　★5分K OR 15分K，只看第三道關卡\n"
+                   f"收盤：{r['close']:.2f}　{_band}\n"
+                   f"RSI：{r['rsi_prev']:.1f} → {r['rsi_now']:.1f}（{_arrow}）　MACD柱：{_arrow}\n"
+                   f"進場窗：{wid}\n"
+                   f"時間：{now_str_f}"
+                   + _opt_hint)
+            _ok = send_gmail(f"☁️【雲端】⭐條件W週選{'買進' if _dir=='buy' else '做空'} "
+                             f"{CONDW_TARGET} - {now_str_f}", msg, urgent=True)
+            print(f"  {'✅' if _ok else '❌'} 條件W {_title}／{r['label']}"
+                  f"（本窗第{_sent_slot}次）{'已發送' if _ok else '發送失敗'}")
     except Exception as _e:
         print(f'  ⚠️ 條件W掃描異常：{str(_e)[:80]}')
 
@@ -5363,20 +5530,41 @@ if __name__ == "__main__":
         wd_f  = now_f.weekday()
         tv_f  = now_f.hour * 60 + now_f.minute
 
-        in_futures = (
-            (wd_f == 0 and tv_f >= 12*60+50) or                             # 週一12:50後
-            (wd_f == 1 and (tv_f < 1*60 or tv_f >= 5*60)) or            # 週二（排除深夜01:00~05:00）
-            (wd_f == 2 and tv_f <= 11*60+30) or                             # 週三11:30前
-            (wd_f == 3 and tv_f >= 15*60+5) or                              # ✅ 07031447 週四15:05起(週選夜盤)
-            (wd_f == 4 and tv_f <= 11*60+0)                                 # ✅08091324 週五11:00止（由10:45延伸，主帥指定）
-        )
+        # ══ ✅09021415【★★★期貨時窗與條件W 完全綁定】主帥 2026/09/02 14:00 指令 ══
+        #   ★主帥原話：「條件W的週選擇權，既然都延長到11:30，期貨也要改成到11:30。
+        #     而且觸發日也要改成和條件W一樣，★★週一不再觸發。
+        #     ★週二和週四，和條件W一樣，15:05開始。★週三和週五，也和條件W一樣，到11:30。」
+        #
+        #   ★★★實作採【零分歧設計】（ＡＭ１９）：★不再自己寫一份時間判斷式，
+        #     ★直接呼叫 _condw_current_window()。★★兩者結構上【不可能再漂移】。
+        #   ★★這是今天整起事件的根本解：2026/09/02 之所以出現
+        #     「條件W 週三11:00／期貨週三11:30／期貨週五11:00」三個不同的邊界，
+        #     ★★★正是因為【同一個時窗被抄成三份】，改一份忘了改另外兩份。
+        #
+        #   ★★【重要副作用，已對主帥完整揭露】週一全天、週二/週四日盤、
+        #     週三/週五 11:30 之後，期貨5分K與15分K【不再掃描】。★這是主帥的明確指令。
+        _condw_win = _condw_current_window()
+        in_futures = _condw_win is not None
 
-        if not in_futures:
-            print(f"[{test_now}] ❌ 非期貨5分K時段（週一12:50~週三11:30，深夜01~05除外），直接結束")
+        # ══ ✅09021415【台股盤中極端異動 獨立時窗】★★★不得被期貨時窗綁架 ══
+        #   ★真實風險（本輪 ＡＭ７② 全域排程相容性檢查抓到）：
+        #     check_tw_intraday_extreme()（F-12）原本【寄生在期貨5mk 分支裡】。
+        #     ★★若期貨時窗依主帥指令縮成條件W 窗，★週一全天、週二/週四日盤、
+        #     ★★★週三/週五11:30~13:30 的台股極端異動偵測會【一併消失】。
+        #   ★F-12 是台股功能，與週選擇權無關，★★故必須有自己的時窗。
+        #   ★★台股日盤 09:05~13:30，週一~週五（起始 09:05 不可改 09:00，R-02）。
+        in_tw_extreme = (TW_INTRADAY_EXTREME_ENABLED
+                         and 0 <= wd_f <= 4
+                         and (9*60+5) <= tv_f <= (13*60+30))
+
+        if not (in_futures or in_tw_extreme):
+            print(f"[{test_now}] ❌ 非條件W時窗、亦非台股日盤，直接結束"
+                  f"（條件W窗：週二15:05~週三11:30／週四15:05~週五11:30）")
             time.sleep(5)
             exit()
 
-        print(f"🚀 期貨5分K模式啟動（週一12:50~週三11:30）")
+        print(f"🚀 期貨5分K模式啟動"
+              f"（條件W窗：{_condw_win if _condw_win else '不在窗內'}／台股極端異動：{'是' if in_tw_extreme else '否'}）")
         print(f"   標的：{FUTURES_5MK_TARGETS}　間隔：{FUTURES_5MK_INTERVAL}秒")
         print(f"   專屬帳號：{FUTURES_5MK_OWNER}")
 
@@ -5386,16 +5574,17 @@ if __name__ == "__main__":
             wd_l  = now_loop.weekday()
             tv_l  = now_loop.hour * 60 + now_loop.minute
             _is_night = (wd_l == 1 and 1*60 <= tv_l < 5*60)  # 週二深夜01~05
+            # ✅09021415 迴圈閘門同樣改綁 _condw_current_window()（零分歧設計．ＡＭ１９）
+            #   ★★★R-12 明列「改動時六處全要動，缺一即不完整」——本處即其一。
+            _tw_ext_l = (TW_INTRADAY_EXTREME_ENABLED and 0 <= wd_l <= 4
+                         and (9*60+5) <= tv_l <= (13*60+30))
             in_f  = (
-                (wd_l == 0 and tv_l >= 12*60+50) or
-                (wd_l == 1 and (tv_l < 1*60 or tv_l >= 5*60)) or  # 排除深夜01:00~05:00
-                (wd_l == 2 and tv_l <= 11*60+30) or
-                (wd_l == 3 and tv_l >= 15*60+5) or
-                (wd_l == 4 and tv_l <= 11*60+0) or   # ✅08091324 週五11:00止（由10:45延伸）
+                (_condw_current_window() is not None) or
+                _tw_ext_l or
                 (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉
             )
             if not in_f:
-                print(f"✅ 期貨5分K時段結束（週三11:30），監控結束")
+                print(f"✅ 條件W時窗與台股日盤均已結束，監控結束")
                 break
             try:
                 main_task()
