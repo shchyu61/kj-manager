@@ -1,6 +1,30 @@
 # ══════════════════════════════════════════════════════════════
 # ★★★【自我舉證表】(09021330)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
 # ══════════════════════════════════════════════════════════════
+# ★★★【09022055 新增結論】
+# 結論⑭：_futures_is_holding 原本只是模組層級變數（第225行），不跨執行保存
+#   來源＝本檔第225行（實讀）＋ 全檔 grep 無任何 futures_pos 讀寫函式
+#   → ★★★「有持倉就繼續掃平倉」在雲端版【從來沒有生效過】
+# 結論⑮：出場不受進場時窗限制
+#   來源＝主帥 2026/09/02 15:02 原話（對話視窗，已立為否決清單 R-14）
+# 結論⑯：期貨嚴禁拿掉關卡1、關卡2
+#   來源＝主帥 2026/09/02 14:55 原話「這是期貨，不是週選擇權，可以買進後放著
+#         不管等歸零！！！期貨放著等歸零，不是大賺就是破產！！！」
+# 結論⑰：做空被做多的第二道 continue 綁架
+#   來源＝本檔原第4907行 `if check_buy_eleader(df5_d) is None: continue`（實讀）
+# 結論⑱：^TWII 只有 09:00~13:30 有報價
+#   來源＝既有 _tw_spot_session_ok 決策註記（F-15）＋ 08160731 定案
+#   → ★13:30~13:45 與夜盤【做不到】，★★需待辦B，★★★不假裝有解
+#
+# ★★★【09022055 推定清單追加】
+#   推定5：Firestore public/futures_position 路徑可未登入讀取
+#     ・依據＝W-2 規則 public 段為 `allow read: if true`（09/01 主帥已部署）
+#     ・★推定為假的後果：每次執行都讀不到 → 回到「從空手開始」；
+#       ★★log 會印「無紀錄或無法讀取」，★★★主帥一眼可驗
+#   推定6：寫入用的 service account 對該路徑有寫權限
+#     ・依據＝同一路徑家族的 futures_status 已由同一憑證寫入多時
+#     ・★推定為假的後果：log 印「持倉狀態寫入失敗」；★★不影響進場訊號
+#
 # ★★★【09021415 重大更正】09021330 版的自我舉證表結論①③有誤，更正如下：
 #   ・原結論①把「期貨5mk 閘門」與「條件W 時窗」混為一談 → 錯誤呈現。
 #     ★事實：條件W 週三/週五【都是 11:00】，★★對稱，★★★沒有不一致。
@@ -55,7 +79,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09021415'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09022055'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -4170,6 +4194,107 @@ def _condw_current_window():
     return None
 
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ✅09022055【持倉狀態跨執行保存】主帥 2026/09/02 15:02 質問所引出的根本問題
+# ----------------------------------------------------------------------
+#   ★主帥原話：「我在09:05~11:30建倉，難道11:31後到13:45，就不再觸發出場
+#     （平倉）訊號通知了嗎？那這樣與放著等歸零（等破產），有什麼不同！！！」
+#
+#   ★★★查證結果比主帥想的更嚴重：
+#     ・`_futures_is_holding` 原本只是【模組層級變數】（第225行），
+#       ★每次 GitHub Actions 啟動都從 False 重新開始。
+#     ・★★雲端是 cron 每5分鐘【一次性執行】，行程結束狀態就消失。
+#     ・★★★所以「有持倉就繼續掃平倉」這個保護，★在雲端版【從來沒有生效過】，
+#       ★它只在本機版同一個行程的 while 迴圈內有意義。
+#     ・★我在 09021415 說「這個保護本來就存在，被我限縮了」——★★那句話只對一半，
+#       ★★★正確說法是：它在雲端版本來就形同虛設，★而我又把它進一步縮小。
+#
+#   ★解法：把持倉狀態寫進 Firestore（與 futures_status 同一個 public 路徑家族），
+#     ★★每次執行開頭先讀回來，★★★這樣跨行程、跨班次都記得住。
+#   ★權限：public 路徑的 read 為 `allow read: if true`（W-2 規則，09/01 已部署），
+#     ★★故讀取【不需憑證】；★寫入需要 service account 憑證。
+# ══════════════════════════════════════════════════════════════════════
+FUTURES_POS_PERSIST = True    # 持倉狀態跨執行保存總開關（凍結清單 F-19）
+
+def _load_futures_position():
+    """讀回持倉狀態。★不需憑證（public read）。★★失敗一律回 (False, False)，
+    ★★★寧可漏掃平倉也不可憑空捏造一個不存在的持倉（會發出假平倉訊號）。"""
+    global _futures_is_holding, _futures_is_short
+    if not FUTURES_POS_PERSIST:
+        return (False, False)
+    try:
+        import requests as _req
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}"
+                f"/public/futures_position")
+        _r = _req.get(_url, timeout=10)
+        if _r.status_code != 200:
+            print(f"  ℹ️ 持倉狀態讀取：無紀錄或無法讀取（HTTP {_r.status_code}），視為空手")
+            return (False, False)
+        _f = _r.json().get('fields', {})
+        _long  = _f.get('is_long',  {}).get('booleanValue', False) is True
+        _short = _f.get('is_short', {}).get('booleanValue', False) is True
+        _at    = _f.get('updated_at', {}).get('stringValue', '?')
+        _futures_is_holding = _long
+        _futures_is_short   = _short
+        print(f"  📥 持倉狀態已還原：多倉={_long} 空倉={_short}（更新於 {_at}）")
+        return (_long, _short)
+    except Exception as _e:
+        print(f"  ⚠️ 持倉狀態讀取失敗（視為空手）：{str(_e)[:60]}")
+        return (False, False)
+
+def _save_futures_position(is_long, is_short, note=''):
+    """寫入持倉狀態（需憑證）。★每一次改變 _futures_is_holding/_short 都必須同步呼叫。"""
+    if not FUTURES_POS_PERSIST:
+        return False
+    try:
+        import json, os, requests as _req
+        from datetime import datetime as _dt
+        import pytz as _tz
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f:
+                    cred_json = f.read()
+        if not cred_json:
+            print("  ⚠️ 持倉狀態寫入略過：Firebase 憑證未設定")
+            return False
+        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+             scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        _now = _dt.now(_tz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}"
+                f"/public/futures_position")
+        _r = _req.patch(_url, timeout=15,
+            headers={"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"},
+            json={"fields": {
+                "is_long":    {"booleanValue": bool(is_long)},
+                "is_short":   {"booleanValue": bool(is_short)},
+                "note":       {"stringValue": str(note)[:120]},
+                "updated_at": {"stringValue": _now},
+                "source":     {"stringValue": "python"}
+            }})
+        _ok = _r.status_code in (200, 201)
+        print(f"  {'📤' if _ok else '⚠️'} 持倉狀態已寫入：多倉={is_long} 空倉={is_short}"
+              f"{'' if _ok else f'（失敗 HTTP {_r.status_code}）'}")
+        return _ok
+    except Exception as _e:
+        print(f"  ⚠️ 持倉狀態寫入失敗：{str(_e)[:60]}")
+        return False
+
+def _txf_data_window(wd, tv):
+    """★資料源可用時段（★不是台指期真實交易時段）。
+    ★★條件W 與期貨5分K 目前抓 ^TWII（加權指數），★只有 09:00~13:30 有新K棒。
+    ★★★台指期真實日盤到 13:45、夜盤 15:00~次日05:00，★但 ^TWII 沒有那些資料，
+      ★這一段【做不到】，★★需待辦B（台指期即時報價源）解決，★★★不假裝有解。"""
+    #   ★起始 09:05 與 cron '5/5 1-5 * * 1-5' 對齊（R-02：★不可改 09:00）
+    return (0 <= wd <= 4) and ((9*60+5) <= tv <= (13*60+30))
+
+
 def _condw_gate3(df, nbars, label):
     """✅09021330【條件W 第三道關卡】★只跑這一道，★不看第一道、不看第二道。
     ★抽出為共用函式，★★供 5分K 與 15分K 共用（ＡＫ１８：同型邏輯單一實作，
@@ -5070,11 +5195,22 @@ def main_task():
                 print(f'  ✅ {ticker} 第一道(日K AND EWT 30分K)通過（多:{_1st_long} 空:{_1st_short}）')
 
                 # ── 第二道：日K eLeader ──────────────────────
-                # （df5_d已在上面取得，直接使用）
-                if check_buy_eleader(df5_d) is None:
-                    print(f'  ❌ {ticker} 第二道日K eLeader未通過，跳過')
+                # ✅09022055【★★★修正：做空原本被做多的第二道 continue 綁架】
+                #   ★原式：`if check_buy_eleader(df5_d) is None: continue`
+                #     → ★★這是【做多】的 eLeader，★但 continue 會跳過【整支標的】。
+                #   ★★★後果：大跌時做多 eLeader 幾乎必然不過 → 整支跳掉 →
+                #     ★下面的 _5mk_short 根本執行不到 → ★★做空在結構上永遠不可能觸發。
+                #   ★這是 2026/09/02 台股大跌900點沒有做空訊號的【第二個根因】
+                #     （第一個是時窗，已於 09021415 修正）。
+                #   ★★★主帥 09/02 明示：★期貨【不可以】拿掉關卡1、關卡2
+                #     （「期貨放著等歸零，不是大賺就是破產」）。
+                #   ★★故本次【一道關卡都沒有拿掉】，★只是讓多空各走各的第二道。
+                _buy_2nd   = check_buy_eleader(df5_d)   is not None
+                _short_2nd = check_short_eleader(df5_d) is not None
+                if not _buy_2nd and not _short_2nd:
+                    print(f'  ❌ {ticker} 第二道日K eLeader多空皆未通過，跳過')
                     continue
-                print(f'  ✅ {ticker} 第二道日K eLeader通過')
+                print(f'  ✅ {ticker} 第二道日K eLeader通過（多:{_buy_2nd} 空:{_short_2nd}）')
 
                 # ── 第三道：5分K 54根條件A/B ────────────────
                 # ✅【夜盤保留】主力以夜盤為主戰場，不剔除夜盤
@@ -5133,8 +5269,13 @@ def main_task():
                 # ✅ v05192327：5分K進場加E和F
                 _5mk_cond_E_long = check_condE_long(df5) if df5 is not None else False
                 _5mk_cond_F_long = check_buy_eleader(df5) is not None if df5 is not None else False
-                _5mk_buy = (_5mk_cond_A or _5mk_cond_B or _5mk_cond_D_long or
-                            _5mk_cond_E_long or _5mk_cond_F_long) and rsi_now > BUY_RSI_MIN
+                # ✅09022055 第一道、第二道改為【顯式帶入】。
+                #   ★原式靠上方的 continue 隱含保證，★★拆開多空後 continue 不再等價，
+                #   ★★★若不顯式帶入，會出現「只有空方過第一道、多方卻發買進訊號」的錯誤。
+                _5mk_buy = (_1st_long and _buy_2nd
+                            and (_5mk_cond_A or _5mk_cond_B or _5mk_cond_D_long or
+                                 _5mk_cond_E_long or _5mk_cond_F_long)
+                            and rsi_now > BUY_RSI_MIN)
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
                 # ── 日K位階參考（印出但不擋住掃描）──────────────
                 try:
@@ -5155,9 +5296,7 @@ def main_task():
                 # 第三道：5分K 54根條件A/B反向 + RSI↓ AND MACD↓
                 # ══════════════════════════════════════════════
                 _short_1st = _1st_short  # ✅ 已在第一道判斷完成
-                _short_2nd = False
-                if _short_1st:
-                    _short_2nd = check_short_eleader(df5_d) is not None
+                # ✅09022055 _short_2nd 已於第二道統一算好（原本在此重算，且被 continue 擋住）
                 # 第三道做空條件A/B（鏡像多方）
                 _5mk_short_A = (h5.iloc[-n5:] >= bt5.iloc[-n5:] * 1.00).any() and rsi_falling and macd_falling
                 _5mk_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).all()
@@ -5168,7 +5307,10 @@ def main_task():
 
                 _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')
                 # ✅ 深夜01~05有持倉：只掃平倉，跳過買進
-                if _5mk_buy and near_lower and not (_is_night_now and _futures_is_holding):
+                # ✅09022055 不在條件W窗內時【只掃平倉】，★嚴禁在窗外開新倉
+                _entry_allowed = in_futures
+                if (_5mk_buy and near_lower and _entry_allowed
+                        and not (_is_night_now and _futures_is_holding)):
                     # ── 5分鐘內最多2封上限 ──────────────────────
                     _now_ts = time.time()
                     if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
@@ -5193,7 +5335,9 @@ def main_task():
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K買進訊號{'已發送' if _ok else '發送失敗'}")
                         # ✅ 方案A：買進訊號發出 → 記錄持倉狀態
                         _futures_is_holding = True
+                        _futures_is_short   = False
                         print(f"  📌 持倉狀態已標記：is_futures_holding=True")
+                        _save_futures_position(True, False, f'5mk買進 {ticker}')  # ✅09022055
 
                 elif rsi_falling and macd_falling and near_upper:
                     # ── 5分鐘內最多2封上限 ──────────────────────
@@ -5218,9 +5362,12 @@ def main_task():
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K平倉訊號{'已發送' if _ok else '發送失敗'}")
                         # ✅ 方案A：平倉訊號發出 → 清除持倉狀態
                         _futures_is_holding = False
+                        _save_futures_position(False, _futures_is_short, '5mk平倉')  # ✅09022055
                         print(f"  📌 持倉狀態已清除：is_futures_holding=False")
                 # ✅【做空訊號】三道關卡通過且接近布林上軌，且深夜無空倉
-                elif _5mk_short and near_upper and not (_is_night_now and _futures_is_short):
+                # ✅09022055 窗外禁開新空倉（同買進，★出場才是窗外允許的動作）
+                elif (_5mk_short and near_upper and _entry_allowed
+                      and not (_is_night_now and _futures_is_short)):
                     _now_ts = time.time()
                     if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
@@ -5243,7 +5390,8 @@ def main_task():
                         _ok = send_gmail(f"☁️【雲端】🔻期貨5分K做空 {ticker} - {now_str_f}", msg, urgent=True)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short   = True
-                        _futures_is_holding = False  # 做空時清除多倉
+                        _futures_is_holding = False   # 做空時清除多倉
+                        _save_futures_position(False, True, f'5mk做空 {ticker}')  # ✅09022055
                         print(f"  📌 空倉狀態已標記：is_futures_short=True")
 
                 # ✅【空倉回補（平空）】RSI↑ AND MACD柱↑ AND 近布林下軌 → 回補平倉
@@ -5268,6 +5416,7 @@ def main_task():
                         _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg, urgent=True)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short = False
+                        _save_futures_position(_futures_is_holding, False, '5mk平空回補')  # ✅09022055
                         print(f"  📌 空倉狀態已清除：is_futures_short=False")
 
                 else:
@@ -5546,6 +5695,18 @@ if __name__ == "__main__":
         _condw_win = _condw_current_window()
         in_futures = _condw_win is not None
 
+        # ══ ✅09022055【★★★出場閘門：只受「有沒有持倉」管，不受進場時窗管】══
+        #   ★主帥 2026/09/02 15:02 指令的核心：
+        #     「09:05~11:30建倉，11:31後就不再觸發平倉訊號？那與放著等破產有何不同！」
+        #   ★★設計原則（已立為凍結清單 R-14）：
+        #     ★進場受時窗管（條件W 窗）；★★出場【不受任何時窗管】。
+        #   ★★★先讀回 Firestore 的持倉狀態，★否則每次執行都從空手開始（原缺陷）。
+        _load_futures_position()
+        _can_exit = ((_futures_is_holding or _futures_is_short)
+                     and _txf_data_window(wd_f, tv_f))
+        if _can_exit and not in_futures:
+            print(f"[{test_now}] 📌 不在條件W窗內，★但有持倉 → 【只掃平倉，不掃進場】")
+
         # ══ ✅09021415【台股盤中極端異動 獨立時窗】★★★不得被期貨時窗綁架 ══
         #   ★真實風險（本輪 ＡＭ７② 全域排程相容性檢查抓到）：
         #     check_tw_intraday_extreme()（F-12）原本【寄生在期貨5mk 分支裡】。
@@ -5557,7 +5718,7 @@ if __name__ == "__main__":
                          and 0 <= wd_f <= 4
                          and (9*60+5) <= tv_f <= (13*60+30))
 
-        if not (in_futures or in_tw_extreme):
+        if not (in_futures or in_tw_extreme or _can_exit):
             print(f"[{test_now}] ❌ 非條件W時窗、亦非台股日盤，直接結束"
                   f"（條件W窗：週二15:05~週三11:30／週四15:05~週五11:30）")
             time.sleep(5)
@@ -5578,10 +5739,15 @@ if __name__ == "__main__":
             #   ★★★R-12 明列「改動時六處全要動，缺一即不完整」——本處即其一。
             _tw_ext_l = (TW_INTRADAY_EXTREME_ENABLED and 0 <= wd_l <= 4
                          and (9*60+5) <= tv_l <= (13*60+30))
+            # ✅09022055 出場閘門併入：★有持倉 → 資料源可用時段內一律繼續掃平倉
+            #   ★★★原式只保留「深夜有持倉」一種情形，★日盤 11:31~13:30 有持倉會斷線。
+            _exit_l = ((_futures_is_holding or _futures_is_short)
+                       and _txf_data_window(wd_l, tv_l))
             in_f  = (
                 (_condw_current_window() is not None) or
                 _tw_ext_l or
-                (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉
+                _exit_l or                           # ✅09022055 有持倉→繼續掃平倉
+                (_is_night and _futures_is_holding)  # ✅ 深夜有持倉→繼續掃平倉（原有，保留）
             )
             if not in_f:
                 print(f"✅ 條件W時窗與台股日盤均已結束，監控結束")
