@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09030300'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09131152'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1610,6 +1610,11 @@ def send_gmail(subject, body, urgent=False):
         return True
     except Exception as e:
         print(f"  ❌ Gmail發送失敗：{e}")
+        # ✅09131152【缺陷G】發信失敗必須留痕。★原本只 print 一行就 return False，
+        #   ★★而主掃描呼叫點完全沒檢查回傳值 → ★★★Gmail 密碼若失效，
+        #   程式會若無其事地繼續，主帥永遠不知道信沒寄出去。
+        _feat_bump('gmail_fail')
+        _feat('gmail_last_err', f"{str(e)[:60]}｜主旨:{subject[:30]}")
         return False
 # ============================================================
 # 【６．通知紀錄讀寫函數】
@@ -2233,6 +2238,7 @@ def check_sell_condition(df):
         h   = df['High']
         rsi = df['rsi14']
         bt  = df['boll_top20']
+        bb  = df['boll_bot20']   # ✅09131120【缺陷B】補上遺漏定義：_gate_upper 需上下軌兩值算通道寬度
         mh  = df['macd_hist']
 
         # ✅08301905 容忍度改綁通道寬度；原式：float(bt.iloc[-1]) * SELL_BOLL_TOLERANCE
@@ -2286,6 +2292,7 @@ def check_cover_condition(df):
         l   = df['Low']
         rsi = df['rsi14']
         bb  = df['boll_bot20']
+        bt  = df['boll_top20']   # ✅09131120【缺陷B】補上遺漏定義：_gate_lower 需上下軌兩值算通道寬度
         mh  = df['macd_hist']
         # ✅08301905 容忍度改綁通道寬度；原式：float(bb.iloc[-1]) * COVER_BOLL_TOLERANCE
         price_near_lower = float(l.iloc[-1])   <= _gate_lower(float(bt.iloc[-1]), float(bb.iloc[-1]), COVER_BOLL_TOLERANCE)
@@ -4421,7 +4428,7 @@ def _condw_gate3(df, nbars, label):
         _cE = bool(check_condE_long(df))
     except Exception:
         _cE = False
-    near_lower = close <= _gate_lower(boll_top, boll_bot)
+    near_lower = float(lo.iloc[-1]) <= _gate_lower(boll_top, boll_bot)   # ✅09131120 丙案-甲案：當根閘門改用【最低價】（原 close）
     _buy = ((_cA or _cB or _cE) and rsi_up and mac_up
             and near_lower and rsi_now > BUY_RSI_MIN)
 
@@ -4437,7 +4444,7 @@ def _condw_gate3(df, nbars, label):
             _sE = bool(check_condE_short(df))
         except Exception:
             _sE = False
-        near_upper = close >= _gate_upper(boll_top, boll_bot)
+        near_upper = float(hi.iloc[-1]) >= _gate_upper(boll_top, boll_bot)   # ✅09131120 丙案-甲案：當根閘門改用【最高價】（原 close）
         _short = ((_sA or _sB or _sE) and rsi_dn and mac_dn
                   and near_upper and rsi_now < SHORT_RSI_MAX)
 
@@ -5692,7 +5699,13 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】⭐【{_get_period_label(_signal_label)}】做多進場 {_mk_summary(filtered)} - {now_str}", body)
+            # ✅09131152【缺陷F】夜間市場（美股/虛擬幣/債券基金）走急迫通道。
+            #   ★原因：美股 cron 22:35 落在睡眠時段(21:30~07:30)，
+            #   ★★非急迫通知會存入 _PENDING_DIGEST（記憶體）後隨容器銷毀，
+            #   ★★★且 send_gmail 回傳 True，呼叫端以為成功 → 訊號永久遺失。
+            #   ★台股掃描在 09:05/12:50，不在睡眠時段 → 行為完全不變。
+            _urgent_buy = any(s[0] in ('美股','美股回補','虛擬幣','虛擬幣回補','債券基金') for s in filtered)
+            send_gmail(f"☁️【雲端】⭐【{_get_period_label(_signal_label)}】做多進場 {_mk_summary(filtered)} - {now_str}", body, urgent=_urgent_buy)
             save_notified(notified)
             # ✅ 05111049：寫入買進訊號到Firebase供網頁版T+2追蹤
             for _s in filtered:
@@ -5732,7 +5745,9 @@ def main_task():
                     f"{'─'*30}\n"
                 )
 
-            send_gmail(f"☁️【雲端】🔔【{_get_period_label(_signal_label)}】出場訊號 {_mk_summary(filtered)} - {now_str}", body)
+            # ✅09131152【缺陷F】同上，★出場訊號與進場對稱處理（ＡＫ１８ 多空同步）。
+            _urgent_sell = any(s[0] in ('美股','美股回補','虛擬幣','虛擬幣回補','債券基金') for s in filtered)
+            send_gmail(f"☁️【雲端】🔔【{_get_period_label(_signal_label)}】出場訊號 {_mk_summary(filtered)} - {now_str}", body, urgent=_urgent_sell)
             save_notified(notified)
         else:
             print(f"🔕 賣出訊號 {len(sell_signals)-len(filtered)} 支已通知過")
