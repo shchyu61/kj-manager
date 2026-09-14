@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09131152'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09150004'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -161,10 +161,16 @@ DELISTING_FILE = '2_delisting_cache.json'  # 下市風險本地快取檔
 # 驗證篩選模式：
 #   False  = 正式模式（週K三層嚴格過濾，正式交易監控）
 #   True   = 測試模式（只發測試Gmail確認通知是否正常）
-#   '5mk'  = 期貨5分K模式（週一12:50~週三11:30，只掃台指近月）
-TEST_MODE = False   # 切換：False / True / '5mk'
+#   'futures' = 期貨掃描模式（★★★同時執行 5分K 與 15分K，★二者為 or）
+#   'condW'   = 條件W 週選擇權模式（★同樣 5分K 與 15分K 併行）
+# ✅09140742【改名】★原值 '5mk' 名稱只提 5 分K，★★實際同時跑 5m＋15m
+#   （★第5200行 if TEST_MODE=='5mk' → 第5216行 scan_futures_15mk()），
+#   ★★★名稱本身與行為不符，★依 ＡＫ２１⑥【命名不等於功能】改名。
+#   ★★週期改由 FUTURES_PERIODS 清單控制，★未來增減週期只改該清單。
+TEST_MODE = False   # 切換：False / True / 'futures' / 'condW'
+FUTURES_PERIODS = ['5m', '15m']   # ✅09140742 期貨掃描的週期清單（★現況即二者併行）
 
-# ── 【期貨5分K專屬設定】（TEST_MODE = '5mk' 時才啟用）──────────
+# ── 【期貨掃描專屬設定】（TEST_MODE = 'futures' 或 '5mk' 時啟用）──────────
 # 執行時段：週一12:50 → 週三大盤收盤11:30（日盤+夜盤+隔日日盤）
 # 掃描標的：台灣加權指數（^TWII）作為台指期替代標的
 # 通知對象：僅 shchyu61@gmail.com（本人專屬，家人親友不適用）
@@ -569,9 +575,9 @@ import pytz
 import json
 import os
 
-weekly_cache = {} # 長期投資月K快取（原週K，v05170856改月K）
+cache_long_1mo = {} # ✅09150004 改名：長期投資【月K】快取（原名 weekly_cache 名實不符）
 _rt_price_map = {}  # ✅08061155 即時價對照表 {ticker: 現價}，由 prefetch_realtime_prices() 批次填入
-daily_cache  = {} # 中期投資週K快取（原日K，v05170856改週K）
+cache_mid_1wk_1d  = {} # ✅09150004 改名：中期投資【週K】＋日K 混用快取（cache_key 含 interval，不會互相覆蓋）
 
 warnings.filterwarnings('ignore')
 import logging
@@ -1039,7 +1045,7 @@ def print_feature_report():
         print("  📋【本輪功能自報】主帥只要看這一塊，不必手動驗證任何東西")
         # ✅08101455 標示執行模式：同一個 workflow 有 scan 與 futures-scan 兩個 job，
         #   各自只跑自己那條路徑。不標示的話，主帥會誤以為「該跑的沒跑」。
-        _mode = {'5mk': '期貨5分K（futures-scan job）',
+        _mode = {'5mk': '期貨掃描(5分K+15分K)', 'futures': '期貨掃描(5分K+15分K)',
                  'condW': '條件W週選擇權（condw-scan job）'}.get(
                      TEST_MODE, '全市場掃描（scan job）')
         print(f"  執行模式：{_mode}　版本：{SCRIPT_VERSION}")
@@ -1047,11 +1053,11 @@ def print_feature_report():
         _rows = [
             ('通知時段判定（F-10）',      'session',        '未執行到（本輪無訊號）'),
             ('觀察清單讀取（F-14）',      'watchlist',
-             '本 job 不負責（只在全市場掃描執行）' if TEST_MODE in ('5mk', 'condW')
+             '本 job 不負責（只在全市場掃描執行）' if TEST_MODE in ('5mk', 'futures', 'condW')
              else '未執行到'),
             ('觀察清單補掃（F-14）',      'watchlist_extra', '未執行到'),
             ('台指期K棒累積（F-11）',     'txf_bars',
-             '本 job 不負責（請看 futures-scan job）' if TEST_MODE not in ('5mk', 'condW')
+             '本 job 不負責（請看 futures-scan job）' if TEST_MODE not in ('5mk', 'futures', 'condW')
              else '未執行到（非期貨時段）'),
             ('夜盤陳舊K棒防護（F-07）',   'stale',          '未觸發（K棒新鮮，正常）'),
             ('選擇權即時權利金（R-01替代）', 'opt_chain',    '未執行到（本輪無選擇權建議）'),
@@ -2100,6 +2106,15 @@ def check_buy_precondition(df, is_weekly=False):
 
             # ✅ 條件D簡化版：移除2a/2b/2c（DIF vs MACD線），只保留OSC柱狀體條件
             # 原因：日K的DIF/MACD線不一定同步，條件過嚴會錯過進場機會
+            # ✅09141835【撤回 09141319 的錯誤改動．★具名自認】
+            #   ★我 09141319 在此加了 _touched_lower（近5根最低價曾碰下軌），
+            #   ★★【那是誤解】。★主帥原話指的是【第一道 or 第二道】要滿足，
+            #   ★★★【不是條件D 自己】。
+            #   ★後果：★★位階要求「近5根最低價 > 中軌」，而下軌恆小於中軌
+            #     → ★★★兩者互斥，★加上去等於把條件D【永久關閉】。
+            #   ★主帥 2026/09/14 13:33 原話：「★★都已經在追高了，
+            #     怎麼可能近5根最低價曾碰下軌！★★★就算是近15根也不一定能碰到下軌！」
+            #   ★★【本行已移除，★恢復 09140742 之前的正確邏輯】
             cond_D = (
                 _all_above_mid and
                 _osc_3drop and _osc_prev_rise and _osc_now_rise and rsi_rising
@@ -2108,7 +2123,12 @@ def check_buy_precondition(df, is_weekly=False):
             cond_D = False
 
         _abc = cond_A or cond_B or cond_C
-        return _abc or cond_D, cond_D  # (整體通過, 是否由條件D觸發)
+        # ✅09141319【主帥 09/14 08:21 明示】★「條件D，★★只會發生在第三道，
+        #   ★★★絕對不可發生在【第一道 or 第二道】！」
+        #   ★原式 `return _abc or cond_D` 讓條件D【能單獨讓第一道通過】→ 違反本則。
+        #   ★★改為：★第一道只認 A/B/C；★★condD 旗標仍回傳，
+        #   ★★★供上層第三道（result['bull_d']）獨立走條件D 路徑使用。
+        return _abc, cond_D  # (第一道是否通過[只認ABC], 是否由條件D觸發)
     except Exception as e:
         # print(f"Precondition Error: {e}") # 偵錯用
         return False, False   # ✅Fix:統一回2元組防crash
@@ -2408,6 +2428,9 @@ def check_short_precondition(df, is_weekly=False):
             _osc_now_drop  = float(mh.iloc[-1]) < float(mh.iloc[-2])
 
             # ✅ 條件D空頭鏡像簡化版：移除DIF vs MACD線條件，只保留OSC
+            # ✅09141835【撤回 09141319 的錯誤改動之鏡像】
+            #   ★理由同做多：★★上軌恆大於中軌，★而位階要求「近5根最高價 < 中軌」
+            #   → ★★★兩者互斥，★加上去等於把條件D 空頭【永久關閉】。
             cond_D_short = (
                 _all_below_mid and
                 _osc_3rise and _osc_prev_drop and _osc_now_drop and rsi_falling
@@ -2416,7 +2439,8 @@ def check_short_precondition(df, is_weekly=False):
             cond_D_short = False
 
         _abc_s = cond_A or cond_B or cond_C  # ✅ 07010537 補上 cond_C 鏡像（原只 cond_A or cond_B）
-        return _abc_s or cond_D_short, cond_D_short  # (整體通過, 是否由條件D空頭觸發)
+        # ✅09141319【同上，做空鏡像】★第一道只認 A/B/C，★★不認條件D。
+        return _abc_s, cond_D_short  # (第一道是否通過[只認ABC], 是否由條件D空頭觸發)
     except:
         return False, False   # ✅Fix:統一回2元組
 
@@ -2669,13 +2693,13 @@ def analyse_market_index(ticker, label):
         _e_bear_w = check_condE_short(df_w) if df_w is not None else False
         _e_bear_d = check_condE_short(df_d) if df_d is not None else False
         # 多頭A/B/C/E：月K或日K通過（非條件D）
-        result['bull_abc'] = ((ok_w and not condD_bull_w) or _e_bull_w or
-                              (ok_d and not condD_bull_d) or _e_bull_d)
+        # ✅09141319 第一道已改為只認 A/B/C（不含 condD），★故此處不必再 `and not condD`。
+        #   ★★保留原寫法不會出錯，★但語意上已重複，★★★改為直接使用 ok_*。
+        result['bull_abc'] = (ok_w or _e_bull_w or ok_d or _e_bull_d)
         # 多頭條件D：月K或日K條件D通過
         result['bull_d']   = condD_bull_w or condD_bull_d
         # 空頭A/B/C/E：月K或日K空頭通過（非條件D）
-        result['bear_abc'] = ((ok_ws and not condD_bear_w) or _e_bear_w or
-                              (ok_ds and not condD_bear_d) or _e_bear_d)
+        result['bear_abc'] = (ok_ws or _e_bear_w or ok_ds or _e_bear_d)  # ✅09141319 同上
         # 空頭條件D：月K或日K空頭條件D
         result['bear_d']   = condD_bear_w or condD_bear_d
         # 下彎警告：RSI↓ AND MACD柱↓（兩個都下彎才警告）
@@ -2979,7 +3003,7 @@ def get_weekly_option_hint(current_price, signal_type):
 
 def scan_stock(ticker, is_holding=False, _mode_label=None):
     global _tw_prescreened, _wk_passed_1st, _prescreened_ind
-    global weekly_cache, daily_cache
+    global cache_long_1mo, cache_mid_1wk_1d
     
     # ✅ [新增: 5分K 專用短效快取, 避免 30 分鐘內重複抓取過多 API]
     # 使用變數名 five_min_cache (請確保在程式開頭 global 宣告過)
@@ -3016,7 +3040,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         # ✅08061155【(點1) 即時補更恢復】改由批次預抓表取值（零額外API呼叫）：
         #   06240532 曾因負荷而恆設 None，使第一關實際使用收盤價而非盤中即時價。
         _rt_px = _rt_price_map.get(ticker)
-        df_w = get_stock_data(ticker, period='5y', interval='1mo', cache=weekly_cache)  # ✅ v05170856 長期投資改月K
+        df_w = get_stock_data(ticker, period='5y', interval='1mo', cache=cache_long_1mo)  # ✅ v05170856 長期投資改月K
         if df_w is None or len(df_w) < 30: return None
         _patch_last_close(df_w, _rt_px)   # ✅ (點1) 月K最後一根即時補更
         df_w = calc_indicators(df_w)   # ✅ 07010000 月K根治：改算全指標(macd/ma_c_20)，復活月K長期投資買進/做空/賣出第一道
@@ -3027,9 +3051,9 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         if is_holding:
             _is_short_hold = (ticker in HOLDINGS_SHORT) or (ticker.split('.')[0] in HOLDINGS_SHORT)  # ✅ 07010514 空單判別
             _df_mon = calc_indicators(df_w)
-            _df_wk  = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)
+            _df_wk  = get_stock_data(ticker, period='2y', interval='1wk', cache=cache_mid_1wk_1d)
             _df_wk  = calc_indicators(_df_wk) if (_df_wk is not None and len(_df_wk) >= 26) else None
-            _df_day = get_stock_data(ticker, period='1y', interval='1d', cache=daily_cache)
+            _df_day = get_stock_data(ticker, period='1y', interval='1d', cache=cache_mid_1wk_1d)
             _df_day = calc_indicators(_df_day) if (_df_day is not None and len(_df_day) >= 26) else None
             for _lbl, _edf in [('月K', _df_mon), ('週K', _df_wk), ('日K', _df_day)]:
                 if _edf is None or len(_edf) < 26:
@@ -3067,7 +3091,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         if not TEST_MODE:
             if SCAN_MODE == 'daily':
                 # 日K模式第一道：日K 3根，條件A or B
-                _df1st = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # ✅ v05170856 中期投資改週K
+                _df1st = get_stock_data(ticker, period='2y', interval='1wk', cache=cache_mid_1wk_1d)  # ✅ v05170856 中期投資改週K
                 if _df1st is None or len(_df1st) < 50: return None
                 _patch_last_close(_df1st, _rt_px)   # ✅ (點1) 週K最後一根即時補更
                 _df1st = calc_indicators(_df1st)
@@ -3111,13 +3135,13 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         # ── 第二道：週K/日K統一用日K eLeader 25條件（AND邏輯）─────
         # 兩種模式統一：eLeader必過才繼續（確保不在高檔區追高）
         # ✅ v05191855：週K快取保留供其他用途
-        df_d = get_stock_data(ticker, period='2y', interval='1wk', cache=daily_cache)  # 週K（保留供參考）
+        df_d = get_stock_data(ticker, period='2y', interval='1wk', cache=cache_mid_1wk_1d)  # 週K（保留供參考）
         if df_d is None or len(df_d) < 20: return None
         _patch_last_close(df_d, _rt_px)   # ✅ (點1) 週K(參考)最後一根即時補更
         df_d = calc_indicators(df_d)
         if df_d is None: return None
         # ✅ v05191855：第二道改用日K（A/B/C/E OR F，符合先大後小原則）
-        _df_1d = get_stock_data(ticker, period='1y', interval='1d', cache=daily_cache)
+        _df_1d = get_stock_data(ticker, period='1y', interval='1d', cache=cache_mid_1wk_1d)
         _patch_last_close(_df_1d, _rt_px)   # ✅ (點1) 日K最後一根即時補更
         _df_1d = calc_indicators(_df_1d) if _df_1d is not None and len(_df_1d) >= 20 else None
 
@@ -4595,7 +4619,7 @@ def load_cross_run_cache():
     """✅ 方案②(07061319) 程序啟動時載入『今日』跨輪月K/週K快取；任何錯誤自動回退(不影響掃描)。"""
     if not USE_CROSS_RUN_CACHE:
         return
-    global weekly_cache, daily_cache
+    global cache_long_1mo, cache_mid_1wk_1d
     try:
         import pickle, os
         p = _kline_cache_path()
@@ -4610,7 +4634,7 @@ def load_cross_run_cache():
         w = data.get('weekly', {}); d = data.get('daily', {})
         _wok = {k: v for k, v in w.items() if hasattr(v, 'empty') and not v.empty and len(v) >= 30}
         _dok = {k: v for k, v in d.items() if hasattr(v, 'empty') and not v.empty}
-        weekly_cache.update(_wok); daily_cache.update(_dok)
+        cache_long_1mo.update(_wok); cache_mid_1wk_1d.update(_dok)
         print(f'✅ [方案②] 已載入今日跨輪快取：月K {len(_wok)} 檔、週K {len(_dok)} 檔（免重抓）')
     except Exception as _e:
         print(f'⚠️ [方案②] 載入跨輪快取失敗，自動回退為重新抓取：{_e}')
@@ -4621,12 +4645,12 @@ def save_cross_run_cache(prev_w=0, prev_d=0):
         return
     try:
         import pickle
-        if len(weekly_cache) <= prev_w and len(daily_cache) <= prev_d:
+        if len(cache_long_1mo) <= prev_w and len(cache_mid_1wk_1d) <= prev_d:
             return
         today = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d')
         with open(_kline_cache_path(), 'wb') as f:
-            pickle.dump({'date': today, 'weekly': weekly_cache, 'daily': daily_cache}, f)
-        print(f'💾 [方案②] 已保存今日跨輪快取：月K {len(weekly_cache)} 檔、週K {len(daily_cache)} 檔')
+            pickle.dump({'date': today, 'weekly': cache_long_1mo, 'daily': cache_mid_1wk_1d}, f)
+        print(f'💾 [方案②] 已保存今日跨輪快取：月K {len(cache_long_1mo)} 檔、週K {len(cache_mid_1wk_1d)} 檔')
     except Exception as _e:
         print(f'⚠️ [方案②] 保存跨輪快取失敗（不影響本輪掃描）：{_e}')
 
@@ -4871,7 +4895,7 @@ def scan_futures_15mk():
 def main_task():
 
     # 🔥 宣告 global 確保全域共用
-    global weekly_cache, daily_cache, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
+    global cache_long_1mo, cache_mid_1wk_1d, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
     global _holdings_sent   # ✅ (07130626) 持股每日健檢
 
     # ✅ (07130626)【持股每日健檢模式】SCAN_TYPE='holdings'：只做持股健檢並寄一封報告，不跑全市場掃描
@@ -4896,28 +4920,28 @@ def main_task():
     now_hour = now.hour
 
     # ✅ 每天早上 8 點且快取有東西時，執行清空快取
-    if now_hour == WEEKLY_REFRESH_HOUR and len(weekly_cache) > 0:
+    if now_hour == WEEKLY_REFRESH_HOUR and len(cache_long_1mo) > 0:
         print(f"♻️ [{now_str}] 偵測到新的一天, 正在清除快取資料以獲取最新K線...")
-        weekly_cache.clear()
-        daily_cache.clear()
+        cache_long_1mo.clear()
+        cache_mid_1wk_1d.clear()
 
     # ✅ 方案②(07061319) 記憶體快取為空(新程序或剛清空)時，載入今日跨輪快取以免重抓
-    if USE_CROSS_RUN_CACHE and len(weekly_cache) == 0 and len(daily_cache) == 0:
+    if USE_CROSS_RUN_CACHE and len(cache_long_1mo) == 0 and len(cache_mid_1wk_1d) == 0:
         load_cross_run_cache()
-    _xrun_prev_w = len(weekly_cache); _xrun_prev_d = len(daily_cache)   # 記錄載入後基準，供結束時判斷是否成長
+    _xrun_prev_w = len(cache_long_1mo); _xrun_prev_d = len(cache_mid_1wk_1d)   # 記錄載入後基準，供結束時判斷是否成長
 
     # ✅ 主流程一定要執行(不能縮在 if 裡)
     active_markets = get_active_markets()
 
     # (以下請確保第 13, 14 章的掃描與發信代碼, 全部都要縮排在 def main_task 之下)
     print(f"\n{'='*55}")
-    print(f"  股票買進賣出建議系統啟動（{"期貨5分K模式" if TEST_MODE == chr(39)+"5mk"+chr(39) else f'{SCAN_MODE}模式'}）  v{SCRIPT_VERSION}")
+    print(f"  股票買進賣出建議系統啟動（{"期貨掃描模式(5分K+15分K)" if TEST_MODE in (chr(39)+"5mk"+chr(39), chr(39)+"futures"+chr(39)) else f'{SCAN_MODE}模式'}）  v{SCRIPT_VERSION}")
     print(f"  掃描時間：{now_str}")
     print(f"  本次掃描市場：{', '.join(active_markets)}")
     print(f"{'='*55}")
 
     # 掃描前預先抓取全額交割清單（快取後不重複抓）
-    _skip_cash = (TEST_MODE == '5mk') or ('TW' not in active_markets and 'CRYPTO' not in active_markets)
+    _skip_cash = (TEST_MODE in ('5mk', 'futures')) or ('TW' not in active_markets and 'CRYPTO' not in active_markets)
     if ENABLE_CASH_DELIVERY_CHECK and not _skip_cash:
         print(f"\n🔍 正在更新全額交割股清單...")
         get_cash_delivery_set()
@@ -4928,7 +4952,7 @@ def main_task():
     # ── 台股掃描 ──────────────────────────────────
     tw_list = []
     _tse_mkt = None  # ✅ v06100131：移至最頂部，無論台股/美股時段都已初始化
-    if TEST_MODE == '5mk':
+    if TEST_MODE in ('5mk', 'futures'):
         print('\n📊 台股：期貨5分K模式，跳過台股掃描')
     elif 'TW' not in active_markets:
         print('\n📊 台股：非交易時段，跳過')
@@ -5067,7 +5091,7 @@ def main_task():
             print('\n🔍 本次預篩：無台股通過條件')
 
 # ── 美股掃描（加入道瓊週K過濾，對應截圖轉折邏輯） ──────────
-    if TEST_MODE == '5mk':
+    if TEST_MODE in ('5mk', 'futures'):
         print('\n📊 美股：期貨5分K模式，跳過美股掃描')
     elif 'US' not in active_markets:
         print('\n📊 美股：非交易時段，跳過')
@@ -5146,7 +5170,7 @@ def main_task():
                 print(f'🔔 債券基金 {_bond_ticker}（{_bond_name}）觸發賣出訊號')
 
     # ── 虛擬幣掃描 ────────────────────────────────
-    if TEST_MODE == '5mk':
+    if TEST_MODE in ('5mk', 'futures'):
         print('\n📊 虛擬幣：期貨5分K模式，跳過虛擬幣掃描')
     elif 'CRYPTO' not in active_markets:
         print('\n📊 虛擬幣：非交易時段，跳過')
@@ -5176,7 +5200,7 @@ def main_task():
 
 
     # ── 外匯掃描（做多+做空）────────────────────────────────────
-    if TEST_MODE == '5mk':
+    if TEST_MODE in ('5mk', 'futures'):
         print('\n📊 外匯：期貨5分K模式，跳過')
     elif 'US' not in active_markets and 'CRYPTO' not in active_markets:
         print('\n📊 外匯：非交易時段，跳過')
@@ -5203,8 +5227,9 @@ def main_task():
                     sell_signals.append(('外匯做空', ticker, *result[1:]))
             time.sleep(0.1)
 
-    # ── 期貨5分K掃描（TEST_MODE='5mk'且FUTURES在active_markets時執行）──
-    if 'FUTURES' in active_markets and TEST_MODE == '5mk':
+    # ── 期貨掃描（TEST_MODE='futures'/'5mk' 且 FUTURES 在 active_markets 時執行）──
+    #   ✅09150004 ★本段【同時跑 5分K 與 15分K】（見下方 scan_futures_15mk() 呼叫）
+    if 'FUTURES' in active_markets and TEST_MODE in ('5mk', 'futures'):
         # ✅ 持倉狀態：多倉/空倉分開追蹤
         # ✅ 07031936 _futures_is_holding/_futures_is_short 已於模組頂層正式宣告為全域，不再用dir()守門
         _pos_str = '多倉🔴' if _futures_is_holding else ('空倉🔵' if _futures_is_short else '空手⬜')
@@ -5309,7 +5334,7 @@ def main_task():
                 #   ★原式：`if check_buy_eleader(df5_d) is None: continue`
                 #     → ★★這是【做多】的 eLeader，★但 continue 會跳過【整支標的】。
                 #   ★★★後果：大跌時做多 eLeader 幾乎必然不過 → 整支跳掉 →
-                #     ★下面的 _5mk_short 根本執行不到 → ★★做空在結構上永遠不可能觸發。
+                #     ★下面的 _fut_short 根本執行不到 → ★★做空在結構上永遠不可能觸發。
                 #   ★這是 2026/09/02 台股大跌900點沒有做空訊號的【第二個根因】
                 #     （第一個是時窗，已於 09021415 修正）。
                 #   ★★★主帥 09/02 明示：★期貨【不可以】拿掉關卡1、關卡2
@@ -5364,27 +5389,33 @@ def main_task():
 
                 # ── 條件A：近54根任一最低價<=布林下緣 AND RSI↑ AND MACD柱↑
                 # ✅08301905 容忍度改綁通道寬度；原式：bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE
-                _5mk_cond_A = (l5.iloc[-n5:] <= _gate_lower(bt5.iloc[-n5:], bb5.iloc[-n5:])).any() and rsi_rising and macd_rising
+                _fut_cond_A = (l5.iloc[-n5:] <= _gate_lower(bt5.iloc[-n5:], bb5.iloc[-n5:])).any() and rsi_rising and macd_rising
                 # ── 條件B：近54根最低均<布林中軌 AND 最高均<布林上軌 AND 前N根MACD縮 AND 當根MACD放大
-                _5mk_low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
-                _5mk_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
-                _5mk_macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
-                _5mk_cond_B   = _5mk_low_mid and _5mk_high_top and _5mk_macd_shr and macd_rising
+                _fut_low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
+                _fut_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
+                _fut_macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
+                _fut_cond_B   = _fut_low_mid and _fut_high_top and _fut_macd_shr and macd_rising
                 # ✅ v06160503修復：near_lower/near_upper 原定義在使用之後(use-before-def)，上移至此
                 near_lower   = close  <= _gate_lower(boll_top, boll_bot)   # ✅08301905 原式：boll_bot * BUY_BOLL_TOLERANCE
                 near_upper   = close  >= _gate_upper(boll_top, boll_bot)   # ✅08301905 原式：boll_top * SELL_BOLL_TOLERANCE
                 # ✅ v05192313：5分K進場加入條件D（追高/追空）
-                _5mk_cond_D_long  = getattr(df5.iloc[-1],'rsi14',0) > getattr(df5.iloc[-2],'rsi14',0) and near_upper
-                _5mk_cond_D_short = getattr(df5.iloc[-1],'rsi14',0) < getattr(df5.iloc[-2],'rsi14',0) and near_lower
+                _fut_cond_D_long  = getattr(df5.iloc[-1],'rsi14',0) > getattr(df5.iloc[-2],'rsi14',0) and near_upper
+                _fut_cond_D_short = getattr(df5.iloc[-1],'rsi14',0) < getattr(df5.iloc[-2],'rsi14',0) and near_lower
                 # ✅ v05192327：5分K進場加E和F
-                _5mk_cond_E_long = check_condE_long(df5) if df5 is not None else False
-                _5mk_cond_F_long = check_buy_eleader(df5) is not None if df5 is not None else False
+                # ✅09140742【多空鏡像修復】★主帥 09/14 03:49 裁示【選項甲：接上】。
+                #   ★★實測：做多有 A/B/D/E/F 五個條件，★做空只有 A/B 兩個。
+                #   ★★★check_condE_short 與 check_short_eleader 兩函式【早已存在】
+                #     （第一道 EWT 於 5299~5300 行就在用），★只是第三道沒接上。
+                _fut_cond_E_short = check_condE_short(df5) if df5 is not None else False
+                _fut_cond_F_short = check_short_eleader(df5) is not None if df5 is not None else False
+                _fut_cond_E_long = check_condE_long(df5) if df5 is not None else False
+                _fut_cond_F_long = check_buy_eleader(df5) is not None if df5 is not None else False
                 # ✅09022055 第一道、第二道改為【顯式帶入】。
                 #   ★原式靠上方的 continue 隱含保證，★★拆開多空後 continue 不再等價，
                 #   ★★★若不顯式帶入，會出現「只有空方過第一道、多方卻發買進訊號」的錯誤。
-                _5mk_buy = (_1st_long and _buy_2nd
-                            and (_5mk_cond_A or _5mk_cond_B or _5mk_cond_D_long or
-                                 _5mk_cond_E_long or _5mk_cond_F_long)
+                _fut_buy = (_1st_long and _buy_2nd
+                            and (_fut_cond_A or _fut_cond_B or _fut_cond_D_long or
+                                 _fut_cond_E_long or _fut_cond_F_long)
                             and rsi_now > BUY_RSI_MIN)
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
                 # ── 日K位階參考（印出但不擋住掃描）──────────────
@@ -5408,18 +5439,24 @@ def main_task():
                 _short_1st = _1st_short  # ✅ 已在第一道判斷完成
                 # ✅09022055 _short_2nd 已於第二道統一算好（原本在此重算，且被 continue 擋住）
                 # 第三道做空條件A/B（鏡像多方）
-                _5mk_short_A = (h5.iloc[-n5:] >= bt5.iloc[-n5:] * 1.00).any() and rsi_falling and macd_falling
-                _5mk_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).all()
-                _5mk_low_bot   = (l5.iloc[-n5:] > bb5.iloc[-n5:]).all()
-                _5mk_macd_exp  = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) < float(mh5.iloc[-n5+j]) for j in range(n5-1))
-                _5mk_short_B   = _5mk_high_mid and _5mk_low_bot and _5mk_macd_exp and macd_falling
-                _5mk_short = _short_1st and _short_2nd and (_5mk_short_A or _5mk_short_B) and rsi_now < (100 - BUY_RSI_MIN)
+                _fut_short_A = (h5.iloc[-n5:] >= bt5.iloc[-n5:] * 1.00).any() and rsi_falling and macd_falling
+                _fut_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).all()
+                _fut_low_bot   = (l5.iloc[-n5:] > bb5.iloc[-n5:]).all()
+                _fut_macd_exp  = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) < float(mh5.iloc[-n5+j]) for j in range(n5-1))
+                _fut_short_B   = _fut_high_mid and _fut_low_bot and _fut_macd_exp and macd_falling
+                # ✅09140742【多空鏡像修復】★原式只有 (_fut_short_A or _fut_short_B) 兩個條件，
+                #   ★★而做多有五個（A/B/D_long/E_long/F_long）→ ★★★多空嚴重不對稱。
+                #   ★依 ＡＫ１８ 多空同步，★★補上 D_short/E_short/F_short 三個。
+                _fut_short = (_short_1st and _short_2nd
+                              and (_fut_short_A or _fut_short_B or _fut_cond_D_short or
+                                   _fut_cond_E_short or _fut_cond_F_short)
+                              and rsi_now < (100 - BUY_RSI_MIN))
 
                 _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')
                 # ✅ 深夜01~05有持倉：只掃平倉，跳過買進
                 # ✅09022055 不在條件W窗內時【只掃平倉】，★嚴禁在窗外開新倉
                 _entry_allowed = in_futures
-                if (_5mk_buy and near_lower and _entry_allowed
+                if (_fut_buy and near_lower and _entry_allowed
                         and not (_is_night_now and _futures_is_holding)):
                     # ── 5分鐘內最多2封上限 ──────────────────────
                     _now_ts = time.time()
@@ -5476,7 +5513,7 @@ def main_task():
                         print(f"  📌 持倉狀態已清除：is_futures_holding=False")
                 # ✅【做空訊號】三道關卡通過且接近布林上軌，且深夜無空倉
                 # ✅09022055 窗外禁開新空倉（同買進，★出場才是窗外允許的動作）
-                elif (_5mk_short and near_upper and _entry_allowed
+                elif (_fut_short and near_upper and _entry_allowed
                       and not (_is_night_now and _futures_is_short)):
                     _now_ts = time.time()
                     if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
@@ -5505,7 +5542,7 @@ def main_task():
                         print(f"  📌 空倉狀態已標記：is_futures_short=True")
 
                 # ✅【空倉回補（平空）】RSI↑ AND MACD柱↑ AND 近布林下軌 → 回補平倉
-                elif _futures_is_short and _5mk_buy and near_lower:
+                elif _futures_is_short and _fut_buy and near_lower:
                     _now_ts = time.time()
                     if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
@@ -5547,7 +5584,7 @@ def main_task():
     # ✅08102047【修正·問題B】觀察清單只在【全市場掃描模式】執行。
     #   真實事故：期貨5分K模式每5分鐘跑一次，原本會連帶每5分鐘讀一次 Firebase
     #   並對14檔補掃標的重抓行情 → 一天數百次無謂呼叫，恐觸發 yfinance 限流。
-    if TEST_MODE in ('5mk', 'condW'):
+    if TEST_MODE in ('5mk', 'futures', 'condW'):
         print('  ⏭️ 觀察清單：期貨/條件W 模式不執行（只在全市場掃描執行，避免每5分鐘重抓）')
     else:
         try:
@@ -5790,7 +5827,7 @@ if __name__ == "__main__":
 
 
     # === [期貨5分K模式]：TEST_MODE = '5mk' ===
-    if TEST_MODE == '5mk':
+    if TEST_MODE in ('5mk', 'futures'):
         # 檢查是否在期貨交易時段
         tz_f = pytz.timezone('Asia/Taipei')
         now_f = datetime.now(tz_f)
