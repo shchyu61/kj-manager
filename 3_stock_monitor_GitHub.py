@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09172001'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09172131'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -5830,6 +5830,26 @@ def main_task():
                                                  check_condE_short(_df60_5mk) or (check_short_eleader(_df60_5mk) is not None))
                 except Exception as _e60:
                     print(f'  ⚠️ {ticker} 60分K 取得失敗（{str(_e60)[:40]}），第一道只看日K')
+                # ✅09172131【二丙．第一道＝日K OR ^TWII 60分K OR EWT 60分K】三擇一，白天與夜盤的 60分K 都兼顧
+                #   主帥 09/17 21:28：「二丙（你這個建議非常棒，第一道的3個週期都兼顧到。我早上誤會了，我以為我第二道指定【EWT 30分K】，
+                #     你第一道就會理解為【EWT 60分K】！結果不是，你還是把第一道定義只有日盤的【60分K】！）」
+                #   主帥 09/17 21:31：「二丙，也要讓我週三和週五的【週選擇權】有正常該有的功能。」
+                #   ★EWT＝iShares MSCI Taiwan ETF，美股時段 21:30～04:00 交易，涵蓋台灣夜盤；判斷條件與 ^TWII 60分K 完全相同
+                #   ★15分K 共用 _fut_gates，自動套用；條件W 依設計只跑第三道，不受第一道影響
+                _1st_ewt60_long = _1st_ewt60_short = False
+                try:
+                    _dfe60 = _yf30.download('EWT', period='3mo', interval='60m', progress=False)
+                    if _dfe60 is not None and len(_dfe60) >= 30:
+                        _dfe60 = calc_indicators(_normalize_df(_dfe60))
+                        if _dfe60 is not None:
+                            _1st_ewt60_long  = bool(signal_within_n(lambda d: check_buy_precondition(d)[0], _dfe60, n=3, reverse_check=check_sell_condition) or
+                                                    check_condE_long(_dfe60) or (check_buy_eleader(_dfe60) is not None))
+                            _1st_ewt60_short = bool(signal_within_n(lambda d: check_short_precondition(d)[0], _dfe60, n=3) or
+                                                    check_condE_short(_dfe60) or (check_short_eleader(_dfe60) is not None))
+                    else:
+                        print(f'  ⚠️ EWT 60分K 資料不足，第一道不含 EWT 60分K')
+                except Exception as _ee60:
+                    print(f'  ⚠️ EWT 60分K 取得失敗（{str(_ee60)[:40]}），第一道不含 EWT 60分K')
                 # 第二道：EWT 30分K（夜盤方向確認）
                 _df30 = _yf30.download('EWT', period='5d', interval='30m', progress=False)
                 if _df30 is None or len(_df30) < 20:
@@ -5852,10 +5872,10 @@ def main_task():
                 # ✅09170846【三道丙案．先大後小】第一道＝日K；第二道＝EWT 30分K；第三道＝5分K＋15分K（主帥 09/17 08:34、08:46）
                 #   原式：第一道＝日K AND EWT 30分K，第二道＝EWT 30分K eLeader（註解誤寫日K）→ 大、中、中、小，第二道重複用 30分K
                 #   主帥 09/17 08:34：「所有策略設計理念就是『先大後小』。第一道和第二道週期太長，絕對不能用在期貨。」
-                _1st_long  = bool(_1st_daily_long or _1st_60_long)     # ✅09171354 日K OR 60分K
-                _1st_short = bool(_1st_daily_short or _1st_60_short)
+                _1st_long  = bool(_1st_daily_long or _1st_60_long or _1st_ewt60_long)     # ✅09171354 日K OR 60分K；✅09172131 二丙加 EWT 60分K
+                _1st_short = bool(_1st_daily_short or _1st_60_short or _1st_ewt60_short)
                 # ✅09170937 不在此 continue：條件D 前提為「第一道 or 第二道」，且有持倉時必須照常檢查平倉回補
-                print(f'  {"✅" if (_1st_long or _1st_short) else "❌"} {ticker} 第一道(日K OR 60分K)（多:{_1st_long} 空:{_1st_short}｜日K 多:{_1st_daily_long} 60分K 多:{_1st_60_long}）')
+                print(f'  {"✅" if (_1st_long or _1st_short) else "❌"} {ticker} 第一道(日K OR ^TWII 60分K OR EWT 60分K)（多:{_1st_long} 空:{_1st_short}｜日K 多:{_1st_daily_long} ^TWII 60分K 多:{_1st_60_long} EWT 60分K 多:{_1st_ewt60_long}）')
 
                 # ── 第二道：日K eLeader ──────────────────────
                 # ✅09022055【★★★修正：做空原本被做多的第二道 continue 綁架】
