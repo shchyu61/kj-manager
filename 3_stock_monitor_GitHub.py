@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09171036'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09171354'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -1395,6 +1395,7 @@ def check_tw_intraday_extreme():
 
 
 _watchlist_cache = {'ts': 0, 'items': None}
+_fb_holdings = None   # ✅09171113 網頁版持股清單（同一份 users/{safeId}/data/stocks 文件的 stocks 陣列）
 
 
 def _load_watchlist():
@@ -1402,7 +1403,7 @@ def _load_watchlist():
     ★只讀不寫，絕不修改，避免與網頁版互相覆蓋。
     ★任何失敗都回空清單並印訊息，絕不影響掃描與通知。
     """
-    global _watchlist_cache
+    global _watchlist_cache, _fb_holdings
     if not WATCHLIST_ENABLED:
         return []
     import time as _t
@@ -1446,6 +1447,18 @@ def _load_watchlist():
             if _code:
                 _items.append({'code': _code.upper(), 'cat': _cat or 'tw'})
         print(f'  ⭐ 觀察清單：讀到 {len(_items)} 檔（來源：網頁版待買觀察）')
+        # ✅09171113【持股清單】網頁版儲存時把 stocks（持股）與 watchlist 寫在同一份文件，同一次讀取一併取出
+        #   每筆：{code, cat（tw/us/crypto/fx/gold/fund/bond）, direction（long／short）}
+        _hs = []
+        for _v in (((_r.json() or {}).get('fields') or {}).get('stocks', {}).get('arrayValue', {}).get('values', [])):
+            _mv = (_v or {}).get('mapValue', {}).get('fields', {})
+            _hc = (_mv.get('code', {}) or {}).get('stringValue', '').strip().upper()
+            if _hc:
+                _hs.append({'code': _hc,
+                            'cat': ((_mv.get('cat', {}) or {}).get('stringValue', '') or 'tw').strip().lower(),
+                            'direction': ((_mv.get('direction', {}) or {}).get('stringValue', '') or 'long').strip().lower()})
+        _fb_holdings = _hs
+        print(f'  💼 持股清單：讀到 {len(_hs)} 檔（來源：網頁版持股清單）')
         _feat('watchlist', f'讀到 {len(_items)} 檔')
     except Exception as _e:
         print(f'  ⚠️ 觀察清單讀取異常（{str(_e)[:45]}）→ 視為空清單，不影響掃描')
@@ -1481,6 +1494,122 @@ def _wl_mark(code):
     except Exception:
         pass
     return ''
+
+
+
+# ============================================================
+# ✅09171113【持股清單讀 Firebase＋條件D 進場紀錄】
+#   ・主帥 09/16 17:19：「本機版和網頁版的【持股清單】頁面，本來就有讓我自行輸入持有股票的功能，
+#     你只要讓這2個地方的持有股票自動寫入 Firebase 持股紀錄，資料將會更準確。」
+#   ・查證：網頁版 saveToCloud 早已把持股清單寫入 artifacts/{專案}/users/{safeId}/data/stocks；雲端版原本只讀 watchlist。
+#   ・雲端版以服務帳戶讀寫，不受 Firestore 安全規則限制，★本項不需修改網頁版與 W-2 安全規則。
+#   ・合併方式：程式常數 HOLDINGS_* 保留為後援；Firebase 持股【加入】對應清單（不刪常數），direction＝short 另加入 HOLDINGS_SHORT。
+#   ・條件D 特殊出場規則（主帥 09/14）：只對「進場時觸發過第三道條件D」的持股套用；進場紀錄由個股短線條件D 訊號寫入。
+# ============================================================
+HOLDINGS_FROM_FIREBASE = True   # ✅09171113 False＝只用程式常數 HOLDINGS_*
+_fb_holdings_merged = False
+_condd_cache = None
+
+
+def _merge_firebase_holdings():
+    global _fb_holdings_merged
+    if _fb_holdings_merged or not HOLDINGS_FROM_FIREBASE:
+        return
+    _fb_holdings_merged = True
+    try:
+        _load_watchlist()
+        _hs = _fb_holdings or []
+        _add = []
+        for _h in _hs:
+            _c, _cat, _dir = _h['code'], _h['cat'], _h['direction']
+            if _cat == 'tw':
+                _tk, _lst = _c.split('.')[0], HOLDINGS_TW
+            elif _cat == 'us':
+                _tk, _lst = _c, HOLDINGS_US
+            elif _cat == 'crypto':
+                _tk, _lst = (_c if '-' in _c else _c + '-USD'), HOLDINGS_CRYPTO
+            elif _cat == 'fx':
+                _tk, _lst = (_c if '=' in _c else _c + '=X'), HOLDINGS_FX
+            elif _cat == 'gold':
+                _tk, _lst = _c, HOLDINGS_GOLD
+            else:
+                continue   # 基金、債券沿用既有安聯基金流程，不併入
+            if _tk not in _lst:
+                _lst.append(_tk); _add.append(_tk)
+            if _dir == 'short' and _tk not in HOLDINGS_SHORT:
+                HOLDINGS_SHORT.append(_tk)
+        print(f'  💼 持股清單併入：新增 {len(_add)} 檔 {_add}（程式常數保留）')
+    except Exception as _e:
+        print(f'  ⚠️ 持股清單併入失敗（{str(_e)[:50]}）→ 沿用程式常數')
+
+
+def _condd_doc_url():
+    _safe = WATCHLIST_OWNER.lower().replace('@', '_').replace('.', '_')
+    return (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+            f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/users/{_safe}/data/condd_entries")
+
+
+def _firestore_token():
+    import json as _json, os as _os
+    _cred = _os.environ.get(FIREBASE_CRED_ENV)
+    if not _cred:
+        _cf = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+        if _os.path.exists(_cf):
+            with open(_cf, 'r', encoding='utf-8') as _f:
+                _cred = _f.read()
+    if not _cred:
+        return None
+    import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+    _c = _sa.Credentials.from_service_account_info(_json.loads(_cred), scopes=['https://www.googleapis.com/auth/datastore'])
+    _c.refresh(_gtr.Request())
+    return _c.token
+
+
+def _load_condd_entries(force=False):
+    """回傳 {代號: {'dir':..,'date':..,'source':..}}；失敗回 {}（保守：不套用條件D 出場）。"""
+    global _condd_cache
+    if _condd_cache is not None and not force:
+        return _condd_cache
+    _condd_cache = {}
+    try:
+        import json as _json, requests as _req
+        _tok = _firestore_token()
+        if not _tok:
+            return _condd_cache
+        _r = _req.get(_condd_doc_url(), headers={"Authorization": f"Bearer {_tok}"}, timeout=10)
+        if _r.status_code == 200:
+            _condd_cache = _json.loads(((_r.json().get('fields') or {}).get('data') or {}).get('stringValue', '{}') or '{}')
+    except Exception as _e:
+        print(f'  ⚠️ 條件D 進場紀錄讀取失敗（{str(_e)[:40]}）→ 視為無紀錄')
+    return _condd_cache
+
+
+def _record_condd_entry(code, direction, source):
+    """條件D 進場訊號發出時寫入紀錄（讀取後合併再寫回）。失敗只印訊息，不影響通知。"""
+    try:
+        import json as _json, requests as _req
+        _tok = _firestore_token()
+        if not _tok:
+            return False
+        _d = dict(_load_condd_entries(force=True))
+        _d[str(code).upper().split('.')[0]] = {'dir': direction, 'source': source,
+                                              'date': datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d %H:%M')}
+        _payload = {"fields": {"data": {"stringValue": _json.dumps(_d, ensure_ascii=False)}}}
+        _r = _req.patch(_condd_doc_url(), json=_payload, headers={"Authorization": f"Bearer {_tok}", "Content-Type": "application/json"}, timeout=10)
+        if _r.status_code in (200, 201):
+            global _condd_cache
+            _condd_cache = _d
+            print(f'  📝 條件D 進場紀錄已寫入：{code}（{direction}，{source}）')
+            return True
+        print(f'  ⚠️ 條件D 進場紀錄寫入失敗 HTTP {_r.status_code}')
+    except Exception as _e:
+        print(f'  ⚠️ 條件D 進場紀錄寫入異常（{str(_e)[:40]}）')
+    return False
+
+
+def _has_condd_entry(ticker):
+    """持股是否有條件D 進場紀錄（有才套用條件D 特殊出場規則，主帥 09/14）。"""
+    return str(ticker).upper().split('.')[0] in _load_condd_entries()
 
 
 def _watchlist_to_ticker(item):
@@ -3071,7 +3200,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                     continue
                 if _is_short_hold:
                     # ✅ 做空回補（月/週/日任一），回補取下軌/最低價
-                    _cD, _cMsg = check_cover_condD(_edf)
+                    _cD, _cMsg = check_cover_condD(_edf) if _has_condd_entry(ticker) else (False, '')   # ✅09171113 只對條件D 進場的持股套用
                     if _cD:
                         c_price = float(_edf['Close'].iloc[-1])
                         print(f'  🔔 {ticker} [{_lbl}] {_cMsg}')
@@ -3083,7 +3212,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                         return ('COVER', c_price, float(_edf['Low'].iloc[-1]), float(_edf['boll_bot20'].iloc[-1]),
                                 float(_edf['rsi14'].iloc[-1]), float(_edf['rsi14'].iloc[-2]))
                 else:
-                    _dD_exit, _dD_msg = check_sell_condD(_edf)
+                    _dD_exit, _dD_msg = check_sell_condD(_edf) if _has_condd_entry(ticker) else (False, '')   # ✅09171113 只對條件D 進場的持股套用
                     if _dD_exit:
                         c_price = float(_edf['Close'].iloc[-1])
                         print(f'  🔔 {ticker} [{_lbl}] {_dD_msg}')
@@ -4745,12 +4874,14 @@ def check_holdings_health():
 
             # 出場判斷：沿用系統既有策略（做多＝賣出；做空＝回補），混合模式 OR
             if _is_short:
-                _s_m = check_cover_condition(_im); _sd_m, _md_m = check_cover_condD(_im)
-                _s_w = check_cover_condition(_iw); _sd_w, _md_w = check_cover_condD(_iw)
+                _cdok = _has_condd_entry(_tk)   # ✅09171113 條件D 特殊出場只對條件D 進場的持股
+                _s_m = check_cover_condition(_im); _sd_m, _md_m = check_cover_condD(_im) if _cdok else (False, '')
+                _s_w = check_cover_condition(_iw); _sd_w, _md_w = check_cover_condD(_iw) if _cdok else (False, '')
                 _act = '建議評估【回補】(空單獲利了結)'
             else:
-                _s_m = check_sell_condition(_im); _sd_m, _md_m = check_sell_condD(_im)
-                _s_w = check_sell_condition(_iw); _sd_w, _md_w = check_sell_condD(_iw)
+                _cdok = _has_condd_entry(_tk)   # ✅09171113
+                _s_m = check_sell_condition(_im); _sd_m, _md_m = check_sell_condD(_im) if _cdok else (False, '')
+                _s_w = check_sell_condition(_iw); _sd_w, _md_w = check_sell_condD(_iw) if _cdok else (False, '')
                 _act = '建議評估【賣出】(獲利了結)'
 
             _hits = []
@@ -4816,6 +4947,8 @@ def check_holdings_health():
 
 
 # ============================================================
+# ✅09171354【兩條路線並行】主帥 13:54「二同意、三合併」：長期／中期（月K OR 週K → 日K → 5分K OR 15分K）＋短線（日K OR 60分K → 30分K → 5分K OR 15分K）
+#   同一檔同一根兩條路線都成立 → 合併成一封；出場（平倉、回補）不看前兩道。
 # ✅09171036【個股短線路線．台股先行】
 #   主帥 09/17 10:05「個股短線全照建議」：先做台股持股清單＋觀察清單（日盤），併入期貨每 5 分鐘排程；持股清單＝持有多倉、做空清單＝持有空倉
 #   ・三道（先大後小，主帥 09/17 08:46 三道丙案）：第一道 日K → 第二道 自身 30分K → 第三道 5分K ＋ 15分K
@@ -4853,17 +4986,69 @@ def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
         except Exception: sE = False
         cF = check_buy_eleader(df) is not None
         sF = check_short_eleader(df) is not None
-        buy   = bool(g1l and g2l and (cA or cB or cE or cF) and r_now > BUY_RSI_MIN and t_lo) or bool((g1l or g2l) and check_condD_long(df))
-        sell  = bool(g1s and g2s and (sA or sB or sE or sF) and r_now < SHORT_RSI_MAX and t_hi) or bool((g1s or g2s) and check_condD_short(df))
+        buy_n = bool(g1l and g2l and (cA or cB or cE or cF) and r_now > BUY_RSI_MIN and t_lo)
+        buy_d = bool((g1l or g2l) and check_condD_long(df))
+        sell_n = bool(g1s and g2s and (sA or sB or sE or sF) and r_now < SHORT_RSI_MAX and t_hi)
+        sell_d = bool((g1s or g2s) and check_condD_short(df))
+        buy, sell = (buy_n or buy_d), (sell_n or sell_d)
         close = bool(is_long and r_dn and m_dn and t_hi)
         cover = bool(is_short and r_up and m_up and t_lo)
-        if buy:   return 'buy'
+        if buy:   return 'buy' if buy_n else 'buyD'     # ✅09171113 buyD／sellD＝只由條件D 路徑觸發
         if close: return 'close'
-        if sell:  return 'sell'
+        if sell:  return 'sell' if sell_n else 'sellD'
         if cover: return 'cover'
         return None
     except Exception:
         return None
+
+
+def _gate_one(fn_pre, fn_e, fn_el, df, within):
+    """✅09171354 單一週期的一道判斷：(條件A/B/C，within＝True 時用事不過三 n=3) OR 條件E OR eLeader。資料不足回 False。"""
+    if df is None or len(df) < 25:
+        return False
+    try:
+        a = signal_within_n(lambda d: fn_pre(d)[0], df, n=3) if within else bool(fn_pre(df)[0])   # n=3＝事不過三（訊號有效期）
+    except Exception:
+        a = False
+    try: e = bool(fn_e(df))
+    except Exception: e = False
+    try: f = fn_el(df) is not None
+    except Exception: f = False
+    return bool(a or e or f)
+
+
+def _intraday_route_gates(dm, dw, dd, d60, d30):
+    """✅09171354 主帥專用兩條路線的前兩道。
+    長期／中期：第一道＝月K OR 週K、第二道＝日K；短線：第一道＝日K OR 60分K、第二道＝30分K。
+    回傳 {'L': (一多, 一空, 二多, 二空), 'S': (...), 'L_name_long': '長期投資'/'中期投資'/'長期+中期投資'/'', 'L_name_short': ...}"""
+    B = (check_buy_precondition, check_condE_long, check_buy_eleader)
+    S = (check_short_precondition, check_condE_short, check_short_eleader)
+    m_l, w_l = _gate_one(*B, dm, True), _gate_one(*B, dw, True)
+    m_s, w_s = _gate_one(*S, dm, True), _gate_one(*S, dw, True)
+    def _nm(m, w):
+        return '長期+中期投資' if (m and w) else ('長期投資' if m else ('中期投資' if w else ''))
+    return {'L': (m_l or w_l, m_s or w_s, _gate_one(*B, dd, False), _gate_one(*S, dd, False)),
+            'S': (_gate_one(*B, dd, True) or _gate_one(*B, d60, True), _gate_one(*S, dd, True) or _gate_one(*S, d60, True),
+                  _gate_one(*B, d30, False), _gate_one(*S, d30, False)),
+            'L_name_long': _nm(m_l, w_l), 'L_name_short': _nm(m_s, w_s)}
+
+
+def _intraday_merge(df, gates, is_long, is_short):
+    """✅09171354 兩條路線第三道合併（主帥 13:54「三合併」）。回傳 (訊號, 路線清單)；訊號同 _intraday_third_gate，buyD／sellD＝兩條路線皆只由條件D 觸發。"""
+    sL = _intraday_third_gate(df, *gates['L'], is_long, is_short)
+    sS = _intraday_third_gate(df, *gates['S'], is_long, is_short)
+    def _routes(kind):
+        r = []
+        if sL in kind: r.append(gates['L_name_long'] if kind[0] == 'buy' else gates['L_name_short'])
+        if sS in kind: r.append('短線')
+        return [x if x else '長期／中期投資' for x in r]
+    for kind in (('buy', 'buyD'), ('close',), ('sell', 'sellD'), ('cover',)):
+        if sL in kind or sS in kind:
+            if kind[0] in ('buy', 'sell'):
+                sig = kind[0] if (sL == kind[0] or sS == kind[0]) else kind[1]
+                return sig, _routes(kind)
+            return kind[0], []
+    return None, []
 
 
 def _intraday_gates(df_d, df_30):
@@ -4945,6 +5130,9 @@ def scan_stock_intraday_tw():
         dd  = _intraday_batch(list(real.values()), '1y', '1d')
         d30 = _intraday_batch(list(real.values()), '1mo', '30m')
         d15 = _intraday_batch(list(real.values()), '5d', '15m')
+        dm  = _intraday_batch(list(real.values()), '10y', '1mo')   # ✅09171354 長中期第一道：月K
+        dw  = _intraday_batch(list(real.values()), '3y', '1wk')    # ✅09171354 長中期第一道：週K
+        d60 = _intraday_batch(list(real.values()), '3mo', '60m')   # ✅09171354 短線第一道：60分K
         _tw = datetime.now(pytz.timezone('Asia/Taipei')); _day = _tw.strftime('%Y-%m-%d'); _now = _tw.strftime('%Y/%m/%d %H:%M')
         for c in codes:
             tk = real[c]
@@ -4953,29 +5141,34 @@ def scan_stock_intraday_tw():
                 continue
             if _bar_too_old(df5, f'{tk} 個股5分K'):
                 continue
-            g1l, g1s, g2l, g2s = _intraday_gates(dd.get(tk), d30.get(tk))
+            gates = _intraday_route_gates(dm.get(tk), dw.get(tk), dd.get(tk), d60.get(tk), d30.get(tk))   # ✅09171354 兩條路線
             is_short = c in [str(x) for x in HOLDINGS_SHORT]
             is_long = (c in [str(x) for x in HOLDINGS_TW]) and not is_short
             for label, df in (('5分K', df5), ('15分K', d15.get(tk))):
                 if df is None:
                     continue
-                sig = _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short)
+                sig, routes = _intraday_merge(df, gates, is_long, is_short)   # ✅09171354 兩條路線合併成一封
                 if not sig:
                     continue
                 bar = str(df.index[-1])[:16].replace(' ', 'T')
                 if _claim_alert_firebase(f'intraday_{c}_{label}_{sig}_{bar}', _day) is False:
                     print(f'  🔕 個股短線：{tk} {label} {sig} 本根已通知過')
                     continue
-                name = {'buy': '買進', 'close': '平倉（持股出場）', 'sell': '做空', 'cover': '平空回補'}[sig]
-                icon = {'buy': '⭐', 'close': '🔔', 'sell': '🔻', 'cover': '🟢'}[sig]
+                name = {'buy': '買進', 'buyD': '買進（條件D 追高）', 'close': '平倉（持股出場）', 'sell': '做空', 'sellD': '做空（條件D 追低）', 'cover': '平空回補'}[sig]
+                icon = {'buy': '⭐', 'buyD': '⭐', 'close': '🔔', 'sell': '🔻', 'sellD': '🔻', 'cover': '🟢'}[sig]
                 close_px = float(df['Close'].iloc[-1]); r0 = float(df['rsi14'].iloc[-2]); r1 = float(df['rsi14'].iloc[-1])
-                body = (f"☁️【雲端】{icon}【個股短線 {label} {name}訊號】{icon}\n標的：{tk}\n"
+                body = (f"☁️【雲端】{icon}【個股即時 {label} {name}訊號】{icon}\n標的：{tk}\n"
                         f"收盤：{close_px:.2f}　布林上軌：{float(df['boll_top20'].iloc[-1]):.2f}　下軌：{float(df['boll_bot20'].iloc[-1]):.2f}\n"
                         f"RSI：{r0:.1f} → {r1:.1f}\n"
-                        f"第一道（日K）多／空：{g1l}／{g1s}　第二道（30分K）多／空：{g2l}／{g2s}\n"
+                        f"觸發路線：{'、'.join(routes) if routes else '出場（不看前兩道）'}\n"
+                        f"長期／中期（月K OR 週K → 日K）多：{gates['L'][0]}／{gates['L'][2]}　空：{gates['L'][1]}／{gates['L'][3]}\n"
+                        f"短線（日K OR 60分K → 30分K）多：{gates['S'][0]}／{gates['S'][2]}　空：{gates['S'][1]}／{gates['S'][3]}\n"
                         f"碰軌回看：近 {TOUCH_LOOKBACK_BARS} 根\n時間：{_now}")
-                _ok = send_gmail(f"☁️【雲端】{icon}個股短線{label}{name} {tk} - {_now}", body, urgent=True)
-                print(f"  {'✅' if _ok else '❌'} {tk} 個股短線 {label} {name}")
+                _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
+                _ok = send_gmail(f"☁️【雲端】{icon}{_rt}個股即時{label}{name} {tk} - {_now}", body, urgent=True)
+                print(f"  {'✅' if _ok else '❌'} {tk} 個股即時 {label} {name} {routes}")
+                if _ok and sig in ('buyD', 'sellD'):   # ✅09171113 條件D 進場紀錄（供條件D 特殊出場規則判斷）
+                    _record_condd_entry(c, 'long' if sig == 'buyD' else 'short', f'個股即時{label}（{"、".join(routes)}）')
     except Exception as _e:
         print(f'  ⚠️ 個股短線整體異常（{str(_e)[:60]}）→ 不影響其他掃描')
 
@@ -5124,6 +5317,7 @@ def main_task():
     global _holdings_sent   # ✅ (07130626) 持股每日健檢
 
     # ✅ (07130626)【持股每日健檢模式】SCAN_TYPE='holdings'：只做持股健檢並寄一封報告，不跑全市場掃描
+    _merge_firebase_holdings()   # ✅09171113 持股清單讀 Firebase（持股健檢與各市場掃描共用）
     if SCAN_TYPE == 'holdings':
         if _holdings_sent:
             print("📋 本次執行已完成持股健檢，跳過重複執行")
@@ -5560,13 +5754,29 @@ def main_task():
                                         (check_short_eleader(_df_daily_5mk) is not None))
                 else:
                     _1st_daily_long = _1st_daily_short = False
+                # ✅09171354【短線第一道＝日K OR 60分K】二擇一，與長中期「月K OR 週K」同一邏輯
+                #   主帥 09/17 13:54：「一甲（這樣【長期中期】和【短期】都一致了，都是「or」二選一，沒有一國兩制）、二同意、三合併。」
+                _1st_60_long = _1st_60_short = False
+                try:
+                    _df60_5mk = _yf30.download(ticker, period='3mo', interval='60m', progress=False)
+                    if _df60_5mk is not None and len(_df60_5mk) >= 30:
+                        _df60_5mk = calc_indicators(_normalize_df(_df60_5mk))
+                        if _df60_5mk is not None:
+                            _1st_60_long  = bool(signal_within_n(lambda d: check_buy_precondition(d)[0], _df60_5mk, n=3, reverse_check=check_sell_condition) or
+                                                 check_condE_long(_df60_5mk) or (check_buy_eleader(_df60_5mk) is not None))
+                            _1st_60_short = bool(signal_within_n(lambda d: check_short_precondition(d)[0], _df60_5mk, n=3) or
+                                                 check_condE_short(_df60_5mk) or (check_short_eleader(_df60_5mk) is not None))
+                except Exception as _e60:
+                    print(f'  ⚠️ {ticker} 60分K 取得失敗（{str(_e60)[:40]}），第一道只看日K')
                 # 第二道：EWT 30分K（夜盤方向確認）
                 _df30 = _yf30.download('EWT', period='5d', interval='30m', progress=False)
                 if _df30 is None or len(_df30) < 20:
-                    print(f'  ⚠️ EWT 30分K資料不足，跳過')
-                    continue
-                df5_d = calc_indicators(_df30)
-                if df5_d is None: continue
+                    print(f'  ⚠️ EWT 30分K資料不足')
+                    if not (_futures_is_holding or _futures_is_short):
+                        print('     無持倉 → 跳過'); continue
+                    _df30 = None   # ✅09171354 有持倉時不跳過，第二道視為未通過，照常檢查平倉回補
+                df5_d = calc_indicators(_df30) if _df30 is not None else None
+                if df5_d is None and not (_futures_is_holding or _futures_is_short): continue
                 _orig5 = BUY_LOOKBACK_BARS
                 globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
                 # ✅ v05181836：第一道=日K AND EWT 30分K雙重確認
@@ -5580,10 +5790,10 @@ def main_task():
                 # ✅09170846【三道丙案．先大後小】第一道＝日K；第二道＝EWT 30分K；第三道＝5分K＋15分K（主帥 09/17 08:34、08:46）
                 #   原式：第一道＝日K AND EWT 30分K，第二道＝EWT 30分K eLeader（註解誤寫日K）→ 大、中、中、小，第二道重複用 30分K
                 #   主帥 09/17 08:34：「所有策略設計理念就是『先大後小』。第一道和第二道週期太長，絕對不能用在期貨。」
-                _1st_long  = _1st_daily_long
-                _1st_short = _1st_daily_short
+                _1st_long  = bool(_1st_daily_long or _1st_60_long)     # ✅09171354 日K OR 60分K
+                _1st_short = bool(_1st_daily_short or _1st_60_short)
                 # ✅09170937 不在此 continue：條件D 前提為「第一道 or 第二道」，且有持倉時必須照常檢查平倉回補
-                print(f'  {"✅" if (_1st_long or _1st_short) else "❌"} {ticker} 第一道(日K)（多:{_1st_long} 空:{_1st_short}）')
+                print(f'  {"✅" if (_1st_long or _1st_short) else "❌"} {ticker} 第一道(日K OR 60分K)（多:{_1st_long} 空:{_1st_short}｜日K 多:{_1st_daily_long} 60分K 多:{_1st_60_long}）')
 
                 # ── 第二道：日K eLeader ──────────────────────
                 # ✅09022055【★★★修正：做空原本被做多的第二道 continue 綁架】
