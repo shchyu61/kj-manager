@@ -40,7 +40,9 @@ name: 主帥專用即時路線雲端掃描
 
 on:
   schedule:
-    - cron: '*/5 * * * *'      # 每 5 分鐘（UTC 全天）；各市場是否開市由 Python 判斷
+    # ✅09180312【甲案】改為每小時觸發、內部迴圈每 5 分鐘（分鐘 04，與其他排程錯開）
+    - cron: '4 * * * *'        # 每小時 04 分觸發（UTC 全天）；內部迴圈每 5 分鐘掃一次、約 50 分鐘
+                               # 各市場是否開市仍由 Python 判斷（美股 21:30~04:00、虛擬幣全天、外匯與黃金週末除外）
 
   # 允許手動觸發（測試用）
   workflow_dispatch:
@@ -53,7 +55,7 @@ concurrency:
 jobs:
   intraday-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 6     # 每輪最多 20 檔 × 7 個週期批次下載，數分鐘足夠；超時即放棄，不拖到下一輪
+    timeout-minutes: 58    # ✅09180312 甲案：內部迴圈約 50 分鐘，留 8 分鐘餘裕
 
     steps:
       # 1. 取得程式碼
@@ -85,4 +87,17 @@ jobs:
           GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
           FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
         run: |
-          python 3_stock_monitor_GitHub.py
+          # ✅09180312【甲案：單次執行內部迴圈】主帥 2026/09/18 03:12 裁示
+          #   ★背景：GitHub 對高頻排程大量丟棄——實測 09/17 20:30 部署的每 5 分鐘排程，6.5 小時只觸發 1 次；
+          #     條件W 每 15 分鐘的排程，實際約每 2～3 小時才跑一次（主帥 09/18 02:59、03:02 截圖為證）。
+          #   ★做法：改由每小時觸發一次，本次執行內部自行每 5 分鐘掃一次、連續約 50 分鐘後結束。
+          #     只要一小時內有一次觸發成功，該小時就能完整覆蓋。
+          #   ★對齊：每次結束後睡到下一個 5 分鐘整點，避免時間漂移。
+          END=$(( $(date +%s) + 3000 ))
+          while :; do
+            python 3_stock_monitor_GitHub.py || true
+            NOW=$(date +%s)
+            if [ "$NOW" -ge "$END" ]; then break; fi
+            SLEEP=$(( 300 - NOW % 300 ))
+            sleep "$SLEEP"
+          done
