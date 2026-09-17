@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09171354'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09172001'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -168,7 +168,7 @@ ENABLE_DELISTING_CHECK = False   # ✅09170232 P0⑦【下市警報總開關．�
 #   （★第5200行 if TEST_MODE=='5mk' → 第5216行 scan_futures_15mk()），
 #   ★★★名稱本身與行為不符，★依 ＡＫ２１⑥【命名不等於功能】改名。
 #   ★★週期改由 FUTURES_PERIODS 清單控制，★未來增減週期只改該清單。
-TEST_MODE = False   # 切換：False / True / 'futures' / 'condW'
+TEST_MODE = False   # 切換：False / True / 'futures' / 'condW' / 'intraday'（✅09172001 主帥專用即時路線）
 FUTURES_PERIODS = ['5m', '15m']   # ✅09140742 期貨掃描的週期清單（★現況即二者併行）
 
 # ── 【期貨掃描專屬設定】（TEST_MODE = 'futures' 或 '5mk' 時啟用）──────────
@@ -4957,7 +4957,7 @@ def check_holdings_health():
 #   ・平倉：持有多倉 AND RSI↓ AND MACD柱↓ AND 近5根碰上軌；回補：持有空倉 AND RSI↑ AND MACD柱↑ AND 近5根碰下軌
 #   ・只在台股日盤執行；每輪最多 STOCK_INTRADAY_MAX 檔（持股優先）；四個週期各一次批次下載，避免 Yahoo 限流
 # ============================================================
-STOCK_INTRADAY_ENABLED = True   # ✅09171036 個股短線路線總開關（False＝完全不執行）
+STOCK_INTRADAY_ENABLED = True   # ✅09171036 個股短線路線總開關（False＝完全不執行）；✅09172001 同時控制第二步（美股／虛擬幣／外匯／黃金）
 STOCK_INTRADAY_MAX     = 20     # ✅09171036 每輪最多掃描檔數
 
 
@@ -5095,6 +5095,47 @@ def _intraday_batch(tickers, period, interval):
     return out
 
 
+def _intraday_emit(codes, real, key5, frames, long_set, short_set, title):
+    """✅09172001 主帥專用兩條路線的逐檔判斷與寄信（台股與美股／虛擬幣／外匯／黃金共用同一份規則）。
+    real＝{代碼: 下載用代號}；key5＝5分K 字典的鍵函式；frames＝各週期資料字典；title＝信件標題前綴。"""
+    _tw = datetime.now(pytz.timezone('Asia/Taipei')); _day = _tw.strftime('%Y-%m-%d'); _now = _tw.strftime('%Y/%m/%d %H:%M')
+    for c in codes:
+        tk = real[c]
+        df5 = frames['d5'].get(key5(c))
+        if df5 is None:
+            continue
+        if _bar_too_old(df5, f'{tk} 個股5分K'):
+            continue
+        gates = _intraday_route_gates(frames['dm'].get(tk), frames['dw'].get(tk), frames['dd'].get(tk), frames['d60'].get(tk), frames['d30'].get(tk))   # ✅09171354 兩條路線
+        is_short = c in short_set
+        is_long = (c in long_set) and not is_short
+        for label, df in (('5分K', df5), ('15分K', frames['d15'].get(tk))):
+            if df is None:
+                continue
+            sig, routes = _intraday_merge(df, gates, is_long, is_short)   # ✅09171354 兩條路線合併成一封
+            if not sig:
+                continue
+            bar = str(df.index[-1])[:16].replace(' ', 'T')
+            if _claim_alert_firebase(f'intraday_{c}_{label}_{sig}_{bar}', _day) is False:
+                print(f'  🔕 個股短線：{tk} {label} {sig} 本根已通知過')
+                continue
+            name = {'buy': '買進', 'buyD': '買進（條件D 追高）', 'close': '平倉（持股出場）', 'sell': '做空', 'sellD': '做空（條件D 追低）', 'cover': '平空回補'}[sig]
+            icon = {'buy': '⭐', 'buyD': '⭐', 'close': '🔔', 'sell': '🔻', 'sellD': '🔻', 'cover': '🟢'}[sig]
+            close_px = float(df['Close'].iloc[-1]); r0 = float(df['rsi14'].iloc[-2]); r1 = float(df['rsi14'].iloc[-1])
+            body = (f"☁️【雲端】{icon}【{title} {label} {name}訊號】{icon}\n標的：{tk}\n"
+                    f"收盤：{close_px:.2f}　布林上軌：{float(df['boll_top20'].iloc[-1]):.2f}　下軌：{float(df['boll_bot20'].iloc[-1]):.2f}\n"
+                    f"RSI：{r0:.1f} → {r1:.1f}\n"
+                    f"觸發路線：{'、'.join(routes) if routes else '出場（不看前兩道）'}\n"
+                    f"長期／中期（月K OR 週K → 日K）多：{gates['L'][0]}／{gates['L'][2]}　空：{gates['L'][1]}／{gates['L'][3]}\n"
+                    f"短線（日K OR 60分K → 30分K）多：{gates['S'][0]}／{gates['S'][2]}　空：{gates['S'][1]}／{gates['S'][3]}\n"
+                    f"碰軌回看：近 {TOUCH_LOOKBACK_BARS} 根\n時間：{_now}")
+            _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
+            _ok = send_gmail(f"☁️【雲端】{icon}{_rt}{title}{label}{name} {tk} - {_now}", body, urgent=True)
+            print(f"  {'✅' if _ok else '❌'} {tk} {title} {label} {name} {routes}")
+            if _ok and sig in ('buyD', 'sellD'):   # ✅09171113 條件D 進場紀錄（供條件D 特殊出場規則判斷）
+                _record_condd_entry(c, 'long' if sig == 'buyD' else 'short', f'{title}{label}（{"、".join(routes)}）')
+
+
 def scan_stock_intraday_tw():
     """✅09171036 個股短線路線（台股先行）：持股清單＋觀察清單，日盤每輪掃描一次。"""
     if not STOCK_INTRADAY_ENABLED:
@@ -5133,44 +5174,65 @@ def scan_stock_intraday_tw():
         dm  = _intraday_batch(list(real.values()), '10y', '1mo')   # ✅09171354 長中期第一道：月K
         dw  = _intraday_batch(list(real.values()), '3y', '1wk')    # ✅09171354 長中期第一道：週K
         d60 = _intraday_batch(list(real.values()), '3mo', '60m')   # ✅09171354 短線第一道：60分K
-        _tw = datetime.now(pytz.timezone('Asia/Taipei')); _day = _tw.strftime('%Y-%m-%d'); _now = _tw.strftime('%Y/%m/%d %H:%M')
-        for c in codes:
-            tk = real[c]
-            df5 = d5.get(c + '.TW')
-            if df5 is None:
-                continue
-            if _bar_too_old(df5, f'{tk} 個股5分K'):
-                continue
-            gates = _intraday_route_gates(dm.get(tk), dw.get(tk), dd.get(tk), d60.get(tk), d30.get(tk))   # ✅09171354 兩條路線
-            is_short = c in [str(x) for x in HOLDINGS_SHORT]
-            is_long = (c in [str(x) for x in HOLDINGS_TW]) and not is_short
-            for label, df in (('5分K', df5), ('15分K', d15.get(tk))):
-                if df is None:
-                    continue
-                sig, routes = _intraday_merge(df, gates, is_long, is_short)   # ✅09171354 兩條路線合併成一封
-                if not sig:
-                    continue
-                bar = str(df.index[-1])[:16].replace(' ', 'T')
-                if _claim_alert_firebase(f'intraday_{c}_{label}_{sig}_{bar}', _day) is False:
-                    print(f'  🔕 個股短線：{tk} {label} {sig} 本根已通知過')
-                    continue
-                name = {'buy': '買進', 'buyD': '買進（條件D 追高）', 'close': '平倉（持股出場）', 'sell': '做空', 'sellD': '做空（條件D 追低）', 'cover': '平空回補'}[sig]
-                icon = {'buy': '⭐', 'buyD': '⭐', 'close': '🔔', 'sell': '🔻', 'sellD': '🔻', 'cover': '🟢'}[sig]
-                close_px = float(df['Close'].iloc[-1]); r0 = float(df['rsi14'].iloc[-2]); r1 = float(df['rsi14'].iloc[-1])
-                body = (f"☁️【雲端】{icon}【個股即時 {label} {name}訊號】{icon}\n標的：{tk}\n"
-                        f"收盤：{close_px:.2f}　布林上軌：{float(df['boll_top20'].iloc[-1]):.2f}　下軌：{float(df['boll_bot20'].iloc[-1]):.2f}\n"
-                        f"RSI：{r0:.1f} → {r1:.1f}\n"
-                        f"觸發路線：{'、'.join(routes) if routes else '出場（不看前兩道）'}\n"
-                        f"長期／中期（月K OR 週K → 日K）多：{gates['L'][0]}／{gates['L'][2]}　空：{gates['L'][1]}／{gates['L'][3]}\n"
-                        f"短線（日K OR 60分K → 30分K）多：{gates['S'][0]}／{gates['S'][2]}　空：{gates['S'][1]}／{gates['S'][3]}\n"
-                        f"碰軌回看：近 {TOUCH_LOOKBACK_BARS} 根\n時間：{_now}")
-                _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
-                _ok = send_gmail(f"☁️【雲端】{icon}{_rt}個股即時{label}{name} {tk} - {_now}", body, urgent=True)
-                print(f"  {'✅' if _ok else '❌'} {tk} 個股即時 {label} {name} {routes}")
-                if _ok and sig in ('buyD', 'sellD'):   # ✅09171113 條件D 進場紀錄（供條件D 特殊出場規則判斷）
-                    _record_condd_entry(c, 'long' if sig == 'buyD' else 'short', f'個股即時{label}（{"、".join(routes)}）')
+        _intraday_emit(codes, real, lambda c: c + '.TW',   # ✅09172001 逐檔判斷抽出為共用函式，台股行為不變
+                       {'d5': d5, 'd15': d15, 'dd': dd, 'd30': d30, 'dm': dm, 'dw': dw, 'd60': d60},
+                       set(str(x) for x in HOLDINGS_TW), set(str(x) for x in HOLDINGS_SHORT), '個股即時')
     except Exception as _e:
         print(f'  ⚠️ 個股短線整體異常（{str(_e)[:60]}）→ 不影響其他掃描')
+
+def _intraday_cat(code):
+    """✅09172001 依代號判斷市場類別：外匯 =X、虛擬幣 -USD／-USDT、黃金白銀期貨、其餘視為美股。"""
+    c = str(code).upper()
+    if c.endswith('=X'):
+        return 'fx'
+    if c.endswith('-USD') or c.endswith('-USDT'):
+        return 'crypto'
+    if c in ('GC=F', 'SI=F', 'MGC=F'):
+        return 'gold'
+    return 'us'
+
+
+def scan_stock_intraday_global():
+    """✅09172001【主帥專用即時路線．第二步】美股、虛擬幣、外匯、黃金（主帥 09/17 13:54「一甲、二同意、三合併」；20:01「依改版記錄順序執行」）
+    ・規則與台股完全相同：長期／中期（月K OR 週K → 日K）＋短線（日K OR 60分K → 30分K）→ 第三道 5分K OR 15分K；同一根兩條路線合併一封
+    ・時段：美股只在 get_active_markets() 含 'US'（21:30～04:00）；虛擬幣全天；外匯、黃金週六 06:00 起至週一 06:00 跳過；另受 _bar_too_old 防護
+    ・清單：持股（HOLDINGS_US／CRYPTO／FX／GOLD，含 Firebase 合併）＋做空清單＋網頁版觀察清單同類別；每輪最多 STOCK_INTRADAY_MAX 檔（持股優先）"""
+    if not STOCK_INTRADAY_ENABLED:
+        return
+    try:
+        act = get_active_markets()
+        _t = datetime.now(pytz.timezone('Asia/Taipei')); _wd = _t.weekday(); _tv = _t.hour * 60 + _t.minute
+        _fxg = not (_wd == 6 or (_wd == 5 and _tv >= 6 * 60) or (_wd == 0 and _tv < 6 * 60))
+        open_cat = {'us': 'US' in act, 'crypto': True, 'fx': _fxg, 'gold': _fxg}
+        short_set = set(str(x).upper() for x in HOLDINGS_SHORT if not str(x).isdigit())
+        long_set, codes = set(), []
+        def _add(c):
+            c = str(c).upper()
+            if c and c not in codes and open_cat.get(_intraday_cat(c), False):
+                codes.append(c)
+        for c in list(HOLDINGS_US) + list(HOLDINGS_CRYPTO) + list(HOLDINGS_FX) + list(HOLDINGS_GOLD):
+            long_set.add(str(c).upper()); _add(c)
+        for c in short_set:
+            _add(c)
+        try:
+            for it in (_load_watchlist() if WATCHLIST_ENABLED else []) or []:
+                if it.get('cat', 'tw') in ('us', 'crypto', 'fx', 'gold'):
+                    _add(it.get('code', ''))
+        except Exception as _e:
+            print(f'  ⚠️ 即時路線（全球）：觀察清單讀取失敗（{str(_e)[:40]}），只掃持股')
+        codes = codes[:STOCK_INTRADAY_MAX]
+        if not codes:
+            print(f"  ℹ️ 即時路線（全球）：目前開市類別 {[k for k, v in open_cat.items() if v]} 無持股或觀察標的，跳過")
+            return
+        print(f'\n📊 即時路線（美股／虛擬幣／外匯／黃金）：{len(codes)} 檔 {codes}')
+        real = {c: c for c in codes}
+        frames = {'d5':  _intraday_batch(codes, '5d', '5m'),  'd15': _intraday_batch(codes, '5d', '15m'),
+                  'dd':  _intraday_batch(codes, '1y', '1d'),  'd30': _intraday_batch(codes, '1mo', '30m'),
+                  'dm':  _intraday_batch(codes, '10y', '1mo'), 'dw': _intraday_batch(codes, '3y', '1wk'),
+                  'd60': _intraday_batch(codes, '3mo', '60m')}
+        _intraday_emit(codes, real, lambda c: c, frames, long_set - short_set, short_set, '即時')
+    except Exception as _e:
+        print(f'  ⚠️ 即時路線（全球）整體異常（{str(_e)[:60]}）→ 不影響其他掃描')
 
 def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道多, 第一道空, 第二道多, 第二道空)}；未提供時只檢查平倉回補
     """✅ (08060105)【15分K 訊號】主帥指定新增（原系統只有5分K）。
@@ -6301,6 +6363,17 @@ if __name__ == "__main__":
     if TEST_MODE == 'condW':
         print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三11:30／週四15:05~週五11:30）")   # ✅09170232 清冊Ｋ１５：窗尾依 R-12 為 11:30
         scan_condition_w()
+        time.sleep(3)
+        exit()
+
+    # === ✅09172001 [主帥專用即時路線模式]：TEST_MODE = 'intraday'（intraday_scan.yml 每 5 分鐘）===
+    #   台股（日盤）＋美股（21:30～04:00）＋虛擬幣（全天）＋外匯與黃金（週六 06:00～週一 06:00 除外）
+    #   ★期貨排程內原有的台股即時呼叫保留；同一根同一訊號由 Firebase 佔位去重，不會重複寄信
+    if TEST_MODE == 'intraday':
+        print('🚀 主帥專用即時路線模式（台股＋美股／虛擬幣／外匯／黃金）')
+        _merge_firebase_holdings()   # 與 main_task 相同：先合併網頁版登錄的持股
+        scan_stock_intraday_tw()
+        scan_stock_intraday_global()
         time.sleep(3)
         exit()
 
