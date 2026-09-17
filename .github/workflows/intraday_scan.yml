@@ -1,0 +1,88 @@
+# ══════════════════════════════════════════════════════════════
+# ★★★【自我舉證表】(09172001)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
+# ══════════════════════════════════════════════════════════════
+# 結論①：主帥專用即時路線需要每 5 分鐘一次的獨立排程
+#   來源＝改版記錄(09171712) 第二八之一 第 2 項「需新增 5 分鐘排程（美股 21:30～04:00、其他全時段）」；
+#         主帥 2026/09/17 15:18「二公開」（倉庫公開 → Actions 分鐘數不受限，可每 5 分鐘）
+# 結論②：排程全天候觸發，市場時段由 Python 判斷
+#   來源＝3_stock_monitor_GitHub(09172001) scan_stock_intraday_global()：
+#         美股看 get_active_markets() 是否含 'US'；虛擬幣全天；外匯與黃金週六 06:00～週一 06:00 跳過；
+#         台股看 scan_stock_intraday_tw() 內的 'TW' 判斷；另有 _bar_too_old 防舊K棒
+# 結論③：台股即時路線在期貨排程內的原有呼叫保留，重複觸發不會重複寄信
+#   來源＝_intraday_emit() 內 _claim_alert_firebase(f'intraday_{代號}_{週期}_{訊號}_{K棒時間}') 原子佔位
+#
+# ★★★【推定清單】★以下【未經實機驗證】，★若推定為假的後果如下：
+#   推定1：GitHub 對 '*/5 * * * *' 排程會大致準時觸發
+#     ・依據＝GitHub 文件：排程觸發在高負載時段可能延遲數分鐘
+#     ・★推定為假的後果：部分 5 分鐘K棒沒被掃到（訊號晚到或漏掉）；★可在 Actions 頁籤看實際觸發時間
+#   推定2：Yahoo 對每 5 分鐘、每輪最多 20 檔 × 7 個週期的批次下載不會限流
+#     ・依據＝每個週期一次批次下載（非逐檔），全市場掃描已長期以更大量運作
+#     ・★推定為假的後果：部分週期下載失敗 → 該檔該輪不判斷（程式印「批次下載失敗」，不會誤發）
+# ══════════════════════════════════════════════════════════════
+# ============================================================
+# GitHub Actions：主帥專用即時路線（雲端專用）自動掃描排程
+# 檔案位置：.github/workflows/intraday_scan.yml
+# 建立：2026/09/17 20:01　v09172001
+# 說明：
+#   兩條路線並行（主帥 09/17 13:54「一甲、二同意、三合併」）：
+#     長期／中期：月K OR 週K → 日K → 5分K OR 15分K
+#     短線　　　：日K OR 60分K → 30分K → 5分K OR 15分K
+#   市場：台股（日盤）＋美股（21:30～04:00）＋虛擬幣（全天）＋外匯、黃金
+#   清單：持股（程式常數＋網頁版 Firebase 持股）＋做空清單＋網頁版觀察清單
+#   去重：同一標的、同一週期、同一根K棒、同一訊號只寄一次（Firebase 原子佔位）
+#
+#   ★ TEST_MODE 由 sed 設為 'intraday'（與 condw_scan.yml 相同作法，只改本 job 的執行副本）
+#
+# 台灣時間 = UTC+8
+# ============================================================
+
+name: 主帥專用即時路線雲端掃描
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'      # 每 5 分鐘（UTC 全天）；各市場是否開市由 Python 判斷
+
+  # 允許手動觸發（測試用）
+  workflow_dispatch:
+
+# 同一個 workflow 同時只跑一個，避免前後兩次重疊時重複下載與同時寫 Firebase
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  intraday-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6     # 每輪最多 20 檔 × 7 個週期批次下載，數分鐘足夠；超時即放棄，不拖到下一輪
+
+    steps:
+      # 1. 取得程式碼
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      # 2. 安裝 Python 3.12
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. 安裝所需套件
+      - name: 安裝套件
+        run: |
+          pip install yfinance pandas pandas-ta pytz twstock cryptography google-auth requests
+
+      # 4. 設定 TEST_MODE='intraday'（sed 改寫執行副本，不影響倉庫原檔行為）
+      - name: 設定即時路線模式
+        run: |
+          sed -i "s/^TEST_MODE = False/TEST_MODE = 'intraday'/" 3_stock_monitor_GitHub.py
+          echo "已設定 TEST_MODE='intraday'"
+          grep -n "^TEST_MODE = " 3_stock_monitor_GitHub.py
+
+      # 5. 執行即時路線掃描
+      - name: 執行主帥專用即時路線掃描
+        env:
+          GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
+        run: |
+          python 3_stock_monitor_GitHub.py
