@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09171005'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09171036'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -4814,6 +4814,171 @@ def check_holdings_health():
     except Exception as _e:
         print(f"⚠️ 持股健檢寄信失敗：{_e}")
 
+
+# ============================================================
+# ✅09171036【個股短線路線．台股先行】
+#   主帥 09/17 10:05「個股短線全照建議」：先做台股持股清單＋觀察清單（日盤），併入期貨每 5 分鐘排程；持股清單＝持有多倉、做空清單＝持有空倉
+#   ・三道（先大後小，主帥 09/17 08:46 三道丙案）：第一道 日K → 第二道 自身 30分K → 第三道 5分K ＋ 15分K
+#   ・第三道建倉：第一道 AND 第二道 AND (A OR B OR E OR F) AND RSI 門檻 AND 近5根碰軌 AND 前1根→當根轉折（與期貨 5分K 相同）
+#   ・條件D：第一道 OR 第二道 AND 條件D（不套碰軌，主帥允許例外）
+#   ・平倉：持有多倉 AND RSI↓ AND MACD柱↓ AND 近5根碰上軌；回補：持有空倉 AND RSI↑ AND MACD柱↑ AND 近5根碰下軌
+#   ・只在台股日盤執行；每輪最多 STOCK_INTRADAY_MAX 檔（持股優先）；四個週期各一次批次下載，避免 Yahoo 限流
+# ============================================================
+STOCK_INTRADAY_ENABLED = True   # ✅09171036 個股短線路線總開關（False＝完全不執行）
+STOCK_INTRADAY_MAX     = 20     # ✅09171036 每輪最多掃描檔數
+
+
+def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
+    """✅09171036 第三道判斷（純函式，不下載、不寄信）。回傳 'buy'／'close'／'sell'／'cover'／None（優先順序比照期貨 5分K）。"""
+    try:
+        K = TOUCH_LOOKBACK_BARS
+        n = BUY_LOOKBACK_5MK
+        l = df['Low']; h = df['High']; bb = df['boll_bot20']; bt = df['boll_top20']
+        bm = df['ma_c_20']; mh = df['macd_hist']; rsi = df['rsi14']
+        r_now = float(rsi.iloc[-1]); r_prev = float(rsi.iloc[-2])
+        m_now = float(mh.iloc[-1]);  m_prev = float(mh.iloc[-2])
+        r_up, r_dn = r_now > r_prev, r_now < r_prev
+        m_up, m_dn = m_now > m_prev, m_now < m_prev
+        t_lo = bool((l.iloc[-K:] <= _gate_lower(bt.iloc[-K:], bb.iloc[-K:])).any())
+        t_hi = bool((h.iloc[-K:] >= _gate_upper(bt.iloc[-K:], bb.iloc[-K:])).any())
+        cA = bool((l.iloc[-n:] <= _gate_lower(bt.iloc[-n:], bb.iloc[-n:])).any()) and r_up and m_up
+        cB = (bool((l.iloc[-n:] < bm.iloc[-n:]).all()) and bool((h.iloc[-n:] < bt.iloc[-n:]).all())
+              and len(mh) >= n + 1 and all(float(mh.iloc[-n-1+j]) > float(mh.iloc[-n+j]) for j in range(n-1)) and m_up)
+        sA = bool((h.iloc[-n:] >= _gate_upper(bt.iloc[-n:], bb.iloc[-n:])).any()) and r_dn and m_dn
+        sB = (bool((h.iloc[-n:] > bm.iloc[-n:]).all()) and bool((l.iloc[-n:] > bb.iloc[-n:]).all())
+              and len(mh) >= n + 1 and all(float(mh.iloc[-n-1+j]) < float(mh.iloc[-n+j]) for j in range(n-1)) and m_dn)
+        try: cE = bool(check_condE_long(df))
+        except Exception: cE = False
+        try: sE = bool(check_condE_short(df))
+        except Exception: sE = False
+        cF = check_buy_eleader(df) is not None
+        sF = check_short_eleader(df) is not None
+        buy   = bool(g1l and g2l and (cA or cB or cE or cF) and r_now > BUY_RSI_MIN and t_lo) or bool((g1l or g2l) and check_condD_long(df))
+        sell  = bool(g1s and g2s and (sA or sB or sE or sF) and r_now < SHORT_RSI_MAX and t_hi) or bool((g1s or g2s) and check_condD_short(df))
+        close = bool(is_long and r_dn and m_dn and t_hi)
+        cover = bool(is_short and r_up and m_up and t_lo)
+        if buy:   return 'buy'
+        if close: return 'close'
+        if sell:  return 'sell'
+        if cover: return 'cover'
+        return None
+    except Exception:
+        return None
+
+
+def _intraday_gates(df_d, df_30):
+    """✅09171036 第一道（日K，事不過三 n=3）與第二道（30分K）。回傳 (第一道多, 第一道空, 第二道多, 第二道空)。"""
+    def _g(fn_pre, fn_e, fn_el, df, within):
+        if df is None or len(df) < 25:
+            return False
+        try:
+            a = signal_within_n(lambda d: fn_pre(d)[0], df, n=3) if within else bool(fn_pre(df)[0])   # n=3＝事不過三（訊號有效期）
+        except Exception:
+            a = False
+        try: e = bool(fn_e(df))
+        except Exception: e = False
+        try: f = fn_el(df) is not None
+        except Exception: f = False
+        return bool(a or e or f)
+    return (_g(check_buy_precondition, check_condE_long, check_buy_eleader, df_d, True),
+            _g(check_short_precondition, check_condE_short, check_short_eleader, df_d, True),
+            _g(check_buy_precondition, check_condE_long, check_buy_eleader, df_30, False),
+            _g(check_short_precondition, check_condE_short, check_short_eleader, df_30, False))
+
+
+def _intraday_batch(tickers, period, interval):
+    """✅09171036 批次下載後拆成各標的已算指標的 DataFrame；失敗或資料不足者不列入。"""
+    out = {}
+    if not tickers:
+        return out
+    try:
+        raw = yf.download(tickers, period=period, interval=interval, progress=False, group_by='ticker', threads=True)
+    except Exception as _e:
+        print(f'  ⚠️ 個股短線：{interval} 批次下載失敗（{str(_e)[:50]}）')
+        return out
+    for tk in tickers:
+        try:
+            sub = raw[tk] if len(tickers) > 1 else raw
+            sub = _normalize_df(sub).dropna(how='all')
+            if sub is None or len(sub) < 32:
+                continue
+            sub = calc_indicators(sub)
+            if sub is not None:
+                out[tk] = sub
+        except Exception:
+            continue
+    return out
+
+
+def scan_stock_intraday_tw():
+    """✅09171036 個股短線路線（台股先行）：持股清單＋觀察清單，日盤每輪掃描一次。"""
+    if not STOCK_INTRADAY_ENABLED:
+        return
+    try:
+        if 'TW' not in get_active_markets():
+            print('  🔕 個股短線：非台股日盤，跳過')
+            return
+        codes = []
+        for c in list(HOLDINGS_TW) + [x for x in HOLDINGS_SHORT if str(x).isdigit()]:
+            if c not in codes:
+                codes.append(str(c))
+        try:
+            for it in (_load_watchlist() if WATCHLIST_ENABLED else []) or []:
+                if it.get('cat', 'tw') == 'tw':
+                    c = str(it['code']).upper().split('.')[0]
+                    if c and c not in codes:
+                        codes.append(c)
+        except Exception as _e:
+            print(f'  ⚠️ 個股短線：觀察清單讀取失敗（{str(_e)[:40]}），只掃持股')
+        codes = codes[:STOCK_INTRADAY_MAX]
+        if not codes:
+            print('  ℹ️ 個股短線：持股與觀察清單皆無台股，跳過')
+            return
+        print(f'\n📊 個股短線（台股）：{len(codes)} 檔 {codes}')
+        tks = [c + '.TW' for c in codes]
+        d5 = _intraday_batch(tks, '5d', '5m')
+        miss = [c for c in codes if c + '.TW' not in d5]
+        if miss:
+            d5.update({k.replace('.TWO', '.TW'): v for k, v in _intraday_batch([c + '.TWO' for c in miss], '5d', '5m').items()})
+            tks = [(c + '.TWO' if c in miss else c + '.TW') for c in codes]
+        real = {c: (c + '.TWO' if c in miss else c + '.TW') for c in codes}
+        dd  = _intraday_batch(list(real.values()), '1y', '1d')
+        d30 = _intraday_batch(list(real.values()), '1mo', '30m')
+        d15 = _intraday_batch(list(real.values()), '5d', '15m')
+        _tw = datetime.now(pytz.timezone('Asia/Taipei')); _day = _tw.strftime('%Y-%m-%d'); _now = _tw.strftime('%Y/%m/%d %H:%M')
+        for c in codes:
+            tk = real[c]
+            df5 = d5.get(c + '.TW')
+            if df5 is None:
+                continue
+            if _bar_too_old(df5, f'{tk} 個股5分K'):
+                continue
+            g1l, g1s, g2l, g2s = _intraday_gates(dd.get(tk), d30.get(tk))
+            is_short = c in [str(x) for x in HOLDINGS_SHORT]
+            is_long = (c in [str(x) for x in HOLDINGS_TW]) and not is_short
+            for label, df in (('5分K', df5), ('15分K', d15.get(tk))):
+                if df is None:
+                    continue
+                sig = _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short)
+                if not sig:
+                    continue
+                bar = str(df.index[-1])[:16].replace(' ', 'T')
+                if _claim_alert_firebase(f'intraday_{c}_{label}_{sig}_{bar}', _day) is False:
+                    print(f'  🔕 個股短線：{tk} {label} {sig} 本根已通知過')
+                    continue
+                name = {'buy': '買進', 'close': '平倉（持股出場）', 'sell': '做空', 'cover': '平空回補'}[sig]
+                icon = {'buy': '⭐', 'close': '🔔', 'sell': '🔻', 'cover': '🟢'}[sig]
+                close_px = float(df['Close'].iloc[-1]); r0 = float(df['rsi14'].iloc[-2]); r1 = float(df['rsi14'].iloc[-1])
+                body = (f"☁️【雲端】{icon}【個股短線 {label} {name}訊號】{icon}\n標的：{tk}\n"
+                        f"收盤：{close_px:.2f}　布林上軌：{float(df['boll_top20'].iloc[-1]):.2f}　下軌：{float(df['boll_bot20'].iloc[-1]):.2f}\n"
+                        f"RSI：{r0:.1f} → {r1:.1f}\n"
+                        f"第一道（日K）多／空：{g1l}／{g1s}　第二道（30分K）多／空：{g2l}／{g2s}\n"
+                        f"碰軌回看：近 {TOUCH_LOOKBACK_BARS} 根\n時間：{_now}")
+                _ok = send_gmail(f"☁️【雲端】{icon}個股短線{label}{name} {tk} - {_now}", body, urgent=True)
+                print(f"  {'✅' if _ok else '❌'} {tk} 個股短線 {label} {name}")
+    except Exception as _e:
+        print(f'  ⚠️ 個股短線整體異常（{str(_e)[:60]}）→ 不影響其他掃描')
+
 def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道多, 第一道空, 第二道多, 第二道空)}；未提供時只檢查平倉回補
     """✅ (08060105)【15分K 訊號】主帥指定新增（原系統只有5分K）。
     ・緣由：2026/08/05(週三)09:45 主帥截圖之15分K已達成做多條件（MACD柱觸底V轉＋RSI↑），
@@ -5674,6 +5839,7 @@ def main_task():
                 print(f'  ❌ 期貨5分K掃描 {ticker} 失敗：{e}')
         print(f'\n📊 期貨15分K掃描：{FUTURES_5MK_TARGETS}')   # ✅09170937
         scan_futures_15mk(_fut_gates)
+        scan_stock_intraday_tw()   # ✅09171036 個股短線路線（台股先行）：函式內自行判斷台股日盤
 
 # ============================================================
 # 【１５．發送Gmail通知】
