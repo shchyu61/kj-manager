@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09172131'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09180945'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -3141,6 +3141,27 @@ def get_weekly_option_hint(current_price, signal_type):
     except Exception as _e:
         return ""
 
+def _full_third_gate(df, is_long):
+    """✅09180937【全市場掃描第三道】主帥 09/18 00:00：「全市場掃描（通知信命名長期／中期投資）│ 月K OR 週K │ 日K │
+    5分K OR 15分K（不含條件D，我不讓家人親友房客追高造成賠錢機率大增！）」。
+    ・規則與主帥專用即時路線第三道【相同】，唯一差別是【不含條件D】（不一國兩制，主帥 09/18 00:00）。
+    ・內容：(條件A/B/C OR 條件E OR eLeader) AND 前1根→當根轉折（多方 RSI↑ 且 MACD柱↑；空方鏡像）AND RSI 門檻。
+    ・近 N 根碰軌已含在 check_buy_precondition／check_short_precondition 內（BUY_LOOKBACK_BARS＝5）。
+    """
+    try:
+        if df is None or len(df) < 30 or 'rsi14' not in df.columns or 'macd_hist' not in df.columns:
+            return False
+        _r0 = float(df['rsi14'].iloc[-2]); _r1 = float(df['rsi14'].iloc[-1])
+        _m0 = float(df['macd_hist'].iloc[-2]); _m1 = float(df['macd_hist'].iloc[-1])
+        if is_long:
+            _cond = bool(check_buy_precondition(df)[0] or check_condE_long(df) or (check_buy_eleader(df) is not None))
+            return bool(_cond and _r1 > _r0 and _m1 > _m0 and _r1 > BUY_RSI_MIN)
+        _cond = bool(check_short_precondition(df)[0] or check_condE_short(df) or (check_short_eleader(df) is not None))
+        return bool(_cond and _r1 < _r0 and _m1 < _m0 and _r1 < (100 - BUY_RSI_MIN))
+    except Exception:
+        return False
+
+
 def scan_stock(ticker, is_holding=False, _mode_label=None):
     global _tw_prescreened, _wk_passed_1st, _prescreened_ind
     global cache_long_1mo, cache_mid_1wk_1d
@@ -3376,16 +3397,29 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 
         rsi_5m_ok = (last_rsi > prev_rsi and last_rsi > BUY_RSI_MIN)
 
-        # ── 第三道：5分K（RSI AND MACD）AND（5分K近3根條件A or B）────
-        # 週K/日K模式統一，避免過度密集觸發
-        rsi_5m_falling  = (last_rsi < prev_rsi and last_rsi < (100 - BUY_RSI_MIN))
-        macd_5m_falling = not macd_5m_ok  # MACD柱下降
-        cond_5m_buy     = check_buy_precondition(df_5m)[0]    # 買進：近3根5分K條件A or B
-        cond_5m_short   = check_short_precondition(df_5m)[0]  # 做空：近3根5分K鏡像條件A or B
+        # ── 第三道：5分K OR 15分K（✅09180937 主帥 09/18 00:00 定案）────────
+        #   ★原本只有 5分K，且條件寫成「RSI↑ AND MACD↑ AND 5分K條件A/B」→ 家人親友房客沒有 15分K 可判斷 A轉／V轉。
+        #   ★★主帥 09/18 00:00：「我怎麼可能同意只有5分K，而讓家人親友房客沒有15分K判斷是否A轉或V轉可以逃命呢！」
+        #   ★★★規則與主帥專用即時路線第三道相同，唯一差別＝不含條件D（不讓家人親友房客追高）。
+        _now_ts15 = time.time(); _ck15 = f"15m_{ticker}"
+        if _ck15 in five_min_cache and (_now_ts15 - five_min_cache[_ck15]['ts'] < 600):
+            df_15m = five_min_cache[_ck15]['df']
+        else:
+            df_15m = _normalize_df(yf.download(ticker, period='5d', interval='15m', progress=False))
+            if df_15m is not None and not getattr(df_15m, 'empty', True) and len(df_15m) >= 30:
+                df_15m['rsi14'] = ta.rsi(df_15m['Close'].squeeze(), length=14)
+                _macd_15m = ta.macd(df_15m['Close'].squeeze(), fast=12, slow=26, signal=9)
+                df_15m['macd_hist'] = _macd_15m.iloc[:, 1]
+                five_min_cache[_ck15] = {'df': df_15m, 'ts': _now_ts15}
+            else:
+                df_15m = None
+        _g3_long  = bool(_full_third_gate(df_5m, True)  or _full_third_gate(df_15m, True))
+        _g3_short = bool(_full_third_gate(df_5m, False) or _full_third_gate(df_15m, False))
+        _g3_label = ('5分K' if _full_third_gate(df_5m, _is_long_ok) else '15分K')
 
         if _is_long_ok:
-            # ── 多頭第三道：（RSI↑ AND MACD↑）AND（5分K買進條件A or B）
-            if not (rsi_5m_ok and macd_5m_ok and cond_5m_buy):
+            # ── 多頭第三道：5分K OR 15分K（條件A/B/C OR E OR eLeader）AND 前1根→當根 V轉 AND RSI 門檻
+            if not _g3_long:
                 return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
@@ -3396,8 +3430,8 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             return ('BUY', c, float(ref_df['Low'].iloc[-1]), float(ref_df['boll_bot20'].iloc[-1]),
                     float(ref_df['rsi14'].iloc[-1]), float(ref_df['rsi14'].iloc[-2]))
         else:
-            # ── 空頭第三道：（RSI↓ AND MACD↓）AND（5分K做空條件A or B）
-            if not (rsi_5m_falling and macd_5m_falling and cond_5m_short):
+            # ── 空頭第三道：5分K OR 15分K（鏡像多方）
+            if not _g3_short:
                 return None
             c = float(df_5m['Close'].iloc[-1])
             ref_df = df_d if SCAN_MODE == 'daily' else df_w
@@ -4959,6 +4993,11 @@ def check_holdings_health():
 # ============================================================
 STOCK_INTRADAY_ENABLED = True   # ✅09171036 個股短線路線總開關（False＝完全不執行）；✅09172001 同時控制第二步（美股／虛擬幣／外匯／黃金）
 STOCK_INTRADAY_MAX     = 20     # ✅09171036 每輪最多掃描檔數
+# ✅09180234【個股短線路線開關】主帥 09/18 01:22：「加一個『短線路線開關』，預設關閉，長中期路線照常。」
+#   ★管的是【個股短線】（台股、美股、虛擬幣、外匯、黃金：日K OR 60分K → 30分K → 5分K OR 15分K）。
+#   ★★與網頁版【期貨5分K】開關【無關】；★★★期貨與週選擇權（條件W、台指）不受本開關影響。
+#   ★要做台股當沖或短線時改 True；主帥現階段以長期／中期投資為主，故預設 False。
+STOCK_SHORT_ROUTE_ENABLED = False   # False＝只跑長期／中期即時路線；True＝同時跑短線路線
 
 
 def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
@@ -4987,9 +5026,13 @@ def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
         cF = check_buy_eleader(df) is not None
         sF = check_short_eleader(df) is not None
         buy_n = bool(g1l and g2l and (cA or cB or cE or cF) and r_now > BUY_RSI_MIN and t_lo)
-        buy_d = bool((g1l or g2l) and check_condD_long(df))
+        #   ★★★【為什麼是 AND】主帥 09/18 02:34、09:37：早期第一道＝月K、第二道＝週K，由大至小，
+        #     ★那時寫 or 是對的（月K 或 週K 任一達標即可）；
+        #     ★★現在第一道本身已經是【月K OR 週K】（短線是【日K OR ^TWII 60分K OR EWT 60分K】），
+        #     ★★★『二擇一』已經在第一道內部完成，所以第一道與第二道之間必須是 AND，條件D 才有前兩道保護。
+        buy_d = bool(g1l and g2l and check_condD_long(df))        # ✅09180234 條件D：第一道 AND 第二道
         sell_n = bool(g1s and g2s and (sA or sB or sE or sF) and r_now < SHORT_RSI_MAX and t_hi)
-        sell_d = bool((g1s or g2s) and check_condD_short(df))
+        sell_d = bool(g1s and g2s and check_condD_short(df))      # ✅09180234 條件D 空方鏡像
         buy, sell = (buy_n or buy_d), (sell_n or sell_d)
         close = bool(is_long and r_dn and m_dn and t_hi)
         cover = bool(is_short and r_up and m_up and t_lo)
@@ -5027,9 +5070,11 @@ def _intraday_route_gates(dm, dw, dd, d60, d30):
     m_s, w_s = _gate_one(*S, dm, True), _gate_one(*S, dw, True)
     def _nm(m, w):
         return '長期+中期投資' if (m and w) else ('長期投資' if m else ('中期投資' if w else ''))
+    _S4 = ((_gate_one(*B, dd, True) or _gate_one(*B, d60, True), _gate_one(*S, dd, True) or _gate_one(*S, d60, True),
+            _gate_one(*B, d30, False), _gate_one(*S, d30, False))
+           if STOCK_SHORT_ROUTE_ENABLED else (False, False, False, False))   # ✅09180234 短線路線開關關閉時，短線四道一律不成立
     return {'L': (m_l or w_l, m_s or w_s, _gate_one(*B, dd, False), _gate_one(*S, dd, False)),
-            'S': (_gate_one(*B, dd, True) or _gate_one(*B, d60, True), _gate_one(*S, dd, True) or _gate_one(*S, d60, True),
-                  _gate_one(*B, d30, False), _gate_one(*S, d30, False)),
+            'S': _S4,
             'L_name_long': _nm(m_l, w_l), 'L_name_short': _nm(m_s, w_s)}
 
 
@@ -5095,10 +5140,90 @@ def _intraday_batch(tickers, period, interval):
     return out
 
 
-def _intraday_emit(codes, real, key5, frames, long_set, short_set, title):
+_mkt_gate_cache = {}
+
+
+def _intraday_market_gate(cat):
+    """✅09180234【守門員：大盤先過，個股也要過】主帥 09/18 01:22「大盤要先過，個股也要過」、02:05「守門員不再管出場，只要管進場」。
+    ・台股看加權指數 ^TWII、美股看道瓊 ^DJI（守門員原始定案）；虛擬幣、外匯、黃金無對應大盤 → 一律放行。
+    ・條件D 進場用同一個標準：條件D 本來就要先過第一道與第二道（主帥 09/18 02:05），故不再與「大盤條件D」配對。
+    ・回傳 (多方可進場, 空方可進場)；大盤分析失敗一律放行，★守門本身不得成為漏訊號的原因。
+    """
+    _idx = {'tw': ('^TWII', '台股'), 'us': ('^DJI', '道瓊')}.get(cat)
+    if not _idx:
+        return (True, True)
+    if cat in _mkt_gate_cache:
+        return _mkt_gate_cache[cat]
+    try:
+        _m = analyse_market_index(_idx[0], _idx[1])
+        _r = (bool(_m.get('bull_abc')), bool(_m.get('bear_abc')))
+    except Exception as _e:
+        print(f'  ⚠️ 守門員（{_idx[1]}）分析失敗（{str(_e)[:40]}）→ 放行')
+        _r = (True, True)
+    _mkt_gate_cache[cat] = _r
+    print(f"  🛡️ 守門員（{_idx[1]}）：多方{'✅' if _r[0] else '❌'}　空方{'✅' if _r[1] else '❌'}")
+    return _r
+
+
+def _touch_detail(df, is_long, n=None):
+    """✅09180924【碰軌明細】回傳 (方向文字, 第幾根, 轉折文字)，供通知信寫清楚是碰上軌還是下軌、V轉或A轉。
+    主帥 09/18 08:25：「所以近5根K棒是觸碰上軌還是下軌，沒有提示給我怎麼知道是V轉或A轉」。
+    ・近 n 根（預設 TOUCH_LOOKBACK_BARS＝5）由新到舊找第一根碰軌者，回傳「第 x 根」（1＝當根）。
+    ・轉折：多方看前1根→當根 RSI↑ 且 MACD柱↑（V轉）；空方看 RSI↓ 且 MACD柱↓（A轉）。
+    """
+    _n = TOUCH_LOOKBACK_BARS if n is None else n
+    try:
+        _bt = df['boll_top20']; _bb = df['boll_bot20']
+        _th = _gate_lower(_bt, _bb) if is_long else _gate_upper(_bt, _bb)
+        _px = df['Low'] if is_long else df['High']
+        _hit = 0
+        for _k in range(1, min(_n, len(df)) + 1):
+            _ok = (float(_px.iloc[-_k]) <= float(_th.iloc[-_k])) if is_long else (float(_px.iloc[-_k]) >= float(_th.iloc[-_k]))
+            if _ok:
+                _hit = _k
+                break
+        _r0 = float(df['rsi14'].iloc[-2]); _r1 = float(df['rsi14'].iloc[-1])
+        _m0 = float(df['macd_hist'].iloc[-2]); _m1 = float(df['macd_hist'].iloc[-1])
+        if is_long:
+            _turn = 'V轉成立（RSI↑ 且 MACD柱↑）' if (_r1 > _r0 and _m1 > _m0) else 'V轉未成立'
+        else:
+            _turn = 'A轉成立（RSI↓ 且 MACD柱↓）' if (_r1 < _r0 and _m1 < _m0) else 'A轉未成立'
+        _band = '下軌' if is_long else '上軌'
+        return (_band, _hit, _turn)
+    except Exception:
+        return ('下軌' if is_long else '上軌', 0, '轉折資料不足')
+
+
+def _gate_mark(ok):
+    """✅09180924 通知信不再出現 True／False（主帥 09/18 08:26：「看不懂，這封信當時的K棒，究竟是多方還是空方」）。"""
+    return '✅' if ok else '✗'
+
+
+def _intraday_body(tk, label, sig, name, df, gates, routes, is_long_sig, now_str):
+    """✅09180924【通知信改寫】首行寫清楚多空與動作，碰軌寫明上下軌與第幾根、V轉或A轉，關卡以✅／✗ 表示。"""
+    _band, _hit, _turn = _touch_detail(df, is_long_sig)
+    _px = float(df['Close'].iloc[-1]); _r0 = float(df['rsi14'].iloc[-2]); _r1 = float(df['rsi14'].iloc[-1])
+    _bt = float(df['boll_top20'].iloc[-1]); _bb = float(df['boll_bot20'].iloc[-1])
+    _touch = (f"近 {TOUCH_LOOKBACK_BARS} 根中第 {_hit} 根碰{_band} → {_turn}" if _hit
+              else (f"近 {TOUCH_LOOKBACK_BARS} 根未碰{_band}（條件D 追高／追低不套碰軌）" if sig in ('buyD', 'sellD')
+                    else f"近 {TOUCH_LOOKBACK_BARS} 根未碰{_band}"))
+    _dir = '做多' if is_long_sig else '做空'
+    return (f"【{name}】{label}　{tk}\n"
+            f"・方向：{_dir}\n"
+            f"・碰軌：{_touch}\n"
+            f"・長期／中期（月K OR 週K → 日K）：多方 第一道{_gate_mark(gates['L'][0])} 第二道{_gate_mark(gates['L'][2])}"
+            f"　空方 第一道{_gate_mark(gates['L'][1])} 第二道{_gate_mark(gates['L'][3])}\n"
+            f"・短線（日K OR 60分K → 30分K）：{'未啟用（STOCK_SHORT_ROUTE_ENABLED=False）' if not STOCK_SHORT_ROUTE_ENABLED else ('多方 第一道' + _gate_mark(gates['S'][0]) + ' 第二道' + _gate_mark(gates['S'][2]) + '　空方 第一道' + _gate_mark(gates['S'][1]) + ' 第二道' + _gate_mark(gates['S'][3]))}\n"
+            f"・觸發路線：{'、'.join(routes) if routes else '出場（不看前兩道）'}\n"
+            f"・收盤 {_px:.4f}｜布林上軌 {_bt:.4f}｜下軌 {_bb:.4f}｜RSI {_r0:.1f}→{_r1:.1f}\n"
+            f"・時間：{now_str}")
+
+
+def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=None, daily_once=False):
     """✅09172001 主帥專用兩條路線的逐檔判斷與寄信（台股與美股／虛擬幣／外匯／黃金共用同一份規則）。
     real＝{代碼: 下載用代號}；key5＝5分K 字典的鍵函式；frames＝各週期資料字典；title＝信件標題前綴。"""
     _tw = datetime.now(pytz.timezone('Asia/Taipei')); _day = _tw.strftime('%Y-%m-%d'); _now = _tw.strftime('%Y/%m/%d %H:%M')
+    _merge_buf = []; _sig_head = [None]   # ✅09180924 每日一封的合併緩衝
     for c in codes:
         tk = real[c]
         df5 = frames['d5'].get(key5(c))
@@ -5115,25 +5240,51 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title):
             sig, routes = _intraday_merge(df, gates, is_long, is_short)   # ✅09171354 兩條路線合併成一封
             if not sig:
                 continue
+            if sig in ('buy', 'buyD', 'sell', 'sellD'):   # ✅09180234 守門員只管進場；平倉、回補（出場）不受限制
+                _mb, _ms = _intraday_market_gate(cat if cat else _intraday_cat(c))
+                if sig in ('buy', 'buyD') and not _mb:
+                    print(f'  🛡️ {tk} {label} 個股多方觸發，但大盤守門員未過 → 不發信')
+                    continue
+                if sig in ('sell', 'sellD') and not _ms:
+                    print(f'  🛡️ {tk} {label} 個股空方觸發，但大盤守門員未過 → 不發信')
+                    continue
             bar = str(df.index[-1])[:16].replace(' ', 'T')
             if _claim_alert_firebase(f'intraday_{c}_{label}_{sig}_{bar}', _day) is False:
                 print(f'  🔕 個股短線：{tk} {label} {sig} 本根已通知過')
                 continue
             name = {'buy': '買進', 'buyD': '買進（條件D 追高）', 'close': '平倉（持股出場）', 'sell': '做空', 'sellD': '做空（條件D 追低）', 'cover': '平空回補'}[sig]
             icon = {'buy': '⭐', 'buyD': '⭐', 'close': '🔔', 'sell': '🔻', 'sellD': '🔻', 'cover': '🟢'}[sig]
-            close_px = float(df['Close'].iloc[-1]); r0 = float(df['rsi14'].iloc[-2]); r1 = float(df['rsi14'].iloc[-1])
-            body = (f"☁️【雲端】{icon}【{title} {label} {name}訊號】{icon}\n標的：{tk}\n"
-                    f"收盤：{close_px:.2f}　布林上軌：{float(df['boll_top20'].iloc[-1]):.2f}　下軌：{float(df['boll_bot20'].iloc[-1]):.2f}\n"
-                    f"RSI：{r0:.1f} → {r1:.1f}\n"
-                    f"觸發路線：{'、'.join(routes) if routes else '出場（不看前兩道）'}\n"
-                    f"長期／中期（月K OR 週K → 日K）多：{gates['L'][0]}／{gates['L'][2]}　空：{gates['L'][1]}／{gates['L'][3]}\n"
-                    f"短線（日K OR 60分K → 30分K）多：{gates['S'][0]}／{gates['S'][2]}　空：{gates['S'][1]}／{gates['S'][3]}\n"
-                    f"碰軌回看：近 {TOUCH_LOOKBACK_BARS} 根\n時間：{_now}")
+            _is_long_sig = sig in ('buy', 'buyD', 'close')
+            # ✅09180924【每日一封】主帥 09/18 09:24「一甲、二丙」：美股、外匯、虛擬幣、黃金的【進場】通知，
+            #   ★同一標的、同一方向【每天只寄一次】；同一時刻多檔觸發 → ★★合併成一封。
+            #   ★★★出場（平倉、回補）不併、照樣即時寄（主帥：出場是逃命，慢一步就少一段）。
+            if daily_once and sig in ('buy', 'buyD', 'sell', 'sellD'):
+                _side = 'long' if sig in ('buy', 'buyD') else 'short'
+                if _claim_alert_firebase(f'dailyone_{c}_{_side}', _day) is False:
+                    print(f'  🔕 每日一封：{tk} {_side} 今日已通知過 → 跳過')
+                    continue
+                _merge_buf.append(_intraday_body(tk, label, sig, name, df, gates, routes, _is_long_sig, _now))
+                print(f'  📥 每日一封：{tk} {label} {name} 併入本輪合併信')
+                if _sig_head[0] is None:
+                    _sig_head[0] = (icon, name)
+                continue
+            body = "☁️【雲端】" + _intraday_body(tk, label, sig, name, df, gates, routes, _is_long_sig, _now)
             _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
             _ok = send_gmail(f"☁️【雲端】{icon}{_rt}{title}{label}{name} {tk} - {_now}", body, urgent=True)
             print(f"  {'✅' if _ok else '❌'} {tk} {title} {label} {name} {routes}")
             if _ok and sig in ('buyD', 'sellD'):   # ✅09171113 條件D 進場紀錄（供條件D 特殊出場規則判斷）
                 _record_condd_entry(c, 'long' if sig == 'buyD' else 'short', f'{title}{label}（{"、".join(routes)}）')
+    # ✅09180924【每日一封】本輪合併信：把同一時刻觸發的所有標的與週期寫進同一封寄出
+    if _merge_buf:
+        _icon, _first = (_sig_head[0] or ('⭐', '進場'))
+        _subj = f"☁️【雲端】{_icon}【{title}．當日合併】{len(_merge_buf)} 檔進場訊號 - {_now}"
+        _body = ("☁️【雲端】" + f"{_icon}【{title}．當日合併通知】{_icon}\n"
+                 + f"本信合併當下觸發的 {len(_merge_buf)} 檔進場訊號；★同一標的同一方向當天只通知一次。\n"
+                 + "★出場（平倉、回補）不受此限，仍即時單獨寄出。\n"
+                 + "══════════════════════════════════════\n"
+                 + "\n──────────────────────────────────────\n".join(_merge_buf))
+        _ok2 = send_gmail(_subj, _body, urgent=True)
+        print(f"  {'✅' if _ok2 else '❌'} 每日一封：合併寄出 {len(_merge_buf)} 檔")
 
 
 def scan_stock_intraday_tw():
@@ -5176,7 +5327,7 @@ def scan_stock_intraday_tw():
         d60 = _intraday_batch(list(real.values()), '3mo', '60m')   # ✅09171354 短線第一道：60分K
         _intraday_emit(codes, real, lambda c: c + '.TW',   # ✅09172001 逐檔判斷抽出為共用函式，台股行為不變
                        {'d5': d5, 'd15': d15, 'dd': dd, 'd30': d30, 'dm': dm, 'dw': dw, 'd60': d60},
-                       set(str(x) for x in HOLDINGS_TW), set(str(x) for x in HOLDINGS_SHORT), '個股即時')
+                       set(str(x) for x in HOLDINGS_TW), set(str(x) for x in HOLDINGS_SHORT), '個股即時', cat='tw')
     except Exception as _e:
         print(f'  ⚠️ 個股短線整體異常（{str(_e)[:60]}）→ 不影響其他掃描')
 
@@ -5230,7 +5381,7 @@ def scan_stock_intraday_global():
                   'dd':  _intraday_batch(codes, '1y', '1d'),  'd30': _intraday_batch(codes, '1mo', '30m'),
                   'dm':  _intraday_batch(codes, '10y', '1mo'), 'dw': _intraday_batch(codes, '3y', '1wk'),
                   'd60': _intraday_batch(codes, '3mo', '60m')}
-        _intraday_emit(codes, real, lambda c: c, frames, long_set - short_set, short_set, '即時')
+        _intraday_emit(codes, real, lambda c: c, frames, long_set - short_set, short_set, '即時', daily_once=True)   # ✅09180924 美股／虛擬幣／外匯／黃金：進場每標的每方向每天一封
     except Exception as _e:
         print(f'  ⚠️ 即時路線（全球）整體異常（{str(_e)[:60]}）→ 不影響其他掃描')
 
@@ -5287,7 +5438,11 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 _g1l, _g1s, _g2l, _g2s = (gates or {}).get(_tk, (False, False, False, False))   # ✅09170937
                 _buy  = (_g1l and _g2l and _near_low and _x_lo and _r_up and _m_up
                          and _r_now > BUY_RSI_MIN)
-                _buy  = bool(_buy or ((_g1l or _g2l) and check_condD_long(_df)))   # ✅09170937 條件D 路徑（不套碰軌）
+                #   ★★★【為什麼是 AND】主帥 09/18 02:34、09:37：早期第一道＝月K、第二道＝週K，由大至小，
+                #     ★那時寫 or 是對的（月K 或 週K 任一達標即可）；
+                #     ★★現在第一道本身已經是【月K OR 週K】（短線是【日K OR ^TWII 60分K OR EWT 60分K】），
+                #     ★★★『二擇一』已經在第一道內部完成，所以第一道與第二道之間必須是 AND，條件D 才有前兩道保護。
+                _buy  = bool(_buy or (_g1l and _g2l and check_condD_long(_df)))   # ✅09180234 條件D 路徑：第一道 AND 第二道（不套碰軌）
                 # 空方鏡像：近18根任一最高價觸及布林上軌帶 AND RSI↓ AND MACD柱↓ AND 現價仍近上軌
                 #   ✅08301755【補上空方RSI門檻】SHORT_RSI_MAX 原本【宣告了但全檔零使用】，
                 #     導致 2026/08/26 10:08 在 RSI=69.5(>65) 的上漲趨勢中發出做空訊號。
@@ -5295,7 +5450,7 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 _near_high = (_h.iloc[-_n15:] >= _bt_gate).any()
                 _sell = (_g1s and _g2s and _near_high and _x_hi and _r_dn and _m_dn
                          and _r_now < SHORT_RSI_MAX)
-                _sell = bool(_sell or ((_g1s or _g2s) and check_condD_short(_df)))   # ✅09170937 條件D 空方鏡像   # ✅09170658 近 TOUCH_LOOKBACK_BARS 根碰上軌（原當根收盤價門檻），鏡像多方
+                _sell = bool(_sell or (_g1s and _g2s and check_condD_short(_df)))   # ✅09180234 條件D 空方鏡像：第一道 AND 第二道   # ✅09170658 近 TOUCH_LOOKBACK_BARS 根碰上軌（原當根收盤價門檻），鏡像多方
 
                 # ✅09170255 15分K 補平倉與回補：規則與 5分K 完全相同（不一國兩制）
                 #   主帥 09/17 02:55：「5分K和15分K都要改看【近5根有沒有碰到上下軌?】+【前1根和當根比較,macd和rsi有沒有V轉或A轉?】」
@@ -5377,6 +5532,8 @@ def main_task():
     # 🔥 宣告 global 確保全域共用
     global cache_long_1mo, cache_mid_1wk_1d, buy_signals, sell_signals, delist_signals, _futures_is_holding, _futures_is_short  # ✅ 07031936 加入期貧持倬全域
     global _holdings_sent   # ✅ (07130626) 持股每日健檢
+    global _prescreened_ind   # ✅09180234【缺陷修正】原未宣告 global → 下方 `_prescreened_ind = {}` 變成區域變數，
+                              #   而 scan_stock 寫入的是全域 → 上傳時取到空字典，雲端紀錄長期顯示「指標 0 支」（主帥 09/18 02:34 提供 09/16 log 佐證）
 
     # ✅ (07130626)【持股每日健檢模式】SCAN_TYPE='holdings'：只做持股健檢並寄一封報告，不跑全市場掃描
     _merge_firebase_holdings()   # ✅09171113 持股清單讀 Firebase（持股健檢與各市場掃描共用）
@@ -5537,15 +5694,21 @@ def main_task():
                         else:
                             print(f'  ⚠️ {code} 個股觸發但大盤條件不符，不發通知')
                     elif result[0] == 'SELL':
+                        # ✅09180937【守門員只管進場】主帥 09/18 02:05：「守門員不再管出場，只要管【進場】就好。」
+                        #   ★原本持股賣出（出場）也要大盤空頭才發信 → 大盤仍多頭時，持股碰上軌 A轉該逃命卻收不到信。
+                        sell_signals.append(('台股', code, *result[1:]))
+                    elif result[0] == 'SHORT':
+                        # ✅09180937【補上台股做空進場】主帥 09/16 17:16：「策略如果只有多方，則 AI 必須鏡像產出空方」；
+                        #   ★原本 scan_stock 算得出 'SHORT'，main_task 卻沒有接收 → 訊號算完就消失。
                         _stock_is_d_s = getattr(result, '_condD_short', False)
                         _mkt_match_s = (
                             (_tw_market_bear_d   and _stock_is_d_s) or
                             (_tw_market_bear_abc and not _stock_is_d_s)
                         ) if '_tw_market_bear_abc' in dir() else True
                         if _mkt_match_s:
-                            sell_signals.append(('台股', code, *result[1:]))
+                            sell_signals.append(('台股做空', code, *result[1:]))
                         else:
-                            print(f'  ⚠️ {code} 個股空頭觸發但大盤條件不符，不發通知')
+                            print(f'  🛡️ {code} 個股空頭觸發但大盤守門員未過，不發通知')
                     elif result[0] == 'COVER':
                         sell_signals.append(('台股回補', code, *result[1:]))
                     elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
@@ -5613,15 +5776,19 @@ def main_task():
                     else:
                         print(f'  ⚠️ {ticker} 美股個股觸發但大盤條件不符，不發通知')
                 elif result[0] == 'SELL':
+                    # ✅09180937 守門員只管進場：美股持股出場同樣不受大盤限制（主帥 09/18 02:05）
+                    sell_signals.append(('美股', ticker, *result[1:]))
+                elif result[0] == 'SHORT':
+                    # ✅09180937 補上美股做空進場（鏡像原則，主帥 09/16 17:16）
                     _stock_is_d_us_s = getattr(result, '_condD_short', False)
                     _mkt_match_us_s = (
                         (_us_market_bear_d   and _stock_is_d_us_s) or
                         (_us_market_bear_abc and not _stock_is_d_us_s)
                     ) if '_us_market_bear_abc' in dir() else True
                     if _mkt_match_us_s:
-                        sell_signals.append(('美股', ticker, *result[1:]))
+                        sell_signals.append(('美股做空', ticker, *result[1:]))
                     else:
-                        print(f'  ⚠️ {ticker} 美股個股空頭觸發但大盤條件不符，不發通知')
+                        print(f'  🛡️ {ticker} 美股個股空頭觸發但大盤守門員未過，不發通知')
                 elif result[0] == 'COVER':
                     sell_signals.append(('美股回補', ticker, *result[1:]))
                 elif result[0] in ('DELIST_HOLD', 'DELIST_WATCH'):
@@ -5971,7 +6138,14 @@ def main_task():
                                  _fut_cond_E_long or _fut_cond_F_long)
                             and rsi_now > BUY_RSI_MIN)
                 # ✅09170937 條件D 路徑：前提為第一道 or 第二道（主帥 09/14 08:21），不套近5根碰軌（主帥 09/17 08:34 例外）
-                _fut_buy_D = bool((_1st_long or _buy_2nd) and _fut_cond_D_long)
+                # ✅09180234【條件D 前提改為第一道 AND 第二道】主帥 09/18 02:05：「必須先達成第一道和第二道的條件，才會觸發條件D 的正式進場決策」
+                #   ★09/14 08:21「條件D 只會發生在第三道，絕對不可發生在第一道 or 第二道」＝條件D 不得當作第一、二道的通過條件，★不是可以略過前兩道（09170937 誤解為 or，本輪更正）
+                #   ★主帥 09/18 02:34：「既然第一道已改成【月K or 週K】，那麼【第一道 and 第二道 and 條件D】也是正確的」；條件D 仍不套近5根碰軌（主帥 09/17 08:34 例外）
+                #   ★★★【為什麼是 AND】主帥 09/18 02:34、09:37：早期第一道＝月K、第二道＝週K，由大至小，
+                #     ★那時寫 or 是對的（月K 或 週K 任一達標即可）；
+                #     ★★現在第一道本身已經是【月K OR 週K】（短線是【日K OR ^TWII 60分K OR EWT 60分K】），
+                #     ★★★『二擇一』已經在第一道內部完成，所以第一道與第二道之間必須是 AND，條件D 才有前兩道保護。
+                _fut_buy_D = bool(_1st_long and _buy_2nd and _fut_cond_D_long)
                 now_str_f = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y/%m/%d %H:%M')
                 # ── 日K位階參考（印出但不擋住掃描）──────────────
                 try:
@@ -6006,7 +6180,7 @@ def main_task():
                               and (_fut_short_A or _fut_short_B or
                                    _fut_cond_E_short or _fut_cond_F_short)
                               and rsi_now < (100 - BUY_RSI_MIN))
-                _fut_short_D = bool((_short_1st or _short_2nd) and _fut_cond_D_short)   # ✅09170937 條件D 空方鏡像
+                _fut_short_D = bool(_short_1st and _short_2nd and _fut_cond_D_short)   # ✅09180234 條件D 空方鏡像：同改為第一道 AND 第二道
 
                 _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')
                 # ✅ 深夜01~05有持倉：只掃平倉，跳過買進
@@ -6272,11 +6446,16 @@ def main_task():
             # ✅08091843 額度改為【日盤/夜盤各自獨立】：key 帶時段標記，
             #   夜盤用掉的槽位不會排擠日盤（主帥 08/09 14:37 定案）。
             key = f"{market}_{code}_BUY_{_sess_now}"
+            # ✅09180937【每日一封】主帥 09/18 09:07、09:24：美股、外匯、虛擬幣、基金、黃金的【進場】通知，
+            #   ★同一標的當天只寄一次（額度 1）；★★台股與期貨維持原額度（日盤 3、夜盤 2）。
+            #   ★★★出場（賣出、回補）不受此限，仍照原額度即時寄出（主帥：出場是逃命）。
+            _once_mkts = ('美股', '虛擬幣', '外匯', '黃金', '債券基金', '基金', '美股做空')
+            _mx = 1 if market in _once_mkts else _sess_max
 
             # ✅08091324【🔴A】改用 Firebase 原子佔位（跨雲端並行行程安全）
             #   原寫法只看本地 4_notified_today.json，雲端多個 job 各持一份，
             #   彼此看不見 → 同一支會被重複寄出。
-            if _claim_notify_slot(key, today, notified, _sess_max):
+            if _claim_notify_slot(key, today, notified, _mx):
                 filtered.append(s)
 
         if filtered:
