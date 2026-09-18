@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09181118'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09181404'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -1389,7 +1389,9 @@ def _load_watchlist():
             _code = (_mv.get('code', {}) or {}).get('stringValue', '').strip()
             _cat = (_mv.get('cat', {}) or {}).get('stringValue', '').strip().lower()
             if _code:
-                _items.append({'code': _code.upper(), 'cat': _cat or 'tw'})
+                _dirv = (_mv.get('direction', {}) or {}).get('stringValue', '').strip().lower()
+                _items.append({'code': _code.upper(), 'cat': _cat or 'tw',
+                               'direction': 'short' if _dirv == 'short' else 'long'})   # ✅09181348 W-16：網頁版待買觀察的多空方向
         print(f'  ⭐ 觀察清單：讀到 {len(_items)} 檔（來源：網頁版待買觀察）')
         # ✅09171113【持股清單】網頁版儲存時把 stocks（持股）與 watchlist 寫在同一份文件，同一次讀取一併取出
         #   每筆：{code, cat（tw/us/crypto/fx/gold/fund/bond）, direction（long／short）}
@@ -5053,8 +5055,24 @@ def _intraday_gates(df_d, df_30):
             _g(check_short_precondition, check_condE_short, check_short_eleader, df_30, False))
 
 
+_intraday_tf_cache = {}
+
+
 def _intraday_batch(tickers, period, interval):
-    """✅09171036 批次下載後拆成各標的已算指標的 DataFrame；失敗或資料不足者不列入。"""
+    """✅09171036 批次下載後拆成各標的已算指標的 DataFrame；失敗或資料不足者不列入。
+    ✅09181348【長週期快取】主帥待辦「即時路線長週期快取」：即時路線每 5 分鐘跑一次，
+    月K／週K／日K 一天內幾乎不變，60分K／30分K 也不需要每 5 分鐘重抓 →
+    依週期設定存活時間，★5分K 與 15分K 一律不快取（第三道必須看最新一根）。
+    ★快取以 (週期, 標的集合) 為鍵；任何一檔標的變動就重新下載，不會取到殘缺清單。
+    """
+    _TTL = {'1mo': 21600, '1wk': 21600, '1d': 10800, '60m': 1800, '30m': 900}   # 秒；6h／6h／3h／30m／15m
+    _ttl = _TTL.get(interval, 0)
+    _key = (interval, period, tuple(sorted(tickers)))
+    if _ttl and _key in _intraday_tf_cache:
+        _ent = _intraday_tf_cache[_key]
+        if (time.time() - _ent['ts']) < _ttl:
+            print(f'  ♻️ 即時路線：{interval} 沿用快取（{int(time.time() - _ent["ts"])} 秒前下載，存活 {_ttl} 秒）')
+            return _ent['data']
     out = {}
     if not tickers:
         return out
@@ -5074,6 +5092,8 @@ def _intraday_batch(tickers, period, interval):
                 out[tk] = sub
         except Exception:
             continue
+    if _ttl:
+        _intraday_tf_cache[_key] = {'ts': time.time(), 'data': out}   # ✅09181348 長週期快取寫入
     return out
 
 
