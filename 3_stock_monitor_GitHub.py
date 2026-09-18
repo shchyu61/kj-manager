@@ -98,7 +98,7 @@
 #     ・★推定為假的後果：Actions 分鐘數上升；★★可由主帥觀察帳單後回報
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09180945'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09181029'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知
 # 版本：(由AI每次改版時自動填寫)
@@ -346,10 +346,18 @@ HOLDINGS_US     = ['KO', 'O', 'PFE']
 HOLDINGS_CRYPTO = ['BTC-USD', 'ETH-USD', 'DOGE-USD']
 
 FX_LIST = ['EURUSD=X', 'USDTWD=X', 'GBPJPY=X', 'USDCHF=X', 'JPY=X']
-HOLDINGS_FX = ['EURUSD=X']     # ✅ 07010514 做空回補：EUR/USD做空持倬（對應網頁版預建）
+HOLDINGS_FX = []               # ✅09181029 EURUSD=X 移至 WATCH_SHORT_LIST（觀察做空、非持倉）；有實際持倉再填回
 GOLD_LIST = ['GC=F']           # ✅09170232 P0⑥ 黃金期貨，比照外匯全時段掃描（主帥 09/16 17:22：「程式碼還是要先改成甲案，以備不時之需」）
 HOLDINGS_GOLD = []             # ✅09170232 P0⑥ 黃金持有清單（有持有時填入，例如 ['GC=F']）
-HOLDINGS_SHORT = ['EURUSD=X']  # ✅ 做空持股清單：在此標記為空單→走回補檢查而非賣出
+HOLDINGS_SHORT = []            # ✅09181029 做空【持股】清單（已進場的空單→走回補檢查）；EURUSD=X 已移至 WATCH_SHORT_LIST
+# ✅09181029【觀察做空清單】主帥 09/18 10:24、10:29（甲案）：
+#   ★用途：看空但【尚未進場】的標的 → 只會收到【做空進場】訊號，
+#     ★★不會被當成持倉，★★★不會產生回補（出場）通知。
+#   ★背景：網頁版 v08182248【待買觀察】沒有多空選擇（缺陷 W-16），主帥只能把看空的 EURUSD=X 放進
+#     【持股清單】→ 被當成持有空單 → 每根K棒都判定該回補、洗版（主帥 09/18 08:27 截圖）。
+#   ★網頁版補齊（W-16）後，待買觀察可直接選做空，本清單即可清空。
+#   ★★主帥請同時把該標的從【網頁版持股清單】移除，否則 Firebase 合併回來仍會算持倉。
+WATCH_SHORT_LIST = ['EURUSD=X']
 HOLDINGS_TW     = ['2330', '3037','3147','6188']  # 有台股持有時填入，例如：['2330', '2317']
 
 # ============================================================
@@ -5258,16 +5266,23 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
             # ✅09180924【每日一封】主帥 09/18 09:24「一甲、二丙」：美股、外匯、虛擬幣、黃金的【進場】通知，
             #   ★同一標的、同一方向【每天只寄一次】；同一時刻多檔觸發 → ★★合併成一封。
             #   ★★★出場（平倉、回補）不併、照樣即時寄（主帥：出場是逃命，慢一步就少一段）。
-            if daily_once and sig in ('buy', 'buyD', 'sell', 'sellD'):
-                _side = 'long' if sig in ('buy', 'buyD') else 'short'
+            # ✅09181018【更正】主帥 09/18 10:18 指正：09/24 丙案的「已寄發過通知信的投資標的，當天不再寄」
+            #   ★★★【進場與出場都適用】，★不是只有進場；★★出場只是【不併入合併信】，仍單獨即時寄。
+            #   ★09180924 版只把每日一次套在進場，出場每根K棒照寄 → 主帥 10:18：「你竄改我的命令」，本輪更正。
+            #   ★每日一次以【標的＋方向】計（多方＝買進與平倉；空方＝做空與回補），09/18 09:24 已向主帥申報此計法。
+            if daily_once and sig in ('buy', 'buyD', 'sell', 'sellD', 'close', 'cover'):
+                _side = 'long' if sig in ('buy', 'buyD', 'close') else 'short'
                 if _claim_alert_firebase(f'dailyone_{c}_{_side}', _day) is False:
                     print(f'  🔕 每日一封：{tk} {_side} 今日已通知過 → 跳過')
                     continue
-                _merge_buf.append(_intraday_body(tk, label, sig, name, df, gates, routes, _is_long_sig, _now))
-                print(f'  📥 每日一封：{tk} {label} {name} 併入本輪合併信')
-                if _sig_head[0] is None:
-                    _sig_head[0] = (icon, name)
-                continue
+                if sig in ('close', 'cover'):
+                    pass   # 出場：占用當日額度，但★不併入合併信，往下走單獨即時寄出
+                if sig in ('buy', 'buyD', 'sell', 'sellD'):
+                    _merge_buf.append(_intraday_body(tk, label, sig, name, df, gates, routes, _is_long_sig, _now))
+                    print(f'  📥 每日一封：{tk} {label} {name} 併入本輪合併信')
+                    if _sig_head[0] is None:
+                        _sig_head[0] = (icon, name)
+                    continue
             body = "☁️【雲端】" + _intraday_body(tk, label, sig, name, df, gates, routes, _is_long_sig, _now)
             _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
             _ok = send_gmail(f"☁️【雲端】{icon}{_rt}{title}{label}{name} {tk} - {_now}", body, urgent=True)
@@ -5364,6 +5379,8 @@ def scan_stock_intraday_global():
         for c in list(HOLDINGS_US) + list(HOLDINGS_CRYPTO) + list(HOLDINGS_FX) + list(HOLDINGS_GOLD):
             long_set.add(str(c).upper()); _add(c)
         for c in short_set:
+            _add(c)
+        for c in WATCH_SHORT_LIST:   # ✅09181029 觀察做空清單：只掃描、不列入持倉集合 → 只有做空進場，不會有回補
             _add(c)
         try:
             for it in (_load_watchlist() if WATCHLIST_ENABLED else []) or []:
@@ -6501,10 +6518,14 @@ def main_task():
             market, code, *_ = s
             # ✅08091843 賣出同步改為【日盤/夜盤各自獨立】（與買進對稱）
             key = f"{market}_{code}_SELL_{_sess_now}"
+            # ✅09181018【每日一封】出場同樣適用（主帥 09/18 10:18 指正）：美股、虛擬幣、外匯、黃金、基金
+            #   ★同一標的當天一次；台股維持原額度（日盤 3、夜盤 2）。
+            _once_mkts_s = ('美股', '美股回補', '虛擬幣', '虛擬幣回補', '外匯', '外匯回補', '黃金', '黃金回補', '債券基金', '基金', '美股做空')
+            _mx_s = 1 if market in _once_mkts_s else _sess_max
 
             # ✅08091324【🔴A 對稱處理】賣出訊號有完全相同的雲端並行重複風險，
             #   只修買進會留半套，故一併改用原子佔位。
-            if _claim_notify_slot(key, today, notified, _sess_max):
+            if _claim_notify_slot(key, today, notified, _mx_s):
                 filtered.append(s)
 
         if filtered:
