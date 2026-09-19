@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09192346'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09200022'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -1677,6 +1677,7 @@ def _digest_window_now(_now=None):
 
 # ✅08301755【ＡＭ１④】睡眠時段產生的非急迫通知暫存區（延發不是丟棄）
 _PENDING_DIGEST = []
+_POS_ALERTED = False   # ✅09200022 持倉寫入失敗告警：本次執行只寄一次
 
 def _flush_digest():
     """✅08301755【ＡＭ１④】把暫存的非急迫通知合併為一封寄出"""
@@ -4485,6 +4486,31 @@ def _save_futures_position(is_long, is_short, note=''):
         print(f"  ⚠️ 持倉狀態寫入失敗：{str(_e)[:60]}")
         return False
 
+def _persist_or_alert(is_long, is_short, note=''):
+    """✅09200022【持倉寫入失敗告警】待辦第 9 項：_save_futures_position 的 8 個呼叫點
+    ★全都沒有檢查回傳值；★★寫入失敗時記憶體說有持倉、雲端沒有，
+    ★★★下一次執行（全新行程）就讀不到持倉 → 平倉訊號永遠不會發（主帥最在意的漏逃命）。
+    ・本函式包一層：寫入失敗時【立刻寄急迫告警】，並在本次執行內只寄一次。
+    ・★不改變任何策略判斷，★★只補上失敗的可見性。
+    """
+    _ok = _save_futures_position(is_long, is_short, note)
+    if _ok is False and FUTURES_POS_PERSIST:
+        global _POS_ALERTED
+        if not _POS_ALERTED:
+            _POS_ALERTED = True
+            _msg = (f"☁️【雲端】⚠️【持倉狀態寫入失敗】⚠️\n"
+                    f"動作：{note}\n"
+                    f"影響：★本次記錄的持倉狀態【沒有存進雲端】；\n"
+                    f"　　　★★下一次執行會讀不到，★★★平倉／回補訊號可能不會發出。\n"
+                    f"建議：檢查 Firebase 憑證（{FIREBASE_CRED_ENV}）是否設定、額度是否用盡。")
+            try:
+                send_gmail("☁️【雲端】⚠️持倉狀態寫入失敗（可能漏發平倉）", _msg, urgent=True)
+            except Exception:
+                pass
+        print(f"  ❌ 持倉寫入失敗：{note} → 已寄急迫告警（本次執行只寄一次）")
+    return _ok
+
+
 def _txf_data_window(wd, tv):
     """★資料源可用時段（★不是台指期真實交易時段）。
     ★★條件W 與期貨5分K 目前抓 ^TWII（加權指數），★只有 09:00~13:30 有新K棒。
@@ -5632,16 +5658,16 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 # ✅09170232 P0② 15分K 進場同步寫入持倉狀態（比照 5分K），平倉／回補才能查到 15分K 建立的倉位
                 if _dir == 'buy':
                     _futures_is_holding = True;  _futures_is_short = False
-                    _save_futures_position(True, False, f'15mk買進 {_tk}')
+                    _persist_or_alert(True, False, f'15mk買進 {_tk}')
                 elif _dir == 'close':
                     _futures_is_holding = False
-                    _save_futures_position(False, _futures_is_short, f'15mk平倉 {_tk}')
+                    _persist_or_alert(False, _futures_is_short, f'15mk平倉 {_tk}')
                 elif _dir == 'sell':
                     _futures_is_short = True;  _futures_is_holding = False
-                    _save_futures_position(False, True, f'15mk做空 {_tk}')
+                    _persist_or_alert(False, True, f'15mk做空 {_tk}')
                 else:
                     _futures_is_short = False
-                    _save_futures_position(_futures_is_holding, False, f'15mk平空回補 {_tk}')
+                    _persist_or_alert(_futures_is_holding, False, f'15mk平空回補 {_tk}')
             except Exception as _e:
                 print(f'  ⚠️ 15分K：{_tk} 掃描異常（{str(_e)[:60]}）')
     except Exception as _e:
@@ -6342,7 +6368,7 @@ def main_task():
                         _futures_is_holding = True
                         _futures_is_short   = False
                         print(f"  📌 持倉狀態已標記：is_futures_holding=True")
-                        _save_futures_position(True, False, f'5mk買進 {ticker}')  # ✅09022055
+                        _persist_or_alert(True, False, f'5mk買進 {ticker}')  # ✅09022055
 
                 elif (_futures_is_holding and stage_pass(df5, True, entry=False)
                       and (_exit_stage1_ok(_df60_5mk, True, '^TWII 60分K') or _exit_stage1_ok(_dfe60, True, 'EWT 60分K'))):
@@ -6376,7 +6402,7 @@ def main_task():
                         print(f"  {'✅' if _ok else '❌'} {ticker} 5分K平倉訊號{'已發送' if _ok else '發送失敗'}")
                         # ✅ 方案A：平倉訊號發出 → 清除持倉狀態
                         _futures_is_holding = False
-                        _save_futures_position(False, _futures_is_short, '5mk平倉')  # ✅09022055
+                        _persist_or_alert(False, _futures_is_short, '5mk平倉')  # ✅09022055
                         print(f"  📌 持倉狀態已清除：is_futures_holding=False")
                 # ✅【做空訊號】三道關卡通過且接近布林上軌，且深夜無空倉
                 # ✅09022055 窗外禁開新空倉（同買進，★出場才是窗外允許的動作）
@@ -6411,7 +6437,7 @@ def main_task():
                         print(f"  {'✅' if _ok else '❌'} {ticker} 做空訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short   = True
                         _futures_is_holding = False   # 做空時清除多倉
-                        _save_futures_position(False, True, f'5mk做空 {ticker}')  # ✅09022055
+                        _persist_or_alert(False, True, f'5mk做空 {ticker}')  # ✅09022055
                         print(f"  📌 空倉狀態已標記：is_futures_short=True")
 
                 # ✅【空倉回補（平空）】RSI↑ AND MACD柱↑ AND 近布林下軌 → 回補平倉
@@ -6442,7 +6468,7 @@ def main_task():
                         _ok = send_gmail(f"☁️【雲端】🟢期貨5分K平空回補 {ticker} - {now_str_f}", msg, urgent=True)
                         print(f"  {'✅' if _ok else '❌'} {ticker} 平空回補訊號{'已發送' if _ok else '發送失敗'}")
                         _futures_is_short = False
-                        _save_futures_position(_futures_is_holding, False, '5mk平空回補')  # ✅09022055
+                        _persist_or_alert(_futures_is_holding, False, '5mk平空回補')  # ✅09022055
                         print(f"  📌 空倉狀態已清除：is_futures_short=False")
 
                 else:
