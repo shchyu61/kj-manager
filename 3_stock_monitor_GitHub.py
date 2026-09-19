@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09190211'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09191108'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -363,7 +363,7 @@ CONDW_ENABLE_15MK    = True   # 條件W 是否併用15分K（與5分K 為 OR，�
 CONDW_ENABLE_SHORT   = True   # 條件W 是否做空方（Λ轉→建議 buy PUT）
 # ── ✅09022155【★★★依交接文件第六章「條件W 定稿規格」回正】────────────
 #   ★交接文件(09020802) 第六章②白紙黑字：
-#     「★★兩個方向的 K 棒根數一律 ★N ＝ 5（★不是事不過三的 3）」
+#     「★★兩個方向的 K 棒根數一律 ★N ＝ 5（★不是近5根同時滿足碰軌與轉折的 3）」
 #   ★★但程式一直借用 BUY_LOOKBACK_5MK = 54（那是【期貨5分K】的根數），
 #     ★★★而 09021330 我加 15分K 時又依 54÷3 推出 18 —— ★兩個都不是 5。
 #   ★這不是我這幾天新造的錯，★★是既有偏差而我【沿用且擴大】了它。
@@ -383,12 +383,12 @@ CONDW_ENABLE_SHORT   = True   # 條件W 是否做空方（Λ轉→建議 buy PUT
 #     「我要的是【★訊號較敏感、觸發較頻繁，★★符合定稿『寧可多報，不可放過一個』】。
 #       至於這個是甲還是乙，我看不懂？由AI依照這個原則決定。」
 #   → ★碰軌丙案後不再等比換算：★★兩個週期一律近 5 根。
-#   ★★★與交接文件第六章②「N＝5」的關係：★該定稿的脈絡是「事不過五 vs 事不過三」
-#     （原文括號寫「不是事不過三的 3」），★★是在 3 與 5 之間選 5；
+#   ★★★與交接文件第六章②「N＝5」的關係：★該定稿的脈絡是「事不過五 vs 近5根同時滿足碰軌與轉折」
+#     （原文括號寫「不是近5根同時滿足碰軌與轉折的 3」），★★是在 3 與 5 之間選 5；
 #     ★★★而 54／18 是【K棒等比換算】後的實際根數，★是另一個維度。
 #     ★主帥當下的明確要求優先（交接文件第七章末明文），★★故採 54／18。
 # ✅09170846【碰軌丙案】條件W 5分K／15分K 近N根一律 5 根（主帥 09/17 08:46）。★上方 09021330 選 54／18 的推論已作廢；
-#   凍結清單 F-21 同步改為 5（原 54／18）。與主帥最早定稿「N＝5（不是事不過三的 3）」一致。
+#   凍結清單 F-21 同步改為 5（原 54／18）。與主帥最早定稿「N＝5（不是近5根同時滿足碰軌與轉折的 3）」一致。
 # ✅09170937【54／18 與 5 是什麼．主帥 09/17 09:37 要求加註，避免日後忘記】
 #   ・「近N根」＝回頭看幾根K棒，用在條件W 的條件A（近N根曾碰下軌＋V轉）與條件B（近N根都在中軌下＋MACD柱連縮後放大）。
 #   ・（舊值 54／18 的由來與失效原因見檔尾【附錄．程式註解沿革存查】）
@@ -3088,24 +3088,13 @@ def get_weekly_option_hint(current_price, signal_type):
         return ""
 
 def _full_third_gate(df, is_long):
-    """✅09180937【全市場掃描第三道】主帥 09/18 00:00：「全市場掃描（通知信命名長期／中期投資）│ 月K OR 週K │ 日K │
-    5分K OR 15分K（不含條件D，我不讓家人親友房客追高造成賠錢機率大增！）」。
-    ・規則與主帥專用即時路線第三道【相同】，唯一差別是【不含條件D】（不一國兩制，主帥 09/18 00:00）。
-    ・內容：(條件A/B/C OR 條件E OR eLeader) AND 前1根→當根轉折（多方 RSI↑ 且 MACD柱↑；空方鏡像）AND RSI 門檻。
-    ・近 N 根碰軌已含在 check_buy_precondition／check_short_precondition 內（BUY_LOOKBACK_BARS＝5）。
+    """✅09191108【全市場掃描第三道．改用 stage_pass】主帥 09/18 00:00：5分K OR 15分K、不含條件D；
+    ★09/19 09:43「乙的加強版」後，判斷內容與主帥專用路線【完全相同】：
+      碰軌(近5) AND OSC 前置(前2→前1) AND 轉折(前1→當根，以最高／最低價) AND 前1根實體。
+    ★★條件E／eLeader 不再單獨使第三道成立（原式讓它們可獨立通過，是 MMM 誤發的成因之一）。
     """
-    try:
-        if df is None or len(df) < 30 or 'rsi14' not in df.columns or 'macd_hist' not in df.columns:
-            return False
-        _r0 = float(df['rsi14'].iloc[-2]); _r1 = float(df['rsi14'].iloc[-1])
-        _m0 = float(df['macd_hist'].iloc[-2]); _m1 = float(df['macd_hist'].iloc[-1])
-        if is_long:
-            _cond = bool(check_buy_precondition(df)[0] or check_condE_long(df) or (check_buy_eleader(df) is not None))
-            return bool(_cond and _r1 > _r0 and _m1 > _m0 and _r1 > BUY_RSI_MIN)
-        _cond = bool(check_short_precondition(df)[0] or check_condE_short(df) or (check_short_eleader(df) is not None))
-        return bool(_cond and _r1 < _r0 and _m1 < _m0 and _r1 < (100 - BUY_RSI_MIN))
-    except Exception:
-        return False
+    return stage_pass(df, is_long, entry=True)
+
 
 
 def scan_stock(ticker, is_holding=False, _mode_label=None):
@@ -3258,10 +3247,10 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         _df_1d = calc_indicators(_df_1d) if _df_1d is not None and len(_df_1d) >= 20 else None
 
         if _is_long_ok:
-            # ✅ v05191855：第二道 = 日K A/B/C/E（事不過三）OR 日K F(eLeader)
-            _2nd_abc = (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_1d, n=3) or
+            # ✅ v05191855：第二道 = 日K A/B/C/E（近5根同時滿足碰軌與轉折）OR 日K F(eLeader)
+            _2nd_abc = (stage_pass(_df_1d, True, entry=True) or
                         (_df_1d is not None and check_condE_long(_df_1d))) if _df_1d is not None else False
-            _2nd_el  = signal_within_n(lambda d: check_buy_eleader(d) is not None, _df_1d, n=3) if _df_1d is not None else False
+            _2nd_el  = False   # ✅09191108 eLeader 不再單獨使一道通過（併入 stage_pass） if _df_1d is not None else False
             is_eleader_ok = _2nd_abc or _2nd_el
             if _condD_long:
                 # ✅ v05192327：高位階第二道 = 日K 條件D OR F（可選，不強制）
@@ -3274,10 +3263,10 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 if not is_eleader_ok:
                     return None
         else:
-            # ✅ v05191855：做空第二道 = 日K A/B/C/E（事不過三）OR 日K F(做空eLeader)
-            _2nd_sabc = (signal_within_n(lambda d: check_short_precondition(d)[0], _df_1d, n=3) or
+            # ✅ v05191855：做空第二道 = 日K A/B/C/E（近5根同時滿足碰軌與轉折）OR 日K F(做空eLeader)
+            _2nd_sabc = (stage_pass(_df_1d, False, entry=True) or
                          (_df_1d is not None and check_condE_short(_df_1d))) if _df_1d is not None else False
-            _2nd_sel  = signal_within_n(lambda d: check_short_eleader(d) is not None, _df_1d, n=3) if _df_1d is not None else False
+            _2nd_sel  = False   # ✅09191108 eLeader 不再單獨使一道通過（併入 stage_pass） if _df_1d is not None else False
             is_eleader_short_ok = _2nd_sabc or _2nd_sel
             if _condD_short:
                 # 條件D空頭（高位階）→ eLeader 為可選
@@ -3621,10 +3610,10 @@ def scan_limit_up():
                     _yf.download(_ticker, period='1y', interval='1d', progress=False))
 
                 _ok_mo = (_df_mo is not None and
-                    (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_mo, n=3) or
+                    (stage_pass(_df_mo, True, entry=True) or
                      check_condE_long(_df_mo) or check_buy_eleader(_df_mo) is not None))
                 _ok_wk = (_df_wk is not None and
-                    (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_wk, n=3) or
+                    (stage_pass(_df_wk, True, entry=True) or
                      check_condE_long(_df_wk) or check_buy_eleader(_df_wk) is not None))
 
                 if not (_ok_mo or _ok_wk):
@@ -3632,7 +3621,7 @@ def scan_limit_up():
 
                 # 日K第二道確認
                 _ok_dk = (_df_dk is not None and
-                    (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_dk, n=3) or
+                    (stage_pass(_df_dk, True, entry=True) or
                      check_condE_long(_df_dk)))
 
                 _period = '月K+週K' if (_ok_mo and _ok_wk) else ('月K' if _ok_mo else '週K')
@@ -3884,9 +3873,9 @@ def _print_scan_summary(buy_signals, sell_signals):
 
 
 def signal_within_n(check_func, df, n=3, reverse_check=None):
-    # ✅09170846 ★n=3 的意思：事不過三（主帥 09/17 08:46 裁示保留 3）：訊號在【最近 3 根K棒】內出現過、且之後沒有出現反轉訊號，就仍算有效＝「訊號有效期」。★與「近5根碰軌」是兩件事，不可混用
+    # ✅09170846 ★n=3 的意思：近5根同時滿足碰軌與轉折（主帥 09/17 08:46 裁示保留 3）：訊號在【最近 3 根K棒】內出現過、且之後沒有出現反轉訊號，就仍算有效＝「訊號有效期」。★與「近5根碰軌」是兩件事，不可混用
     #   例：月K 前2根曾發出買進訊號、之後沒有賣出訊號 → 本根仍視為第一道通過。
-    """✅ v05181836：事不過三 — 過去n根K棒內有訊號且無反轉，全市場通用
+    """✅ v05181836：近5根同時滿足碰軌與轉折 — 過去n根K棒內有訊號且無反轉，全市場通用
     用法：signal_within_n(check_buy_precondition, df_monthly, n=3)
     說明：不動策略條件，只擴大回看窗口，符合eleader切換週期原則
     """
@@ -4998,17 +4987,25 @@ def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
         except Exception: sE = False
         cF = check_buy_eleader(df) is not None
         sF = check_short_eleader(df) is not None
-        buy_n = bool(g1l and g2l and (cA or cB or cE or cF) and r_now > BUY_RSI_MIN and t_lo)
+        # ✅09191108【第三道改用 stage_pass】主帥 09/19 09:43「乙的加強版」：三道同一套規則。
+        #   ★一般進場：第一道 AND 第二道 AND 第三道(stage_pass)；★★條件E／eLeader 不再單獨使第三道成立。
+        _s3_long  = stage_pass(df, True,  entry=True)
+        _s3_short = stage_pass(df, False, entry=True)
+        buy_n = bool(g1l and g2l and _s3_long and r_now > BUY_RSI_MIN)
         #   ★★★【為什麼是 AND】主帥 09/18 02:34、09:37：早期第一道＝月K、第二道＝週K，由大至小，
         #     ★那時寫 or 是對的（月K 或 週K 任一達標即可）；
         #     ★★現在第一道本身已經是【月K OR 週K】（短線是【日K OR ^TWII 60分K OR EWT 60分K】），
         #     ★★★『二擇一』已經在第一道內部完成，所以第一道與第二道之間必須是 AND，條件D 才有前兩道保護。
         buy_d = bool(g1l and g2l and check_condD_long(df))        # ✅09180234 條件D：第一道 AND 第二道
-        sell_n = bool(g1s and g2s and (sA or sB or sE or sF) and r_now < SHORT_RSI_MAX and t_hi)
+        sell_n = bool(g1s and g2s and _s3_short and r_now < SHORT_RSI_MAX)
         sell_d = bool(g1s and g2s and check_condD_short(df))      # ✅09180234 條件D 空方鏡像
         buy, sell = (buy_n or buy_d), (sell_n or sell_d)
-        close = bool(is_long and r_dn and m_dn and t_hi)
-        cover = bool(is_short and r_up and m_up and t_lo)
+        if buy and sell:   # ✅09191108 主帥 09/19 10:15：多空同時成立【兩邊都不發】，寧可空等
+            print('  ⚖️ 多空同時成立 → 依主帥 09/19 10:15 裁示，兩邊都不發進場訊號')
+            buy = sell = False
+        # ✅09191108 出場改用 stage_pass(entry=False)：碰軌方向相反＋OSC 前置＋以最低／最高價判轉折；★不看實體
+        close = bool(is_long and stage_pass(df, True, entry=False))
+        cover = bool(is_short and stage_pass(df, False, entry=False))
         if buy:   return 'buy' if buy_n else 'buyD'     # ✅09171113 buyD／sellD＝只由條件D 路徑觸發
         if close: return 'close'
         if sell:  return 'sell' if sell_n else 'sellD'
@@ -5018,19 +5015,95 @@ def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
         return None
 
 
-def _gate_one(fn_pre, fn_e, fn_el, df, within):
-    """✅09171354 單一週期的一道判斷：(條件A/B/C，within＝True 時用事不過三 n=3) OR 條件E OR eLeader。資料不足回 False。"""
-    if df is None or len(df) < 25:
-        return False
+def _osc_pre_ok(mh, is_long):
+    """✅09191108【OSC 前置】主帥 09/19 10:17、11:08：
+    ・做多進場：前 2 根→前 1 根 OSC【下降】（主帥稱「綠柱」）；做空進場鏡像【上升】。
+    ・★主帥 11:08 定義：「我只看【升降】，不論是綠色還是紅色的柱狀體，
+      我只看【近5根的其中某1根】圓柱有沒有比前1根圓柱高或低」→ ★★只比升降，不看正負。
+    """
     try:
-        a = signal_within_n(lambda d: fn_pre(d)[0], df, n=3) if within else bool(fn_pre(df)[0])   # n=3＝事不過三（訊號有效期）
+        _m2 = float(mh.iloc[-3]); _m1 = float(mh.iloc[-2])
+        return (_m1 < _m2) if is_long else (_m1 > _m2)
     except Exception:
-        a = False
-    try: e = bool(fn_e(df))
-    except Exception: e = False
-    try: f = fn_el(df) is not None
-    except Exception: f = False
-    return bool(a or e or f)
+        return False
+
+
+def _turn_ok(df, is_long):
+    """✅09191108【轉折】前 1 根→當根：OSC 轉向 ＋ 以【最高／最低價】比前 1 根收盤（主帥 09/19 10:47）。
+    ・★主帥原話：月K 若用收盤價，觸發日 9/15 要拖到 9/30 收盤才算數 → ★★當根一律用最高／最低價。
+    ・做多：OSC 轉升 AND 當根最高價 > 前 1 根收盤；做空鏡像（OSC 轉跌 AND 當根最低價 < 前 1 根收盤）。
+    """
+    try:
+        _mh = df['macd_hist']
+        _m1 = float(_mh.iloc[-2]); _m0 = float(_mh.iloc[-1])
+        _c1 = float(df['Close'].iloc[-2])
+        if is_long:
+            return (_m0 > _m1) and (float(df['High'].iloc[-1]) > _c1)
+        return (_m0 < _m1) and (float(df['Low'].iloc[-1]) < _c1)
+    except Exception:
+        return False
+
+
+def _body_ok(df, is_long):
+    """✅09191108【實體】只看【前 1 根】：做多要求前 1 根不得收黑（收盤 ≥ 開盤）；做空鏡像。
+    ・★主帥 09/19 11:08：「當根絕不能用【收盤價】，會拖延到 9/30 才逃命」→ ★★當根不看實體。
+    ・★★★只用於【進場】；出場不套（主帥：連跌 11 根還要等紅K才逃，出場沒有意義）。
+    """
+    try:
+        _o1 = float(df['Open'].iloc[-2]); _c1 = float(df['Close'].iloc[-2])
+        return (_c1 >= _o1) if is_long else (_c1 <= _o1)
+    except Exception:
+        return False
+
+
+def _touch_ok(df, is_long, n=None):
+    """✅09191108【碰軌】近 N 根（預設 TOUCH_LOOKBACK_BARS＝5）：
+    做多看最低價碰下軌、做空看最高價碰上軌；門檻為通道制與百分比制中【較嚴】者。"""
+    try:
+        _n = TOUCH_LOOKBACK_BARS if n is None else n
+        _bt = df['boll_top20'].iloc[-_n:]; _bb = df['boll_bot20'].iloc[-_n:]
+        if is_long:
+            return bool((df['Low'].iloc[-_n:] <= _gate_lower(_bt, _bb)).any())
+        return bool((df['High'].iloc[-_n:] >= _gate_upper(_bt, _bb)).any())
+    except Exception:
+        return False
+
+
+def stage_pass(df, is_long, entry=True):
+    """✅09191108【三道統一判斷】主帥 2026/09/19 09:43「乙的加強版」、10:15～11:08 逐項定義。
+    ★進場（entry=True）：碰軌(近5) AND OSC 前置 AND 轉折 AND 前1根實體。
+    ★★出場（entry=False）：碰軌(近5，方向相反) AND OSC 前置(方向相反) AND 轉折(方向相反)；★不看實體。
+    ★★★第一道／第二道／第三道【都用本函式】，三道之間為 AND（主帥 09/19 10:47 b、c）。
+    ・本函式取代舊的「條件A/B/C＋近5根同時滿足碰軌與轉折」通道：★舊制允許 3 根前的舊訊號仍算數，
+      導致美股 MMM 在月K 前1根轉黑、週K OSC 轉降時仍發出買進（主帥 09/19 09:23 三張截圖）。
+    ・出場方向對照：做多平倉＝看上軌＋OSC 前置上升＋當根最低價跌破前1根收盤（A轉）；做空回補鏡像。
+    """
+    try:
+        if df is None or len(df) < 25 or 'macd_hist' not in df.columns:
+            return False
+        _dir = is_long if entry else (not is_long)      # 出場時碰軌與轉折方向相反
+        if not _touch_ok(df, _dir):
+            return False
+        if not _osc_pre_ok(df['macd_hist'], _dir):
+            return False
+        if not _turn_ok(df, _dir):
+            return False
+        if entry and not _body_ok(df, is_long):
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def _gate_one(fn_pre, fn_e, fn_el, df, within):
+    """✅09191108【單一週期的一道判斷．改寫】主帥 2026/09/19 09:43～11:08：
+    ・★一律呼叫 stage_pass()：碰軌(近5) AND OSC 前置 AND 轉折(高／低價) AND 前1根實體。
+    ・★★【移除舊制】原式為「(條件A/B/C，可套 3 根內有效) OR 條件E OR eLeader」，
+      ★★★該寫法讓 3 根前的舊訊號、或條件E／eLeader 單獨成立即可通過 → 本輪廢除。
+    ・參數 fn_e／fn_el／within 保留以相容呼叫端，★但不再影響判斷結果。
+    """
+    _is_long = (fn_pre is check_buy_precondition)
+    return stage_pass(df, _is_long, entry=True)
 
 
 def _intraday_route_gates(dm, dw, dd, d60, d30):
@@ -5070,12 +5143,12 @@ def _intraday_merge(df, gates, is_long, is_short):
 
 
 def _intraday_gates(df_d, df_30):
-    """✅09171036 第一道（日K，事不過三 n=3）與第二道（30分K）。回傳 (第一道多, 第一道空, 第二道多, 第二道空)。"""
+    """✅09171036 第一道（日K，近5根同時滿足碰軌與轉折 n=3）與第二道（30分K）。回傳 (第一道多, 第一道空, 第二道多, 第二道空)。"""
     def _g(fn_pre, fn_e, fn_el, df, within):
         if df is None or len(df) < 25:
             return False
         try:
-            a = signal_within_n(lambda d: fn_pre(d)[0], df, n=3) if within else bool(fn_pre(df)[0])   # n=3＝事不過三（訊號有效期）
+            a = signal_within_n(lambda d: fn_pre(d)[0], df, n=3) if within else bool(fn_pre(df)[0])   # n=3＝（舊制字樣已移除，見檔尾附錄）
         except Exception:
             a = False
         try: e = bool(fn_e(df))
@@ -5484,7 +5557,7 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                                 break
                     except Exception:
                         continue
-                _close_long  = bool(_futures_is_holding and _r_dn and _m_dn and _x_hi
+                _close_long  = bool(_futures_is_holding and stage_pass(_df, True, entry=False)   # ✅09191108
                                     and _exit_stage1_ok(_df1st_15, True, '15分K 第一道(^TWII/EWT 60分K)'))   # ✅09190152 出場前提
                 _cover_short = bool(_futures_is_short   and _r_up and _m_up and _x_lo)
 
@@ -5989,7 +6062,7 @@ def main_task():
                 #   但判斷邏輯完全相同，符合eleader切換K線週期原則
                 # ✅ v05181836：5分K策略先大後小原則（先日K後EWT 30分K後5分K）
                 # 【正確先大後小架構】：
-                #   第一道 → 日K（事不過三=3個交易日）← 大週期，看整體位階
+                #   第一道 → 日K（近5根同時滿足碰軌與轉折=3個交易日）← 大週期，看整體位階
                 #   第二道 → EWT 30分K（夜盤方向）← 中週期，確認隔夜方向
                 #   進場   → ^TWII 5分K ← 小週期，精確入場時機
                 # 【為何日K在前】：
@@ -6000,16 +6073,16 @@ def main_task():
                 #   ET 09:30~16:00 = 台灣夜盤21:30~04:00
                 #   完整覆蓋台灣夜盤，Yahoo Finance資料穩定
                 import yfinance as _yf30
-                # 第一道：日K（事不過三=3個交易日）
+                # 第一道：日K（近5根同時滿足碰軌與轉折=3個交易日）
                 _df_daily_5mk = _yf30.download(ticker, period='60d', interval='1d', progress=False)
                 if _df_daily_5mk is not None and not _df_daily_5mk.empty:
                     _df_daily_5mk = calc_indicators(_df_daily_5mk)
                     # ✅ v05192327：5分K第一道日K加E和F
-                    # ✅09170846 n=3＝事不過三（訊號有效期：近3根內出現過且未反轉），不是碰軌根數；碰軌在條件A 內一律近5根
-                    _1st_daily_long  = (signal_within_n(lambda d: check_buy_precondition(d)[0], _df_daily_5mk, n=3, reverse_check=check_sell_condition) or
+                    # ✅09170846 n=3＝近5根同時滿足碰軌與轉折（訊號有效期：近3根內出現過且未反轉），不是碰軌根數；碰軌在條件A 內一律近5根
+                    _1st_daily_long  = (stage_pass(_df_daily_5mk, True, entry=True) or
                                         check_condE_long(_df_daily_5mk) or
                                         (check_buy_eleader(_df_daily_5mk) is not None))
-                    _1st_daily_short = (signal_within_n(lambda d: check_short_precondition(d)[0], _df_daily_5mk, n=3) or
+                    _1st_daily_short = (stage_pass(_df_daily_5mk, False, entry=True) or
                                         check_condE_short(_df_daily_5mk) or
                                         (check_short_eleader(_df_daily_5mk) is not None))
                 else:
@@ -6022,9 +6095,9 @@ def main_task():
                     if _df60_5mk is not None and len(_df60_5mk) >= 30:
                         _df60_5mk = calc_indicators(_normalize_df(_df60_5mk))
                         if _df60_5mk is not None:
-                            _1st_60_long  = bool(signal_within_n(lambda d: check_buy_precondition(d)[0], _df60_5mk, n=3, reverse_check=check_sell_condition) or
+                            _1st_60_long  = bool(stage_pass(_df60_5mk, True, entry=True) or
                                                  check_condE_long(_df60_5mk) or (check_buy_eleader(_df60_5mk) is not None))
-                            _1st_60_short = bool(signal_within_n(lambda d: check_short_precondition(d)[0], _df60_5mk, n=3) or
+                            _1st_60_short = bool(stage_pass(_df60_5mk, False, entry=True) or
                                                  check_condE_short(_df60_5mk) or (check_short_eleader(_df60_5mk) is not None))
                 except Exception as _e60:
                     print(f'  ⚠️ {ticker} 60分K 取得失敗（{str(_e60)[:40]}），第一道只看日K')
@@ -6040,9 +6113,9 @@ def main_task():
                     if _dfe60 is not None and len(_dfe60) >= 30:
                         _dfe60 = calc_indicators(_normalize_df(_dfe60))
                         if _dfe60 is not None:
-                            _1st_ewt60_long  = bool(signal_within_n(lambda d: check_buy_precondition(d)[0], _dfe60, n=3, reverse_check=check_sell_condition) or
+                            _1st_ewt60_long  = bool(stage_pass(_dfe60, True, entry=True) or
                                                     check_condE_long(_dfe60) or (check_buy_eleader(_dfe60) is not None))
-                            _1st_ewt60_short = bool(signal_within_n(lambda d: check_short_precondition(d)[0], _dfe60, n=3) or
+                            _1st_ewt60_short = bool(stage_pass(_dfe60, False, entry=True) or
                                                     check_condE_short(_dfe60) or (check_short_eleader(_dfe60) is not None))
                     else:
                         print(f'  ⚠️ EWT 60分K 資料不足，第一道不含 EWT 60分K')
@@ -6248,8 +6321,9 @@ def main_task():
                         print(f"  📌 持倉狀態已標記：is_futures_holding=True")
                         _save_futures_position(True, False, f'5mk買進 {ticker}')  # ✅09022055
 
-                elif (_futures_is_holding and rsi_falling and macd_falling and near_upper
+                elif (_futures_is_holding and stage_pass(df5, True, entry=False)
                       and (_exit_stage1_ok(_df60_5mk, True, '^TWII 60分K') or _exit_stage1_ok(_dfe60, True, 'EWT 60分K'))):
+                    # ✅09191108 出場改用 stage_pass(entry=False)：近5根碰上軌＋OSC 前置上升＋當根最低價跌破前1根收盤
                     # ✅09190152 出場前提：第一道（^TWII 60分K OR EWT 60分K）近5根至少 1 根碰上軌，否則不發平倉（主帥 09/19 01:52）
                     # ── 5分鐘內最多2封上限 ──────────────────────
                     _now_ts = time.time()
