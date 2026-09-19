@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09191108'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09192346'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -4567,8 +4567,12 @@ def _condw_gate3(df, nbars, label):
         _cE = False
     # ✅09170658 更正 09170232 P0③：當根閘門不是刪除，而是改為近 TOUCH_LOOKBACK_BARS 根碰下軌（條件B／E 原本不看碰軌，刪除會變寬鬆）
     _touch_lo = bool((lo.iloc[-TOUCH_LOOKBACK_BARS:] <= _gate_lower(bt.iloc[-TOUCH_LOOKBACK_BARS:], bb.iloc[-TOUCH_LOOKBACK_BARS:])).any())
-    _buy = ((_cA or _cB or _cE) and rsi_up and mac_up
-            and _touch_lo and rsi_now > BUY_RSI_MIN)
+    # ✅09192332【條件W 第三道改用統一判斷】主帥 09/19 09:43「乙的加強版」：條件ABCDEFW 全適用同一套。
+    #   ★原式為 (條件A or B or E) and RSI↑ and MACD↑ and 碰下軌 → ★★條件E 可單獨成立，與三道統一牴觸。
+    #   ★★★改用 stage_pass()：碰軌(近5) AND OSC 前置 AND 轉折(以最高／最低價) AND 前1根實體。
+    #   ・條件W 仍【只跑第三道】，不看第一道、第二道（主帥 09/02 定案，本輪未變）。
+    #   ・5分K 與 15分K 各自呼叫本函式、各自判斷（主帥 09/19 23:32：兩個週期都重要）。
+    _buy = bool(stage_pass(df, True, entry=True) and rsi_now > BUY_RSI_MIN)
 
     # ── 空方鏡像：Λ轉觸頂翻落（★R-08 已於 08/19 撤銷，★★做空為主帥要求）──
     _short = False
@@ -4584,8 +4588,7 @@ def _condw_gate3(df, nbars, label):
             _sE = False
         # ✅09170658 更正 09170232 P0③：改為近 TOUCH_LOOKBACK_BARS 根碰上軌，鏡像多方
         _touch_hi = bool((hi.iloc[-TOUCH_LOOKBACK_BARS:] >= _gate_upper(bt.iloc[-TOUCH_LOOKBACK_BARS:], bb.iloc[-TOUCH_LOOKBACK_BARS:])).any())
-        _short = ((_sA or _sB or _sE) and rsi_dn and mac_dn
-                  and _touch_hi and rsi_now < SHORT_RSI_MAX)
+        _short = bool(stage_pass(df, False, entry=True) and rsi_now < SHORT_RSI_MAX)   # ✅09192332 空方鏡像
 
     print(f"  \u2139\ufe0f 條件W {label}（{n}根）："
           f"RSI={rsi_prev:.1f}→{rsi_now:.1f}({'\u2191' if rsi_up else '\u2193'})  "
@@ -5345,6 +5348,15 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
             #   ★★★【進場與出場都適用】，★不是只有進場；★★出場只是【不併入合併信】，仍單獨即時寄。
             #   ★09180924 版只把每日一次套在進場，出場每根K棒照寄 → 主帥 10:18：「你竄改我的命令」，本輪更正。
             #   ★每日一次以【標的＋方向】計（多方＝買進與平倉；空方＝做空與回補），09/18 09:24 已向主帥申報此計法。
+            # ✅09192346【跨週期去重】主帥 09/18 08:24 截圖檔名即指令：
+            #   「1天內的5分K和15分K，請合併成1封信通知我1次就好」；
+            #   ★主帥 09/19 23:46 再次明示：同一標的第1筆（5分K 或 15分K）先觸發後，
+            #   ★★第2筆的另一個週期【不要再寄】；★★★台股與其他投資種類一律適用。
+            if sig in ('buy', 'buyD', 'sell', 'sellD', 'close', 'cover'):
+                _side_tf = 'long' if sig in ('buy', 'buyD', 'close') else 'short'
+                if _claim_alert_firebase(f'tfonce_{c}_{_side_tf}_{sig in ("close", "cover")}', _day) is False:
+                    print(f'  🔕 跨週期去重：{tk} {_side_tf} 今日已由另一週期通知過 → 跳過')
+                    continue
             if daily_once and sig in ('buy', 'buyD', 'sell', 'sellD', 'close', 'cover'):
                 _side = 'long' if sig in ('buy', 'buyD', 'close') else 'short'
                 if _claim_alert_firebase(f'dailyone_{c}_{_side}', _day) is False:
@@ -5575,6 +5587,11 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 _claim = _claim_alert_firebase(f'f15mk_{_tk}_{_dir}_{_bar}', _day)
                 if _claim is False:
                     print(f'  🔕 15分K：{_tk} 本根({_bar}) {_dir} 已通知過，跳過'); continue
+                # ✅09192346【跨週期去重】主帥 09/18 08:24 截圖、09/19 23:46 再次明示：
+                #   ★同一標的同方向，5分K 與 15分K 只寄第一筆；★★本鍵與 5分K 路徑【共用】。
+                _sess_w = 'day' if (9*60+5 <= (_tw.hour*60+_tw.minute) <= 13*60+30) else 'night'
+                if _claim_alert_firebase(f'futtf_{_tk}_{_dir}_{_sess_w}', _day) is False:
+                    print(f'  🔕 期貨跨週期去重：{_tk} {_dir} 本時段已由另一週期通知過，跳過'); continue
 
                 _now_str = _tw.strftime('%Y/%m/%d %H:%M')
                 _opt = _opt_hint_if_window(_close, 'buy' if _dir in ('buy', 'cover') else 'sell')   # ✅09170255 平倉＝轉弱建議 PUT、回補＝轉強建議 CALL（比照 5分K）
@@ -6295,7 +6312,13 @@ def main_task():
                         and not (_is_night_now and _futures_is_holding)):
                     # ── 5分鐘內最多2封上限 ──────────────────────
                     _now_ts = time.time()
-                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
+                    _twf = datetime.now(pytz.timezone('Asia/Taipei'))
+                    _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
+                    if _claim_alert_firebase(f'futtf_{ticker}_buy_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
+                        print(f'  🔕 期貨跨週期去重：{ticker} buy 本時段已由另一週期通知過，跳過')
+                    else:
+                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                     if len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
@@ -6327,7 +6350,13 @@ def main_task():
                     # ✅09190152 出場前提：第一道（^TWII 60分K OR EWT 60分K）近5根至少 1 根碰上軌，否則不發平倉（主帥 09/19 01:52）
                     # ── 5分鐘內最多2封上限 ──────────────────────
                     _now_ts = time.time()
-                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
+                    _twf = datetime.now(pytz.timezone('Asia/Taipei'))
+                    _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
+                    if _claim_alert_firebase(f'futtf_{ticker}_close_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
+                        print(f'  🔕 期貨跨週期去重：{ticker} close 本時段已由另一週期通知過，跳過')
+                    else:
+                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                     if len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
@@ -6354,7 +6383,13 @@ def main_task():
                 elif (((_fut_short and near_upper) or _fut_short_D) and _entry_allowed   # ✅09170658 近 TOUCH_LOOKBACK_BARS 根碰上軌；✅09170937 條件D 路徑不套碰軌
                       and not (_is_night_now and _futures_is_short)):
                     _now_ts = time.time()
-                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
+                    _twf = datetime.now(pytz.timezone('Asia/Taipei'))
+                    _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
+                    if _claim_alert_firebase(f'futtf_{ticker}_buy_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
+                        print(f'  🔕 期貨跨週期去重：{ticker} buy 本時段已由另一週期通知過，跳過')
+                    else:
+                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                     if len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
@@ -6382,7 +6417,13 @@ def main_task():
                 # ✅【空倉回補（平空）】RSI↑ AND MACD柱↑ AND 近布林下軌 → 回補平倉
                 elif _futures_is_short and rsi_rising and macd_rising and near_lower:   # ✅09170255 回補與平倉同一規則的鏡像（原式沿用做多全套條件）；P0② 查空倉
                     _now_ts = time.time()
-                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
+                    _twf = datetime.now(pytz.timezone('Asia/Taipei'))
+                    _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
+                    if _claim_alert_firebase(f'futtf_{ticker}_buy_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
+                        print(f'  🔕 期貨跨週期去重：{ticker} buy 本時段已由另一週期通知過，跳過')
+                    else:
+                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
                     if len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
