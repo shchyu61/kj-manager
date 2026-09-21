@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09200022'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09220640'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -4944,7 +4944,8 @@ def check_holdings_health():
 
 # ============================================================
 # ✅09171354【兩條路線並行】主帥 13:54「二同意、三合併」：長期／中期（月K OR 週K → 日K → 5分K OR 15分K）＋短線（日K OR 60分K → 30分K → 5分K OR 15分K）
-#   同一檔同一根兩條路線都成立 → 合併成一封；出場（平倉、回補）不看前兩道。
+#   同一檔同一根兩條路線都成立 → 合併成一封。
+#   ✅09220443 主帥 09/22 04:43：出場（平倉、回補）【須長中期出場關卡至少一道成立】，★舊寫法「出場不看前兩道」廢止。
 # ✅09171036【個股短線路線．台股先行】
 #   主帥 09/17 10:05「個股短線全照建議」：先做台股持股清單＋觀察清單（日盤），併入期貨每 5 分鐘排程；持股清單＝持有多倉、做空清單＝持有空倉
 #   ・三道（先大後小，主帥 09/17 08:46 三道丙案）：第一道 日K → 第二道 自身 30分K → 第三道 5分K ＋ 15分K
@@ -5135,6 +5136,21 @@ def _gate_one(fn_pre, fn_e, fn_el, df, within):
     return stage_pass(df, _is_long, entry=True)
 
 
+def _exit_gates(dm, dw, dd, is_long):
+    """✅09220640【出場三道 AND】做多平倉／做空回補的第一道與第二道（第三道在 _intraday_third_gate）。
+    ・主帥 2026/09/19 10:47 b：「a點的規定，同時套用在【第一道】and【第二道】and【第三道】（不是「or」）」
+    ・★★為何是 AND（主帥 09/18 02:34 d、e 要求在旁備註）：早期第一道＝月K、第二道＝週K，寫 or；
+      現在第一道本身已是【月K or 週K】（短線為【日K or 60分K】），★二擇一已在第一道內部完成，
+      ★★★所以第一道與第二道之間必須是 AND。
+    ・各道一律 stage_pass(entry=False)：近5根碰上軌＋OSC 前置上升＋當根以最低價判 A轉；★不看實體（表二④）。
+    回傳 (第一道成立, 第二道成立, 路線名稱)"""
+    m = stage_pass(dm, is_long, entry=False) if dm is not None else False
+    w = stage_pass(dw, is_long, entry=False) if dw is not None else False
+    d = stage_pass(dd, is_long, entry=False) if dd is not None else False
+    nm = '長期+中期出場' if (m and w) else ('長期出場' if m else ('中期出場' if w else ''))
+    return (m or w), d, nm
+
+
 def _intraday_route_gates(dm, dw, dd, d60, d30):
     """✅09171354 主帥專用兩條路線的前兩道。
     長期／中期：第一道＝月K OR 週K、第二道＝日K；短線：第一道＝日K OR 60分K、第二道＝30分K。
@@ -5292,7 +5308,21 @@ def _gate_mark(ok):
     return '✅' if ok else '✗'
 
 
-def _intraday_body(tk, label, sig, name, df, gates, routes, is_long_sig, now_str, stage1_txt='', pos_long=None):
+_MKT_NAME = {'tw': '台股', 'us': '美股', 'crypto': '虛擬幣', 'fx': '外匯', 'gold': '黃金'}   # ✅09220443 主帥 09/22 04:43 b：主旨標明市場別
+
+
+def _band_pos(df):
+    """✅09220443 主帥 09/22 04:43 e、g：信中要看得出當根靠近上軌還是下軌（月K／週K／訊號週期皆用）。"""
+    try:
+        _c = float(df['Close'].iloc[-1]); _t = float(df['boll_top20'].iloc[-1]); _b = float(df['boll_bot20'].iloc[-1])
+        _pct = (_c - _b) / (_t - _b) * 100 if _t > _b else 50.0
+        _w = '靠近上軌' if _pct >= 80 else ('靠近下軌' if _pct <= 20 else '中軌附近')
+        return f"{_w}（位於布林帶 {_pct:.0f}%）"
+    except Exception:
+        return '資料不足'
+
+
+def _intraday_body(tk, label, sig, name, df, gates, routes, is_long_sig, now_str, stage1_txt='', pos_long=None, pos_frames=None):
     """✅09180924【通知信改寫】首行寫清楚多空與動作，碰軌寫明上下軌與第幾根、V轉或A轉，關卡以✅／✗ 表示。"""
     _band, _hit, _turn = _touch_detail(df, is_long_sig)
     _px = float(df['Close'].iloc[-1]); _r0 = float(df['rsi14'].iloc[-2]); _r1 = float(df['rsi14'].iloc[-1])
@@ -5307,12 +5337,23 @@ def _intraday_body(tk, label, sig, name, df, gates, routes, is_long_sig, now_str
             f"・方向：{_dir}\n"
             f"・碰軌（訊號週期 {label}）：{_touch}\n"
             + (f"・出場前提（第一道 {stage1_txt}\n" if stage1_txt else "")
-            + f"・長期／中期（月K OR 週K → 日K）：多方 第一道{_gate_mark(gates['L'][0])} 第二道{_gate_mark(gates['L'][2])}"
-            f"　空方 第一道{_gate_mark(gates['L'][1])} 第二道{_gate_mark(gates['L'][3])}\n"
-            f"・短線（日K OR 60分K → 30分K）：{'未啟用（STOCK_SHORT_ROUTE_ENABLED=False）' if not STOCK_SHORT_ROUTE_ENABLED else ('多方 第一道' + _gate_mark(gates['S'][0]) + ' 第二道' + _gate_mark(gates['S'][2]) + '　空方 第一道' + _gate_mark(gates['S'][1]) + ' 第二道' + _gate_mark(gates['S'][3]))}\n"
-            f"・觸發路線：{'、'.join(routes) if routes else '出場（不看前兩道）'}\n"
-            f"・收盤 {_px:.4f}｜布林上軌 {_bt:.4f}｜下軌 {_bb:.4f}｜RSI {_r0:.1f}→{_r1:.1f}\n"
-            f"・時間：{now_str}")
+            + (  # ✅09220443 主帥 09/22 04:43 f：出場信只顯示【出場方向】那一組（做多出場＝月週K／日K 碰上軌＋A轉；做空回補鏡像）
+                f"・長期／中期出場關卡（第一道 月K OR 週K → AND 第二道 日K）：{'多方出場' if sig == 'close' else '空方回補'}"
+                f" 第一道{_gate_mark(gates['L'][1] if sig == 'close' else gates['L'][0])}"
+                f" 第二道{_gate_mark(gates['L'][3] if sig == 'close' else gates['L'][2])}"
+                f"（★兩道都須✅才寄；第一道＝月K OR 週K）\n"
+                if sig in ('close', 'cover') else
+                f"・長期／中期（月K OR 週K → 日K）：多方 第一道{_gate_mark(gates['L'][0])} 第二道{_gate_mark(gates['L'][2])}"
+                f"　空方 第一道{_gate_mark(gates['L'][1])} 第二道{_gate_mark(gates['L'][3])}\n")
+            + f"・短線（日K OR 60分K → 30分K）：{'未啟用（STOCK_SHORT_ROUTE_ENABLED=False）' if not STOCK_SHORT_ROUTE_ENABLED else ('多方 第一道' + _gate_mark(gates['S'][0]) + ' 第二道' + _gate_mark(gates['S'][2]) + '　空方 第一道' + _gate_mark(gates['S'][1]) + ' 第二道' + _gate_mark(gates['S'][3]))}\n"
+            f"・觸發路線：{'、'.join(routes) if routes else '長中期'}\n"   # ✅09220443 主帥 09/22 04:43 c、d：改為長期／中期進場或出場，★移除「不看前兩道」
+            f"・收盤 {_px:.4f}｜布林上軌 {_bt:.4f}｜下軌 {_bb:.4f}｜RSI {_r0:.1f}→{_r1:.1f}"
+            f"｜MACD柱 {float(df['macd_hist'].iloc[-2]):.4f}→{float(df['macd_hist'].iloc[-1]):.4f}"
+            f"（{'↑' if float(df['macd_hist'].iloc[-1]) > float(df['macd_hist'].iloc[-2]) else '↓'}）\n"
+            f"・位置（{label}）：{_band_pos(df)}\n"   # ✅09220443 主帥 09/22 04:43 e
+            + (f"・位置（月K）：{_band_pos(pos_frames[0])}｜位置（週K）：{_band_pos(pos_frames[1])}\n"
+               if pos_frames else "")   # ✅09220443 主帥 09/22 04:43 g：月K／週K 當根靠近上軌還是下軌
+            + f"・時間：{now_str}")
 
 
 def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=None, daily_once=False):
@@ -5337,18 +5378,20 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
             if not sig:
                 continue
             _stage1_txt = ''
-            if sig in ('close', 'cover'):   # ✅09190152 出場前提：第一道週期近5根至少碰過一次軌道
+            _gdisp = gates
+            if sig in ('close', 'cover'):
+                # ✅09220640【出場三道 AND】主帥 09/19 10:47 b「第一道 and 第二道 and 第三道（不是 or）」；
+                #   09/18 02:05 b「自始自終都強調要第一道（長週期達標），我才會進入到第二道或第三道」。
+                #   ★取代：09190152「只看週K 近5根碰軌」出場前提、09220443「第一道 或 第二道」（皆廢止）。
+                #   ★★第三道已由 _intraday_third_gate 以 stage_pass(entry=False) 判定；此處補上第一道 AND 第二道。
                 _is_l = (sig == 'close')
-                _ok_w = _exit_stage1_ok(frames['dw'].get(tk), _is_l, f'{tk} 週K')
-                _ok_60 = _exit_stage1_ok(frames['d60'].get(tk), _is_l, f'{tk} 60分K') if STOCK_SHORT_ROUTE_ENABLED else False
-                if not (_ok_w or _ok_60):
+                _x1, _x2, _xnm = _exit_gates(frames['dm'].get(tk), frames['dw'].get(tk), frames['dd'].get(tk), _is_l)
+                if not (_x1 and _x2):
+                    print(f"  🛑 {tk} {label} {sig}：出場三道未齊（第一道 月K OR 週K={_x1}、第二道 日K={_x2}）→ 不寄")
                     continue
-                # ✅09190211 信中分開寫兩層週期（主帥 09/19 02:11：「1根K棒代表1週／代表60分鐘」）
-                _s1_df = frames['dw'].get(tk) if _ok_w else frames['d60'].get(tk)
-                _s1_lbl = '週K（1 根＝1 週）' if _ok_w else '60分K（1 根＝60 分鐘）'
-                _sb, _sh, _st = _touch_detail(_s1_df, not _is_l)   # ★平倉看上軌、回補看下軌
-                _stage1_txt = (f"{_s1_lbl}）：近 {TOUCH_LOOKBACK_BARS} 根中第 {_sh} 根碰{_sb}"
-                               if _sh else f"{_s1_lbl}）：近 {TOUCH_LOOKBACK_BARS} 根未碰{_sb}")
+                routes = [_xnm]
+                _gdisp = dict(gates)
+                _gdisp['L'] = ((gates['L'][0], _x1, gates['L'][2], _x2) if _is_l else (_x1, gates['L'][1], _x2, gates['L'][3]))
             if sig in ('buy', 'buyD', 'sell', 'sellD'):   # ✅09180234 守門員只管進場；平倉、回補（出場）不受限制
                 _mb, _ms = _intraday_market_gate(cat if cat else _intraday_cat(c))
                 if sig in ('buy', 'buyD') and not _mb:
@@ -5361,7 +5404,12 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
             if _claim_alert_firebase(f'intraday_{c}_{label}_{sig}_{bar}', _day) is False:
                 print(f'  🔕 個股短線：{tk} {label} {sig} 本根已通知過')
                 continue
-            name = {'buy': '買進', 'buyD': '買進（條件D 追高）', 'close': '平倉（持股出場）', 'sell': '做空', 'sellD': '做空（條件D 追低）', 'cover': '平空回補'}[sig]
+            _mk = _MKT_NAME.get(cat if cat else _intraday_cat(c), '')   # ✅09220443 主帥 09/22 04:43 b
+            name = {'buy': f'買進（{_mk}新倉進場）', 'buyD': f'買進（{_mk}新倉進場．條件D 追高）',
+                    'close': f'平倉（{_mk}持股出場）', 'sell': f'做空（{_mk}新倉進場）',
+                    'sellD': f'做空（{_mk}新倉進場．條件D 追低）', 'cover': f'平空回補（{_mk}持股出場）'}[sig]
+            if sig in ('buy', 'buyD', 'sell', 'sellD'):
+                routes = [r.replace('投資', '進場') for r in routes]   # ✅09220443 主帥 09/22 04:43 c：長期進場／中期進場
             icon = {'buy': '⭐', 'buyD': '⭐', 'close': '🔔', 'sell': '🔻', 'sellD': '🔻', 'cover': '🟢'}[sig]
             _is_long_sig = sig in ('buy', 'buyD', 'close')
             # ✅09190152 碰軌方向修正：多方【平倉】要看【上軌】、空方【回補】要看【下軌】；
@@ -5391,12 +5439,12 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
                 if sig in ('close', 'cover'):
                     pass   # 出場：占用當日額度，但★不併入合併信，往下走單獨即時寄出
                 if sig in ('buy', 'buyD', 'sell', 'sellD'):
-                    _merge_buf.append(_intraday_body(tk, label, sig, name, df, gates, routes, _band_long, _now, _stage1_txt, _is_long_sig))
+                    _merge_buf.append(_intraday_body(tk, label, sig, name, df, _gdisp, routes, _band_long, _now, _stage1_txt, _is_long_sig, (frames['dm'].get(tk), frames['dw'].get(tk))))
                     print(f'  📥 每日一封：{tk} {label} {name} 併入本輪合併信')
                     if _sig_head[0] is None:
                         _sig_head[0] = (icon, name)
                     continue
-            body = "☁️【雲端】" + _intraday_body(tk, label, sig, name, df, gates, routes, _band_long, _now, _stage1_txt, _is_long_sig)
+            body = "☁️【雲端】" + _intraday_body(tk, label, sig, name, df, _gdisp, routes, _band_long, _now, _stage1_txt, _is_long_sig, (frames['dm'].get(tk), frames['dw'].get(tk)))
             _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
             _ok = send_gmail(f"☁️【雲端】{icon}{_rt}{title}{label}{name} {tk} - {_now}", body, urgent=True)
             print(f"  {'✅' if _ok else '❌'} {tk} {title} {label} {name} {routes}")
