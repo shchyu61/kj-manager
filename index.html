@@ -253,7 +253,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09230708</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09220248</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -364,8 +364,8 @@
                     <div class="rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                         <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                         <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                            ✅ 台股：每天 <b>09:03</b>、<b>12:00</b>、<b>22:33</b> 全市場掃描，符合條件寄 Gmail<br>
-                            ✅ 美股/外匯/黃金/虛擬幣：即時路線<b>每小時</b>掃描（每小時 04 分觸發），符合條件寄 Gmail<br>
+                            ✅ 台股：每天 <b>09:05</b>、<b>13:00</b> 自動掃描，符合條件寄 Gmail<br>
+                            ✅ 美股/外匯/黃金：每天 <b>22:35</b>、<b>03:55</b> 自動掃描，符合條件寄 Gmail<br>
                             ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                             <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
                         </div>
@@ -550,7 +550,7 @@
                             <!-- ✅ 05052313：提醒手動診斷與自動掃描無關 -->
                             <span class="text-[10px] leading-relaxed mt-1 block" style="color:#94a3b8;">
                                 ⚙️ 以下各開關與下欄綠色框🔍台股AI預篩清單下方的藍色「啟動AI診斷」，<br>
-                                與每天 09:03／12:00／22:33 雲端自動掃描<b style="color:#e53935;">無關</b>，<br>
+                                與每天 09:03／12:48／22:33 雲端自動掃描<b style="color:#e53935;">無關</b>，<br>
                                 藍色「啟動AI診斷」只針對【持股清單】的已持有股票有效
                             </span>
                         </div>
@@ -696,13 +696,13 @@
                 <div class="flex justify-center mt-3 mb-2">
                     <button onclick="startManualScan()" class="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                 </div>
-                                <div class="text-[10px] text-center leading-relaxed mb-2" style="color:#94a3b8;">💡 「啟動AI診斷」結果僅顯示於螢幕，<b style="color:#e53935;">不會發送Gmail</b>。Gmail由雲端自動掃描發出（台股 09:03／12:00／22:33；美股、外匯、黃金、虛擬幣每小時）</div>
+                                <div class="text-[10px] text-center leading-relaxed mb-2" style="color:#94a3b8;">💡 「啟動AI診斷」結果僅顯示於螢幕，<b style="color:#e53935;">不會發送Gmail</b>。Gmail由09:05／13:00／22:35／03:55 雲端自動掃描發出</div>
                 <!-- ✅ GitHub Actions 自動通知提醒卡 -->
                 <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                     <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                     <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                        ✅ 台股：每天 <b>09:03</b>、<b>12:00</b>、<b>22:33</b> 全市場掃描，符合條件寄 Gmail<br>
-                        ✅ 美股/外匯/黃金/虛擬幣：即時路線<b>每小時</b>掃描（每小時 04 分觸發），符合條件寄 Gmail<br>
+                        ✅ 台股：每天 <b>09:05</b>、<b>13:00</b> 自動掃描，符合條件寄 Gmail<br>
+                        ✅ 美股/外匯/黃金：每天 <b>22:35</b>、<b>03:55</b> 自動掃描，符合條件寄 Gmail<br>
                         ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                         <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
                     </div>
@@ -1045,21 +1045,7 @@
         emailjs.init('5dk4HoCBYIS7ypwiw');
         const EMAILJS_SERVICE  = 'service_q711s3u';  // ✅ v06090756：新Service ID（舊service_knhvcfj OAuth失效）
         const EMAILJS_TEMPLATE        = 'template_oqm4kw9';   // OTP用
-        const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';
-        // ✅09230708【通知三級分類．寄信入口判定】ＡＭ１⑦（嘉義房租版 09230021 提案甲；自檢 (166)）：
-        //   ★急迫＝當下不行動即錯失（本網頁的即時進出場訊號、登入驗證碼、黑名單警示）→ 睡眠時段(21:30~07:30)照寄；
-        //   ★次日有效／一般＝睡眠時段不寄（網頁目前無此兩類；★★日後新增時，判定一律經本函式，不得散落各呼叫點）。
-        //   ★本網頁的自動掃描只在主帥開著瀏覽器時執行，★故其訊號屬【急迫】。
-        window._inQuietHours = function () {
-            const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-            const t = d.getHours() * 60 + d.getMinutes();
-            return t >= 21 * 60 + 30 || t < 7 * 60 + 30;
-        };
-        window._notifyAllowed = function (kind) {
-            if (kind === '急迫') return true;
-            if (window._inQuietHours()) { console.warn('[睡眠時段] 非急迫通知暫不寄：' + kind); return false; }
-            return true;
-        };  // ✅09220248 改為兩版共用的通用通知模板（房租 09220137 提案）：
+        const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';  // ✅09220248 改為兩版共用的通用通知模板（房租 09220137 提案）：
         //   ★呼叫端同時傳 {subject, message}（新）與 {scan_time, signal_count, signal_body}（舊），
         //   ★★主帥在 EmailJS 後台改模板前後【都能正常寄信】，不必同步切換。
 
@@ -2700,7 +2686,7 @@
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
-                if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail,
                     scan_time: scanTime,
                     signal_count: newSignals.length,
@@ -2730,7 +2716,7 @@
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
-                if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail,
                     scan_time: scanTime,
                     signal_count: `賣出 ${newSignals.length}`,
@@ -3277,7 +3263,7 @@
 收盤：${_px.toFixed(2)}｜布林上軌 ${_g.boll.upper.toFixed(2)}｜下軌 ${_g.boll.lower.toFixed(2)}
 RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
 時間：${_now}`;
-                    if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                    await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                         to_email: currentUserEmail, scan_time: _now,
                         signal_count: '期貨15分K 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('期貨15分K 1') + '（' + String(_now) + '）', message: String(_body), });
                 }
@@ -3305,7 +3291,7 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
 ${window._strikeHint(_hit.px, _isCall)}
 ⚠️【未取得即時權利金報價】以上為【距離推估】，尚【未驗證】是否 ≤16 元，下單前請自行確認市價。
 時間：${_now}`;
-                if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail, scan_time: _now,
                     signal_count: '條件W 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('條件W 1') + '（' + String(_now) + '）', message: String(_body), });
             } catch (e) { console.log('條件W：', e); }
@@ -3463,7 +3449,7 @@ ${window._strikeHint(_hit.px, _isCall)}
 RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 時間：${scanTime}`;
                         try {
-                            if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '期貨買進 1',
@@ -3487,7 +3473,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 時間：${scanTime}`;
                         try {
-                            if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '期貨平倉 1',
@@ -3515,7 +3501,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 時間：${scanTime}`;
                         try {
-                            if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '期貨做空 1',
@@ -3540,7 +3526,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
 RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 時間：${scanTime}`;
                         try {
-                            if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                            await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '平空回補 1',
