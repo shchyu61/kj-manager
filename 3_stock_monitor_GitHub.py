@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09231655'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09232204'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -5523,6 +5523,16 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
             if df is None:
                 continue
             sig, routes = _intraday_merge(df, gates, is_long, is_short)   # ✅09171354 兩條路線合併成一封
+            # ✅09232204【即時路線補條件D 出場A／B】09/23 15:03 主帥要求全面查衝突時查出：全市場與持股健檢皆有、即時路線沒有 → 三條路徑不一致。
+            #   ★條件D 進場的持股，第三道另可用條件D 出場A／B；★★仍須通過下方出場三道的第一道 AND 第二道（與全市場一致）
+            if not sig and (is_long or is_short) and _has_condd_entry(tk):
+                try:
+                    if is_long and check_sell_condD(df)[0]:
+                        sig, routes = 'close', []
+                    elif is_short and check_cover_condD(df)[0]:
+                        sig, routes = 'cover', []
+                except Exception as _ecd:
+                    print(f'  ⚠️ {tk} {label} 條件D 出場判斷失敗：{_ecd}')
             if not sig:
                 continue
             _stage1_txt = ''
