@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09230708'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09230055'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -3531,29 +3531,10 @@ def check_overnight_extreme_move():
         if _ewt is None or len(_ewt) < 10:
             return
 
-        # ✅09230708【資料新鮮度守門】主帥 09/23 07:08：13:51、13:56 收盤後收到「夜盤極端異動」，內容文不對題。
-        #   ★根因：本函式原本【沒有任何時間判斷】，台股 12:48 那班全市場掃描也會執行；
-        #     ★★台灣中午美股沒開盤，EWT 最後一根其實是【昨晚美股收盤前】的價位 → 比的是昨晚美股漲跌，不是夜盤。
-        #   ★修正①：EWT 最後一根距今超過 45 分鐘 → 視為非即時（美股未開盤），不判斷、不寄。
-        #   ★修正②：前收改為【前一個美股交易日的最後一根】（原寫 iloc[-20] 只是往前 20 根，不是前收）。
-        try:
-            _last_ts = _ewt.index[-1]
-            _last_ts = _last_ts.tz_localize('UTC') if _last_ts.tzinfo is None else _last_ts
-            _age_min = (_now - _last_ts.tz_convert(_tz)).total_seconds() / 60
-        except Exception:
-            _age_min = 9999
-        if _age_min > 45:
-            print(f"  🔕 EWT 資料非即時（最後一根距今 {_age_min:.0f} 分鐘，美股未開盤）→ 不判斷夜盤極端異動")
-            return
+        # 取最新收盤和前一美股交易日收盤
         _cur_price = _safe_float(_ewt['Close'].iloc[-1])
-        try:
-            _idx_ny = _ewt.index.tz_convert('America/New_York') if _ewt.index.tz is not None else _ewt.index.tz_localize('UTC').tz_convert('America/New_York')
-            _dates = [d.date() for d in _idx_ny]
-            _prev_pos = max(i for i, d in enumerate(_dates) if d < _dates[-1])
-            _prev_close = _safe_float(_ewt['Close'].iloc[_prev_pos])
-        except Exception:
-            print("  🔕 EWT 找不到前一美股交易日收盤 → 不判斷夜盤極端異動")
-            return
+        # 找前一交易日最後收盤（EWT US收盤 = 台灣時間04:00）
+        _prev_close = _safe_float(_ewt['Close'].iloc[-20]) if len(_ewt) >= 20 else _safe_float(_ewt['Close'].iloc[0])
 
         _chg_pct = (_cur_price - _prev_close) / _prev_close * 100
         _twii_base = 45000  # 台指基準點（可隨市況調整）
