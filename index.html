@@ -179,7 +179,7 @@
                 </div>
             </div>
 
-            <!-- 方式A：每日密碼 -->
+            <!-- 方式A：信箱＋密碼（✅09240524 每日密碼機制已廢止並移除殘留，R-17） -->
             <div id="section-daily-key" class="space-y-2 text-left">
                 <div class="divider">已註冊者：信箱 ＋ 密碼快速登入</div>
                 <div class="flex flex-col gap-1">
@@ -257,7 +257,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240247</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240524</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
@@ -956,17 +956,7 @@
                     <div class="text-sm font-black mb-2" style="color:#8a6a40;">當前授權帳號</div>
                     <div id="settings-email" class="font-bold text-xl tracking-tight" style="color:#3a2010;">訪客模式</div>
                 </div>
-                <!-- 需求4：自訂登入密碼 -->
-                <div class="rounded-2xl p-4 space-y-3" style="background:#ede0cc;">
-                    <div class="text-base font-black" style="color:#3a2010;">🔑 修改登入密碼</div>
-                    <div class="text-sm" style="color:#6a4a20;">設定後每日密碼失效，改用此自訂密碼登入</div>
-                    <input type="password" id="new-pw-input" placeholder="輸入新密碼（至少6位）"
-                           class="w-full border-none rounded-xl py-2.5 px-4 text-base font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
-                    <input type="password" id="new-pw-confirm" placeholder="再次確認新密碼"
-                           class="w-full border-none rounded-xl py-2.5 px-4 text-base font-bold outline-none focus:ring-2 focus:ring-amber-400" style="background:#faf4ea;">
-                    <button onclick="saveCustomPassword()" class="w-full py-2.5 rounded-xl font-black text-base text-white transition-all" style="background:#8a4a18;">儲存密碼</button>
-                    <div id="pw-msg" class="text-sm font-black text-center opacity-0" style="color:#1a6a30;"></div>
-                </div>
+                <!-- ✅09240524 原「修改登入密碼」區塊已移除（W-1c）：設定後不影響真正的登入密碼，且以 base64 存入雲端 -->
                 <!-- 匯出匯入（也放帳號頁一份） -->
                 <div class="rounded-2xl p-4 space-y-3" style="background:#ede0cc;">
                     <div class="text-base font-black" style="color:#3a2010;">💾 資料備份與還原</div>
@@ -1501,7 +1491,7 @@
             const _nowHour = new Date().getHours();
             if (_otpData.hour !== _nowHour) { _otpData.count = 0; _otpData.hour = _nowHour; }
             if (_otpData.count >= 3) {
-                showError('本小時已發送3次OTP，請改用每日密碼（601+月日+信箱帳號）登入。'); return;
+                showError('本小時已發送3次OTP，請稍後再試，或改用信箱＋密碼登入。'); return;
             }
 
             // 🔒 60秒冷卻，防止瘋狂點擊
@@ -1848,7 +1838,7 @@
                         + '<span class="text-slate-400 w-9 shrink-0">' + t[0] + '</span>'
                         + '<span class="' + (rUp ? 'text-emerald-500' : 'text-rose-500') + '">RSI ' + r.rsi + (rUp ? '↑' : '↓') + '</span>'
                         + '<span class="' + (mUp ? 'text-emerald-500' : 'text-rose-500') + '">MACD柱' + (mUp ? '↑' : '↓') + '</span>'
-                        + '<span class="text-amber-500">' + (bMap[r.boll_position] || r.boll_position) + '</span>'
+                        + '<span class="text-amber-500">' + window._esc(bMap[r.boll_position] || r.boll_position) + '</span>'
                         + '</div>'
                     );
                 }
@@ -4243,35 +4233,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
 
         // ── 需求4：Firebase儲存自訂密碼 ──────────────────────────
-        window.saveCustomPassword = async () => {
-            const pw  = document.getElementById('new-pw-input').value.trim();
-            const pw2 = document.getElementById('new-pw-confirm').value.trim();
-            const msg = document.getElementById('pw-msg');
-            if (pw.length < 6) { msg.style.color='#8a2020'; msg.innerText='密碼至少6位'; msg.style.opacity='1'; return; }
-            if (pw !== pw2)    { msg.style.color='#8a2020'; msg.innerText='兩次密碼不一致'; msg.style.opacity='1'; return; }
-            try {
-                await initFirebaseAuth();
-                const pwPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(currentUserEmail), 'data', 'settings');
-                await setDoc(pwPath, { customPw: btoa(pw), updatedAt: new Date().toISOString() });
-                msg.style.color='#1a6a30'; msg.innerText='✅ 密碼已儲存！下次可用此密碼登入'; msg.style.opacity='1';
-                document.getElementById('new-pw-input').value='';
-                document.getElementById('new-pw-confirm').value='';
-            } catch(e) { msg.style.color='#8a2020'; msg.innerText='儲存失敗：'+e.message; msg.style.opacity='1'; }
-        };
-
-        // ── 需求4：登入時優先驗證自訂密碼 ───────────────────────
-        const checkCustomPassword = async (email, inputPw) => {
-            try {
-                await initFirebaseAuth();
-                const pwPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
-                const snap = await getDoc(pwPath);
-                if (snap.exists()) {
-                    const data = snap.data();
-                    if (data.customPw) return atob(data.customPw) === inputPw;
-                }
-            } catch(e) {}
-            return null; // null = 無自訂密碼，回退到每日密碼
-        };
+        // ✅09240524【W-1c 舊登入機制殘留清理】主帥 09/24 05:24 同意：移除 saveCustomPassword／checkCustomPassword——前者把密碼以 base64 存入雲端、後者為從未被呼叫的死碼；登入一律走 Firebase 帳號驗證
 
         // ── 首次登入驗證：查詢 Firebase 此信箱是否已通過 OTP 驗證 ──
         const checkEmailVerified = async (email) => {
@@ -4429,12 +4391,12 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     const icon  = l.success ? '✅ 成功' : (isBlocked ? '🚫 黑名單' : '❌ 失敗');
                     const bg    = l.success ? '#f0fff4' : (isBlocked ? '#fff8e8' : '#fff0f0');
                     const bdr   = l.success ? '#6cd47e' : (isBlocked ? '#e8a020' : '#e88888');
-                    const methodTag = l.method ? `<span style="background:#e0d0f0;color:#3a1060;padding:1px 6px;border-radius:8px;font-size:12px;font-weight:900;">${l.method}</span>` : '';
+                    const methodTag = l.method ? `<span style="background:#e0d0f0;color:#3a1060;padding:1px 6px;border-radius:8px;font-size:12px;font-weight:900;">${window._esc(l.method)}</span>` : '';
                     const reasonTag = (l.reason && !isBlocked) ? `<span style="color:#8a4040;font-size:12px;">(${window._esc(l.reason)})</span>` : '';
                     return `<div style="background:${bg};border:1px solid ${bdr};border-radius:0.75rem;padding:0.6rem 0.8rem;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
                             <span style="font-weight:900;font-size:14px;">${icon}</span>
-                            <span style="color:#888;font-size:12px;">${l.time}</span>
+                            <span style="color:#888;font-size:12px;">${window._esc(l.time)}</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <span style="color:#1a1060;font-weight:700;font-size:14px;">🔵 ${window._esc(l.email)}</span>
@@ -4909,7 +4871,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     var el=document.getElementById(labels[i]);
                     if(!snap.exists()||!snap.data().purchases){if(el)el.textContent='';_purchaseCache[dStr]=0;continue;}
                     var recs=JSON.parse(snap.data().purchases),total=0,html='';
-                    Object.values(recs).forEach(function(r){total+=parseFloat(r.amount)||0;html+='<div style="color:#374151;">• '+r.ticker+' '+r.shares+'股 '+r.amount+'元</div>';});
+                    Object.values(recs).forEach(function(r){total+=parseFloat(r.amount)||0;html+='<div style="color:#374151;">• '+window._esc(r.ticker)+' '+r.shares+'股 '+r.amount+'元</div>';});
                     html+='<div style="color:#dc2626;font-weight:900;">小計：'+total.toFixed(0)+'元</div>';
                     if(el)el.innerHTML=html;_purchaseCache[dStr]=total;
                 }
