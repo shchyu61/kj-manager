@@ -253,7 +253,8 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09231003</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240105</span>
+                <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1347,8 +1348,33 @@
             } catch(e) { /* 不影響登入流程 */ }
         };
 
+        // ✅09240105【網頁顯示雲端心跳】主帥 09/24 01:05 核准（ＡＭ１⑧）：顯示雲端最後執行時間；逾 26 小時無成功紀錄或最近一次失敗 → 紅色警示。
+        //   ★只讀不寫；★讀取失敗只顯示黃色提示，不影響登入與其他功能。資料由雲端 write_cloud_heartbeat() 寫入 artifacts/{appId}/public/cloud_heartbeat。
+        window.loadCloudHeartbeat = async function () {
+            const el = document.getElementById('cloud-hb');
+            if (!el) return;
+            try {
+                const snap = await getDoc(doc(window.db, 'artifacts', window.appId, 'public', 'cloud_heartbeat'));
+                if (!snap.exists()) { el.textContent = '☁️ 雲端心跳：尚無紀錄'; el.style.color = '#d97706'; return; }
+                const hb = snap.data() || {};
+                const t = new Date(String(hb.last_run || '').replace(' ', 'T') + '+08:00');
+                const hrs = (Date.now() - t.getTime()) / 3600000;
+                const mmdd = isNaN(hrs) ? '?' : String(hb.last_run).slice(5, 16).replace('-', '/');
+                if (isNaN(hrs) || hrs > 26 || hb.ok === false) {
+                    el.textContent = '⚠️ 雲端異常：最後執行 ' + mmdd + (hb.ok === false ? '（失敗）' : '') + (isNaN(hrs) ? '' : '，已 ' + Math.floor(hrs) + ' 小時');
+                    el.style.color = '#dc2626';
+                } else {
+                    el.textContent = '☁️ 雲端最後執行 ' + mmdd + '（成功，寄出 ' + (hb.sent || 0) + ' 封）';
+                    el.style.color = '#16a34a';
+                }
+            } catch (e) {
+                el.textContent = '☁️ 雲端心跳：讀取失敗'; el.style.color = '#d97706';
+                console.warn('[雲端心跳] 讀取失敗', e);
+            }
+        };
         const completeLogin = async (email, method='OTP') => {
             currentUserEmail = email;
+            setTimeout(() => { try { window.loadCloudHeartbeat && window.loadCloudHeartbeat(); } catch (e) {} }, 1500);   // ✅09240105 登入後讀取雲端心跳（不阻塞登入）
             // 自動登入記錄為「自動登入」，手動登入記錄實際方式（不再假裝是OTP）
             _writeLoginLog(email, true, '', method === '自動登入' ? '自動登入（沿用上次）' : method);
             // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
