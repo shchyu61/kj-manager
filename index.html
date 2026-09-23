@@ -55,6 +55,10 @@
     </script>
 
     <script>
+        // ✅09240247【畫面轉義．(186)】主帥 09/24 02:5x（嘉義房租版 09240227 引述）：「股票PRO版的網頁版也會開放給親友房客用……防堵此bug」
+        //   ★他人可寫的資料（登入紀錄的信箱、原因等）插入畫面前一律轉義，避免夾帶程式碼以主帥身分執行；定義在最前面的一般區塊，全頁可用
+        window._esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+
         // ✅ 全域常數（所有script可存取）
         window._WORKER_URL = 'https://yahoo-proxy.shchyu61.workers.dev';
         window._FM_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wNC0wNyAwNTowMDozNSIsInVzZXJfaWQiOiJzaGNoeXU2MSIsImVtYWlsIjoic2hjaHl1NjFAZ21haWwuY29tIiwiaXAiOiI2MS4yMzEuMTcxLjQ3In0.3uJILpJs-l1IJn3v4ldfI7VqTyvm67J1lW2vR8Vmh3k';
@@ -253,7 +257,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240157</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240247</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
@@ -1638,7 +1642,7 @@
                         <div class="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-black text-blue-600 shadow-inner text-base shrink-0">${s.code[0]}</div>
                         <div class="flex-1 min-w-0">
                             <div class="font-black text-base tracking-tight truncate">${s.code}</div>
-                            <div class="text-[11px] font-black text-slate-400 break-words leading-tight">${name}</div>
+                            <div class="text-[11px] font-black text-slate-400 break-words leading-tight">${window._esc(name)}</div>
                         </div>
                         <button onclick="window.removeStock('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-1 shrink-0">
                             <i data-lucide="x-circle" class="w-5 h-5"></i>
@@ -4314,7 +4318,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         <div class="w-11 h-11 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner shrink-0">${s.code[0]}</div>
                         <div class="flex-1 min-w-0">
                             <div class="font-black text-base tracking-tight truncate">${s.code}</div>
-                            <div class="text-[11px] font-black text-slate-400 break-words leading-tight">${name}</div>
+                            <div class="text-[11px] font-black text-slate-400 break-words leading-tight">${window._esc(name)}</div>
                         </div>
                         <button onclick="window.toggleWatchDir('${s.code}')" class="px-2 py-1 rounded-xl text-[11px] font-black shrink-0 ${(s.direction||'long')==='short' ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-700'}">${(s.direction||'long')==='short' ? '▼做空' : '▲做多'}</button>
                         <button onclick="window.removeWatchlist('${s.code}')" class="text-slate-200 hover:text-rose-500 transition-colors p-1 shrink-0"><i data-lucide="x-circle" class="w-5 h-5"></i></button>
@@ -4426,20 +4430,20 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     const bg    = l.success ? '#f0fff4' : (isBlocked ? '#fff8e8' : '#fff0f0');
                     const bdr   = l.success ? '#6cd47e' : (isBlocked ? '#e8a020' : '#e88888');
                     const methodTag = l.method ? `<span style="background:#e0d0f0;color:#3a1060;padding:1px 6px;border-radius:8px;font-size:12px;font-weight:900;">${l.method}</span>` : '';
-                    const reasonTag = (l.reason && !isBlocked) ? `<span style="color:#8a4040;font-size:12px;">(${l.reason})</span>` : '';
+                    const reasonTag = (l.reason && !isBlocked) ? `<span style="color:#8a4040;font-size:12px;">(${window._esc(l.reason)})</span>` : '';
                     return `<div style="background:${bg};border:1px solid ${bdr};border-radius:0.75rem;padding:0.6rem 0.8rem;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
                             <span style="font-weight:900;font-size:14px;">${icon}</span>
                             <span style="color:#888;font-size:12px;">${l.time}</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="color:#1a1060;font-weight:700;font-size:14px;">🔵 ${l.email}</span>
+                            <span style="color:#1a1060;font-weight:700;font-size:14px;">🔵 ${window._esc(l.email)}</span>
                             ${methodTag}${reasonTag}
                         </div>
                     </div>`;
                 }).join('');
             } catch(e) {
-                logList.innerHTML = `<div style="color:#8a2020;padding:0.5rem;">載入失敗：${e.message}</div>`;
+                logList.innerHTML = `<div style="color:#8a2020;padding:0.5rem;">載入失敗：${window._esc(e.message)}</div>`;
             }
         };
 
