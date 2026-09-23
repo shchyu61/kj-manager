@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09221912'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09220640'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -3152,43 +3152,40 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             _df_wk  = calc_indicators(_df_wk) if (_df_wk is not None and len(_df_wk) >= 26) else None
             _df_day = get_stock_data(ticker, period='1y', interval='1d', cache=cache_mid_1wk_1d)
             _df_day = calc_indicators(_df_day) if (_df_day is not None and len(_df_day) >= 26) else None
-            # ✅09221651【出場三道 AND．全市場持股出場】主帥 09/19 10:47 b、09/22 06:40 裁示甲：
-            #   第一道（月K OR 週K）AND 第二道（日K）AND 第三道（5分K OR 15分K），各道 stage_pass(entry=False)、不看實體。
-            #   ★取代：09190152「週K 近5根碰軌＋月週日任一出場」（主帥 09/22 06:40 查出與表二矛盾）。
-            _xl = not _is_short_hold
-            _g1x = stage_pass(_df_mon, _xl, entry=False) or stage_pass(_df_wk, _xl, entry=False)
-            _g2x = stage_pass(_df_day, _xl, entry=False)
-            if not (_g1x and _g2x):
-                print(f"  🔕 {ticker} 持股出場：第一道（月K OR 週K）={_g1x}、第二道（日K）={_g2x} → 不發")
+            # ✅09190152【出場前提】主帥 09/19 01:52：第一道週期（此處＝週K）近5根至少 1 根碰軌，否則不發出場通知。
+            #   ★主帥 09/19 01:27 截圖：美股 O 週K 現價 56.6、上軌 66.16，連續多根遠離上軌仍一直收到平倉信。
+            _exit_ref = _df_wk if (_df_wk is not None and len(_df_wk) >= 26) else _df_mon
+            if not _exit_stage1_ok(_exit_ref, not _is_short_hold, f'{ticker} 週K'):
                 return None
-            _g3x, _g3lbl, _g3df = False, '', None
-            for _lbl3, _per3 in (('5分K', '5d'), ('15分K', '1mo')):
-                try:
-                    _d3 = get_stock_data(ticker, period=_per3, interval=_lbl3.replace('分K', 'm'))
-                    _d3 = calc_indicators(_d3) if (_d3 is not None and len(_d3) >= 26) else None
-                except Exception:
-                    _d3 = None
-                # ✅09221651 條件D 進場的持股，第三道另可用條件D 出場A／B（主帥 09/17 定案，09171113），★不因三道 AND 而取消
-                _cdx = False
-                if _d3 is not None and _has_condd_entry(ticker):
-                    try:
-                        _cdx = bool((check_cover_condD(_d3) if _is_short_hold else check_sell_condD(_d3))[0])
-                    except Exception:
-                        _cdx = False
-                if _d3 is not None and (stage_pass(_d3, _xl, entry=False) or _cdx):
-                    _g3x, _g3lbl, _g3df = True, _lbl3, _d3
-                    break
-            if not _g3x:
-                print(f"  🔕 {ticker} 持股出場：前兩道成立，第三道（5分K OR 15分K）未成立 → 不發")
-                return None
-            _nm3 = '長期+中期出場' if (stage_pass(_df_mon, _xl, entry=False) and stage_pass(_df_wk, _xl, entry=False)) else ('長期出場' if stage_pass(_df_mon, _xl, entry=False) else '中期出場')
-            print(f"  🔔 {ticker} [{_g3lbl}] {_nm3}（三道 AND 成立）")
-            _px3 = float(_g3df['Close'].iloc[-1])
-            if _is_short_hold:
-                return ('COVER', _px3, float(_g3df['Low'].iloc[-1]), float(_g3df['boll_bot20'].iloc[-1]),
-                        float(_g3df['rsi14'].iloc[-1]), float(_g3df['rsi14'].iloc[-2]))
-            return ('SELL', _px3, float(_g3df['High'].iloc[-1]), float(_g3df['boll_top20'].iloc[-1]),
-                    float(_g3df['rsi14'].iloc[-1]), float(_g3df['rsi14'].iloc[-2]))
+            for _lbl, _edf in [('月K', _df_mon), ('週K', _df_wk), ('日K', _df_day)]:
+                if _edf is None or len(_edf) < 26:
+                    continue
+                if _is_short_hold:
+                    # ✅ 做空回補（月/週/日任一），回補取下軌/最低價
+                    _cD, _cMsg = check_cover_condD(_edf) if _has_condd_entry(ticker) else (False, '')   # ✅09171113 只對條件D 進場的持股套用
+                    if _cD:
+                        c_price = float(_edf['Close'].iloc[-1])
+                        print(f'  🔔 {ticker} [{_lbl}] {_cMsg}')
+                        return ('COVER', c_price, float(_edf['Low'].iloc[-1]), float(_edf['boll_bot20'].iloc[-1]),
+                                float(_edf['rsi14'].iloc[-1]), float(_edf['rsi14'].iloc[-2]))
+                    if check_cover_condition(_edf):
+                        c_price = float(_edf['Close'].iloc[-1])
+                        print(f'  🔔 {ticker} [{_lbl}] 做空回補/觸底翻揚觸發')
+                        return ('COVER', c_price, float(_edf['Low'].iloc[-1]), float(_edf['boll_bot20'].iloc[-1]),
+                                float(_edf['rsi14'].iloc[-1]), float(_edf['rsi14'].iloc[-2]))
+                else:
+                    _dD_exit, _dD_msg = check_sell_condD(_edf) if _has_condd_entry(ticker) else (False, '')   # ✅09171113 只對條件D 進場的持股套用
+                    if _dD_exit:
+                        c_price = float(_edf['Close'].iloc[-1])
+                        print(f'  🔔 {ticker} [{_lbl}] {_dD_msg}')
+                        return ('SELL', c_price, float(_edf['High'].iloc[-1]), float(_edf['boll_top20'].iloc[-1]),
+                                float(_edf['rsi14'].iloc[-1]), float(_edf['rsi14'].iloc[-2]))
+                    if check_sell_condition(_edf):
+                        c_price = float(_edf['Close'].iloc[-1])
+                        print(f'  🔔 {ticker} [{_lbl}] 獲利了結/反轉賣出觸發')
+                        return ('SELL', c_price, float(_edf['High'].iloc[-1]), float(_edf['boll_top20'].iloc[-1]),
+                                float(_edf['rsi14'].iloc[-1]), float(_edf['rsi14'].iloc[-2]))
+            return None
 
         # ── 第一道：週K/日K統一用3根（條件A or B）────────────────
         # weekly：用週K 3根
@@ -5121,13 +5118,6 @@ def stage_pass(df, is_long, entry=True):
             return False
         if not _turn_ok(df, _dir):
             return False
-        if not entry:
-            # ✅09221700【出場另看 RSI】主帥 09/22 17:00：「一~三道的當根『RSI』『MACD柱』都要『A轉』」（空方出場鏡像 V轉）；
-            #   ★★只適用平倉／出場，★新倉進場不套（主帥 17:0x：「這只是【平倉或出場】，不是新倉建倉的【買進】」）。
-            #   MACD柱 A轉已由 _osc_pre_ok（前2→前1 上升）＋_turn_ok（前1→當根 下降）判定；此處補 RSI 前1→當根 轉向。
-            _r1 = float(df['rsi14'].iloc[-2]); _r0 = float(df['rsi14'].iloc[-1])
-            if (_r0 >= _r1) if not _dir else (_r0 <= _r1):
-                return False
         if entry and not _body_ok(df, is_long):
             return False
         return True
@@ -5159,37 +5149,6 @@ def _exit_gates(dm, dw, dd, is_long):
     d = stage_pass(dd, is_long, entry=False) if dd is not None else False
     nm = '長期+中期出場' if (m and w) else ('長期出場' if m else ('中期出場' if w else ''))
     return (m or w), d, nm
-
-
-_TW30_CACHE = {'t': 0.0, 'df': None}
-
-
-def _twii30_df():
-    """✅09221700 期貨出場第二道之一：^TWII 30分K（主帥 09/22 17:00：第二道＝^TWII 30分K OR EWT 30分K）。同輪 5 分鐘內共用快取。"""
-    import time as _tm
-    if _TW30_CACHE['df'] is not None and _tm.time() - _TW30_CACHE['t'] < 300:
-        return _TW30_CACHE['df']
-    try:
-        _d = yf.download('^TWII', period='5d', interval='30m', progress=False)
-        _TW30_CACHE['df'] = calc_indicators(_normalize_df(_d)) if (_d is not None and len(_d) >= 20) else None
-    except Exception as _e:
-        print(f'  ⚠️ ^TWII 30分K 取得失敗：{_e}')
-        _TW30_CACHE['df'] = None
-    _TW30_CACHE['t'] = _tm.time()
-    return _TW30_CACHE['df']
-
-
-def _fut_exit_ok(is_long, first_list, second_df, label=''):
-    """✅09221651【期貨出場三道 AND】第一道（日K OR ^TWII 60分K OR EWT 60分K，三擇一）AND 第二道（^TWII 30分K OR EWT 30分K；✅09221700 補 ^TWII）；
-    ★含週三、週五的週選擇權（主帥 09/22 17:00）；各道當根 RSI 與 MACD柱 皆須轉向（多方出場 A轉、空方出場 V轉）；
-    第三道由呼叫端以 stage_pass(5分K／15分K, entry=False) 判定。各道一律出場四項、不看實體（表二④）。
-    主帥 09/19 10:47 b「第一道 and 第二道 and 第三道（不是 or）」；09/22 06:40 裁示甲。取代 09190152「第一道只看碰軌」。"""
-    g1 = any(stage_pass(d, is_long, entry=False) for d in first_list if d is not None)
-    # ✅09221700 第二道＝^TWII 30分K OR EWT 30分K（主帥 09/22 17:00）
-    g2 = any(stage_pass(d, is_long, entry=False) for d in (_twii30_df(), second_df) if d is not None)
-    if not (g1 and g2):
-        print(f"  🔕 期貨{label}{'平倉' if is_long else '回補'}：出場三道未齊（第一道={g1}、第二道 ^TWII／EWT 30分K={g2}）→ 不發")
-    return bool(g1 and g2)
 
 
 def _intraday_route_gates(dm, dw, dd, d60, d30):
@@ -5684,19 +5643,9 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                                 break
                     except Exception:
                         continue
-                # ✅09221651 出場三道 AND：補抓第一道日K 與第二道 EWT 30分K；★回補由舊式 RSI↑ MACD柱↑ 改為與平倉鏡像
-                _df0_15 = _df2nd_15 = None
-                try:
-                    _d0 = yf.download(_tk, period='1y', interval='1d', progress=False)
-                    _df0_15 = calc_indicators(_normalize_df(_d0)) if (_d0 is not None and len(_d0) >= 30) else None
-                    _d2 = yf.download('EWT', period='5d', interval='30m', progress=False)
-                    _df2nd_15 = calc_indicators(_normalize_df(_d2)) if (_d2 is not None and len(_d2) >= 20) else None
-                except Exception as _e15:
-                    print(f'  ⚠️ 15分K 出場第一／二道資料取得失敗：{_e15}')
-                _close_long  = bool(_futures_is_holding and stage_pass(_df, True, entry=False)
-                                    and _fut_exit_ok(True, (_df0_15, _df1st_15), _df2nd_15, '15分K'))
-                _cover_short = bool(_futures_is_short and stage_pass(_df, False, entry=False)
-                                    and _fut_exit_ok(False, (_df0_15, _df1st_15), _df2nd_15, '15分K'))
+                _close_long  = bool(_futures_is_holding and stage_pass(_df, True, entry=False)   # ✅09191108
+                                    and _exit_stage1_ok(_df1st_15, True, '15分K 第一道(^TWII/EWT 60分K)'))   # ✅09190152 出場前提
+                _cover_short = bool(_futures_is_short   and _r_up and _m_up and _x_lo)
 
                 if not (_buy or _sell or _close_long or _cover_short):
                     print(f"  ℹ️ {_tk} 15分K：RSI={_r_now:.1f}({'↑' if _r_up else '↓'})  "
@@ -6221,8 +6170,12 @@ def main_task():
                     _df_daily_5mk = calc_indicators(_df_daily_5mk)
                     # ✅ v05192327：5分K第一道日K加E和F
                     # ✅09170846 n=3＝近5根同時滿足碰軌與轉折（訊號有效期：近3根內出現過且未反轉），不是碰軌根數；碰軌在條件A 內一律近5根
-                    _1st_daily_long  = (stage_pass(_df_daily_5mk, True, entry=True))   # ✅09221912 移除 OR 條件E／eLeader（09/19 已廢止）
-                    _1st_daily_short = (stage_pass(_df_daily_5mk, False, entry=True))   # ✅09221912 移除 OR 條件E／eLeader（09/19 已廢止）
+                    _1st_daily_long  = (stage_pass(_df_daily_5mk, True, entry=True) or
+                                        check_condE_long(_df_daily_5mk) or
+                                        (check_buy_eleader(_df_daily_5mk) is not None))
+                    _1st_daily_short = (stage_pass(_df_daily_5mk, False, entry=True) or
+                                        check_condE_short(_df_daily_5mk) or
+                                        (check_short_eleader(_df_daily_5mk) is not None))
                 else:
                     _1st_daily_long = _1st_daily_short = False
                 # ✅09171354【短線第一道＝日K OR 60分K】二擇一，與長中期「月K OR 週K」同一邏輯
@@ -6233,8 +6186,10 @@ def main_task():
                     if _df60_5mk is not None and len(_df60_5mk) >= 30:
                         _df60_5mk = calc_indicators(_normalize_df(_df60_5mk))
                         if _df60_5mk is not None:
-                            _1st_60_long  = bool(stage_pass(_df60_5mk, True, entry=True))   # ✅09221912 移除 OR 條件E／eLeader（09/19 已廢止）
-                            _1st_60_short = bool(stage_pass(_df60_5mk, False, entry=True))   # ✅09221912 移除 OR 條件E／eLeader（09/19 已廢止）
+                            _1st_60_long  = bool(stage_pass(_df60_5mk, True, entry=True) or
+                                                 check_condE_long(_df60_5mk) or (check_buy_eleader(_df60_5mk) is not None))
+                            _1st_60_short = bool(stage_pass(_df60_5mk, False, entry=True) or
+                                                 check_condE_short(_df60_5mk) or (check_short_eleader(_df60_5mk) is not None))
                 except Exception as _e60:
                     print(f'  ⚠️ {ticker} 60分K 取得失敗（{str(_e60)[:40]}），第一道只看日K')
                 # ✅09172131【二丙．第一道＝日K OR ^TWII 60分K OR EWT 60分K】三擇一，白天與夜盤的 60分K 都兼顧
@@ -6249,8 +6204,10 @@ def main_task():
                     if _dfe60 is not None and len(_dfe60) >= 30:
                         _dfe60 = calc_indicators(_normalize_df(_dfe60))
                         if _dfe60 is not None:
-                            _1st_ewt60_long  = bool(stage_pass(_dfe60, True, entry=True))   # ✅09221912 移除 OR 條件E／eLeader（09/19 已廢止）
-                            _1st_ewt60_short = bool(stage_pass(_dfe60, False, entry=True))   # ✅09221912 移除 OR 條件E／eLeader（09/19 已廢止）
+                            _1st_ewt60_long  = bool(stage_pass(_dfe60, True, entry=True) or
+                                                    check_condE_long(_dfe60) or (check_buy_eleader(_dfe60) is not None))
+                            _1st_ewt60_short = bool(stage_pass(_dfe60, False, entry=True) or
+                                                    check_condE_short(_dfe60) or (check_short_eleader(_dfe60) is not None))
                     else:
                         print(f'  ⚠️ EWT 60分K 資料不足，第一道不含 EWT 60分K')
                 except Exception as _ee60:
@@ -6268,13 +6225,12 @@ def main_task():
                 globals()['BUY_LOOKBACK_BARS'] = BUY_LOOKBACK_DAILY
                 # ✅ v05181836：第一道=日K AND EWT 30分K雙重確認
                 # ✅ v05192327：5分K第二道EWT 30分K加E和F
-                # ✅09221912【期貨進場第二道】主帥 09/22 19:12：「進場的期貨第二道和平倉的第二道一樣要看『第二道（^TWII 30分K OR EWT 30分K）』」
-                #   ★判斷改為表二三道共用的 stage_pass（原為舊式「條件A/B/C OR 條件E OR eLeader」，09/19 已廢止）
-                _tw30_in = _twii30_df()
-                _ewt_long  = bool((stage_pass(df5_d, True, entry=True) if df5_d is not None else False) or
-                                  (stage_pass(_tw30_in, True, entry=True) if _tw30_in is not None else False))
-                _ewt_short = bool((stage_pass(df5_d, False, entry=True) if df5_d is not None else False) or
-                                  (stage_pass(_tw30_in, False, entry=True) if _tw30_in is not None else False))
+                _ewt_long  = ((check_buy_precondition(df5_d)[0] if df5_d is not None else False) or
+                              (check_condE_long(df5_d) if df5_d is not None else False) or
+                              (check_buy_eleader(df5_d) is not None if df5_d is not None else False))
+                _ewt_short = ((check_short_precondition(df5_d)[0] if df5_d is not None else False) or
+                              (check_condE_short(df5_d) if df5_d is not None else False) or
+                              (check_short_eleader(df5_d) is not None if df5_d is not None else False))
                 # ✅09170846【三道丙案．先大後小】第一道＝日K；第二道＝EWT 30分K；第三道＝5分K＋15分K（主帥 09/17 08:34、08:46）
                 #   主帥 09/17 08:34：「所有策略設計理念就是『先大後小』。第一道和第二道週期太長，絕對不能用在期貨。」
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-025）
@@ -6297,7 +6253,7 @@ def main_task():
                 _buy_2nd   = bool(_ewt_long)
                 _short_2nd = bool(_ewt_short)
                 _fut_gates[ticker] = (_1st_long, _1st_short, _buy_2nd, _short_2nd)   # ✅09170937 供 15分K 共用
-                print(f'  {"✅" if (_buy_2nd or _short_2nd) else "❌"} {ticker} 第二道(^TWII 30分K OR EWT 30分K)（多:{_buy_2nd} 空:{_short_2nd}）')
+                print(f'  {"✅" if (_buy_2nd or _short_2nd) else "❌"} {ticker} 第二道(EWT 30分K)（多:{_buy_2nd} 空:{_short_2nd}）')
                 if not (_1st_long or _1st_short or _buy_2nd or _short_2nd) and not (_futures_is_holding or _futures_is_short):
                     print(f'  ❌ {ticker} 第一道、第二道皆未通過且無持倉，跳過'); continue
                 # ✅09170937 原式第一道或第二道未過即 continue，連平倉回補都不檢查 → 有持倉時可能收不到平倉信（已修正）
@@ -6462,9 +6418,8 @@ def main_task():
                         print(f"  📌 持倉狀態已標記：is_futures_holding=True")
                         _persist_or_alert(True, False, f'5mk買進 {ticker}')  # ✅09022055
 
-                elif (_futures_is_holding and stage_pass(df5, True, entry=False)   # ✅09221651 出場三道 AND
-                      and _fut_exit_ok(True, (locals().get('_df_daily_5mk'), locals().get('_df60_5mk'), locals().get('_dfe60')),
-                                       locals().get('df5_d'), '5分K')):
+                elif (_futures_is_holding and stage_pass(df5, True, entry=False)
+                      and (_exit_stage1_ok(_df60_5mk, True, '^TWII 60分K') or _exit_stage1_ok(_dfe60, True, 'EWT 60分K'))):
                     # ✅09191108 出場改用 stage_pass(entry=False)：近5根碰上軌＋OSC 前置上升＋當根最低價跌破前1根收盤
                     # ✅09190152 出場前提：第一道（^TWII 60分K OR EWT 60分K）近5根至少 1 根碰上軌，否則不發平倉（主帥 09/19 01:52）
                     # ── 5分鐘內最多2封上限 ──────────────────────
@@ -6534,9 +6489,7 @@ def main_task():
                         print(f"  📌 空倉狀態已標記：is_futures_short=True")
 
                 # ✅【空倉回補（平空）】RSI↑ AND MACD柱↑ AND 近布林下軌 → 回補平倉
-                elif (_futures_is_short and stage_pass(df5, False, entry=False)   # ✅09221651 出場三道 AND；★取代舊式 RSI↑ MACD柱↑ 近下軌
-                      and _fut_exit_ok(False, (locals().get('_df_daily_5mk'), locals().get('_df60_5mk'), locals().get('_dfe60')),
-                                       locals().get('df5_d'), '5分K')):
+                elif _futures_is_short and rsi_rising and macd_rising and near_lower:   # ✅09170255 回補與平倉同一規則的鏡像（原式沿用做多全套條件）；P0② 查空倉
                     _now_ts = time.time()
                     # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
                     _twf = datetime.now(pytz.timezone('Asia/Taipei'))
