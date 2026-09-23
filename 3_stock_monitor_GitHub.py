@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09232204'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09240157'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -1796,6 +1796,7 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
     try:
         import json, os
         import requests as _req
+        from datetime import timedelta   # ✅09240157 連續天數計算用（模組層未匯入；(180) 抓到）
         cred_json = os.environ.get(FIREBASE_CRED_ENV)
         if not cred_json:
             print('  ⚠️ 心跳未寫入：無 Firebase 憑證')
@@ -1804,21 +1805,53 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         if not token:
             print('  ⚠️ 心跳未寫入：取不到 Firestore token')
             return False
-        _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d %H:%M:%S')   # ✅09231503 原寫 TW_TZ（未定義）→ 心跳自 09230055 起從未寫成功
+        # ✅09240157【心跳升級．比照嘉義房租版 landlord/heartbeat】主帥 09/24 01:57 核准「跟進」：
+        #   ★分開記「最後成功」與「最後執行」——★失敗時不得覆蓋最後成功時間（先讀舊值再寫）；
+        #   ★成功時累積近 7 天成功日期與連續成功天數；★舊欄位 ok／err／sent 保留，相容 09240105 網頁。
+        _tz = pytz.timezone('Asia/Taipei')
+        _dt = datetime.now(_tz)
+        _now = _dt.strftime('%Y-%m-%d %H:%M:%S')
+        _today = _dt.strftime('%Y-%m-%d')
         url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/cloud_heartbeat")
+        _hdr = {"Authorization": f"Bearer {token}"}
+        _old = {}
+        try:
+            _g = _req.get(url, headers=_hdr, timeout=10)
+            if _g.status_code == 200:
+                _old = (_g.json() or {}).get('fields', {}) or {}
+        except Exception:
+            _old = {}
+        _sv = lambda k: (_old.get(k) or {}).get('stringValue', '')
+        _iv = lambda k: int((_old.get(k) or {}).get('integerValue', 0) or 0)
+        _dates = [v.get('stringValue', '') for v in (((_old.get('ok_dates') or {}).get('arrayValue') or {}).get('values') or [])
+                  if v.get('stringValue')]
+        _last_ok, _streak, _total = _sv('last_ok'), _iv('ok_streak'), _iv('sent_total')
+        if ok:
+            _last_ok = _now
+            if _today not in _dates:
+                _yday = (_dt - timedelta(days=1)).strftime('%Y-%m-%d')
+                _streak = (_streak + 1) if (_dates and _dates[-1] == _yday) else 1
+                _dates = (_dates + [_today])[-7:]
+            _total += int(sent)
         payload = {'fields': {
             'last_run': {'stringValue': _now},
+            'last_run_ok': {'booleanValue': bool(ok)},
+            'last_ok': {'stringValue': _last_ok},
+            'last_error': {'stringValue': '' if ok else str(err)[:160]},
+            'sent_total': {'integerValue': str(_total)},
+            'ok_dates': {'arrayValue': {'values': [{'stringValue': d} for d in _dates]}},
+            'ok_streak': {'integerValue': str(_streak)},
             'ok': {'booleanValue': bool(ok)},
             'sent': {'integerValue': str(int(sent))},
             'err': {'stringValue': str(err)[:120]},
             'version': {'stringValue': SCRIPT_VERSION},
         }}
-        r = _req.patch(url, headers={"Authorization": f"Bearer {token}"}, json=payload, timeout=10)
+        r = _req.patch(url, headers=_hdr, json=payload, timeout=10)
         if r.status_code not in (200, 201):
             print(f'  ❌ 心跳寫入失敗：HTTP {r.status_code}')
             return False
-        print(f'  💓 雲端心跳已寫入：{_now}｜成功={ok}｜寄出 {sent} 封｜版本 {SCRIPT_VERSION}')
+        print(f'  💓 雲端心跳已寫入：{_now}｜成功={ok}｜最後成功 {_last_ok or "無"}｜連續 {_streak} 天｜版本 {SCRIPT_VERSION}')
         return True
     except Exception as _e:
         print(f'  ❌ 心跳寫入例外：{str(_e)[:80]}')

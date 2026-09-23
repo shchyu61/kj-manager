@@ -253,7 +253,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240105</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240157</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
@@ -1357,14 +1357,25 @@
                 const snap = await getDoc(doc(window.db, 'artifacts', window.appId, 'public', 'cloud_heartbeat'));
                 if (!snap.exists()) { el.textContent = '☁️ 雲端心跳：尚無紀錄'; el.style.color = '#d97706'; return; }
                 const hb = snap.data() || {};
-                const t = new Date(String(hb.last_run || '').replace(' ', 'T') + '+08:00');
-                const hrs = (Date.now() - t.getTime()) / 3600000;
-                const mmdd = isNaN(hrs) ? '?' : String(hb.last_run).slice(5, 16).replace('-', '/');
-                if (isNaN(hrs) || hrs > 26 || hb.ok === false) {
-                    el.textContent = '⚠️ 雲端異常：最後執行 ' + mmdd + (hb.ok === false ? '（失敗）' : '') + (isNaN(hrs) ? '' : '，已 ' + Math.floor(hrs) + ' 小時');
+                // ✅09240157【升級．比照嘉義房租版】分開看「最後成功」與「最後執行」；相容舊格式（只有 last_run／ok）
+                const lastOk = hb.last_ok || (hb.ok !== false ? hb.last_run : '');
+                const runOk = (hb.last_run_ok !== undefined) ? hb.last_run_ok : hb.ok;
+                const err = hb.last_error || hb.err || '';
+                const toT = s => new Date(String(s || '').replace(' ', 'T') + '+08:00');
+                const md = s => s ? String(s).slice(5, 16).replace('-', '/') : '無';
+                const hrs = lastOk ? (Date.now() - toT(lastOk).getTime()) / 3600000 : NaN;
+                const days = (hb.ok_dates || []).map(d => String(d).slice(5).replace('-', '/')).join('、');
+                el.title = '最後成功：' + md(lastOk) + '\n最後執行：' + md(hb.last_run) + (err ? '\n錯誤：' + err : '')
+                         + (days ? '\n近 7 天成功：' + days : '') + (hb.ok_streak ? '\n連續成功：' + hb.ok_streak + ' 天' : '')
+                         + (hb.version ? '\n雲端版本：' + hb.version : '');
+                if (isNaN(hrs) || hrs > 26) {
+                    el.textContent = '⚠️ 雲端已 ' + (isNaN(hrs) ? '?' : Math.floor(hrs)) + ' 小時沒有成功執行（最後成功 ' + md(lastOk) + (err ? '；錯誤：' + String(err).slice(0, 40) : '') + '）';
                     el.style.color = '#dc2626';
+                } else if (runOk === false) {
+                    el.textContent = '🟡 雲端最近一次執行失敗（' + md(hb.last_run) + '），最後成功 ' + md(lastOk);
+                    el.style.color = '#b45309';
                 } else {
-                    el.textContent = '☁️ 雲端最後執行 ' + mmdd + '（成功，寄出 ' + (hb.sent || 0) + ' 封）';
+                    el.textContent = '☁️ 雲端最後成功 ' + md(lastOk) + (hb.ok_streak ? '｜連續 ' + hb.ok_streak + ' 天' : '') + '（寄出 ' + (hb.sent || 0) + ' 封）';
                     el.style.color = '#16a34a';
                 }
             } catch (e) {
