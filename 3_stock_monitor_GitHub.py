@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09230055'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09221912'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -1707,28 +1707,15 @@ def maybe_flush_digest():
         print(f'  📬 進入 20:30 寄發窗，合併寄出 {len(_PENDING_DIGEST)} 則暫存通知')
         _flush_digest()
 
-NOTIFY_KINDS = ('急迫', '次日有效', '一般')
-_SENT_COUNT = [0]   # ✅09230055 心跳用：本次執行成功寄出的封數   # ✅09230055 嘉義房租版 09230021 提案甲⑦：通知信三級分類
-
-
-def send_gmail(subject, body, urgent=False, kind='一般'):
+def send_gmail(subject, body, urgent=False):
     """✅08301755【ＡＭ１⑥】時段判定放在寄信函式【入口】統一攔截。
     ★不得改放各呼叫點——否則日後新增通知必然漏掉（ＡＫ１８ 型錯誤）。
     urgent=True  → 急迫類，任何時段都直接寄（條件W進場、即時進出場訊號）
     urgent=False → 非急迫類，睡眠時段暫存，於當天 20:30 合併寄出
     """
-    # ✅09230055【三級分類】嘉義房租版 09230021 提案甲⑦（主帥 09/23 00:21：四版通用）：
-    #   ★急迫＝當下不行動即錯失（條件W 進場、即時進出場訊號）→ 睡眠時段照寄；
-    #   ★★次日有效＝內容關乎「明天」（例：奇門隔日偏財日、天赦日）→ 睡眠時段延到次日 07:30 後第一個可寄時點；
-    #   ★★★一般＝睡眠時段暫存，當天 20:30 合併寄出（ＡＭ１④ 現行）。
-    _kind = '急迫' if urgent else (kind if kind in NOTIFY_KINDS else '一般')
-    _shown = subject if os.environ.get('DEBUG_LOG') == '1' else '（主旨不印入公開執行紀錄；DEBUG_LOG=1 才印）'
-    if _kind != '急迫' and _in_quiet_hours():
-        if _kind == '次日有效':
-            print(f"  🌙 睡眠時段(21:30~07:30)，【次日有效】通知延到次日 07:30 後第一個可寄時點：{_shown}")
-            return True
+    if (not urgent) and _in_quiet_hours():
         _PENDING_DIGEST.append((subject, body))
-        print(f"  🌙 睡眠時段(21:30~07:30)，【一般】通知不寄發：{_shown}")
+        print(f"  🌙 睡眠時段(21:30~07:30)，非急迫通知不寄發：{subject}")
         print(f"     → 改由 20:30 排程(cron: 30 12 * * 1-5, UTC)重算後寄出")
         return True
     try:
@@ -1742,8 +1729,7 @@ def send_gmail(subject, body, urgent=False, kind='一般'):
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(GMAIL_ACCOUNT, pwd)
             server.sendmail(GMAIL_ACCOUNT, NOTIFY_EMAIL, msg.as_string())
-        _SENT_COUNT[0] += 1
-        print(f"  ✅ Gmail已發送：{_shown}")   # ✅09230055 公開執行紀錄預設不印主旨
+        print(f"  ✅ Gmail已發送：{subject}")
         return True
     except Exception as e:
         print(f"  ❌ Gmail發送失敗：{e}")
@@ -1751,7 +1737,7 @@ def send_gmail(subject, body, urgent=False, kind='一般'):
         #   程式會若無其事地繼續，主帥永遠不知道信沒寄出去。
         #   （沿革見檔尾【附錄．程式註解沿革存查】H-011）
         _feat_bump('gmail_fail')
-        _feat('gmail_last_err', f"{str(e)[:60]}")   # ✅09230055 錯誤摘要不含主旨（公開紀錄可見）
+        _feat('gmail_last_err', f"{str(e)[:60]}｜主旨:{subject[:30]}")
         return False
 # ============================================================
 # 【６．通知紀錄讀寫函數】
@@ -1784,44 +1770,6 @@ def load_notified_firebase():
     except Exception as e:
         print(f"  ⚠️ Firebase notified 讀取失敗：{e}")
     return {}
-
-def write_cloud_heartbeat(ok=True, sent=0, err=''):
-    """✅09230055【雲端心跳】嘉義房租版 09230021 提案甲⑧：雲端排程每次執行（成功或失敗都算）寫一筆。
-    ★內容：最後執行時間、成功否、寄出封數、錯誤摘要、程式版本。
-    ★★存【獨立文件 cloud_heartbeat】且只由雲端寫入 —— 避免網頁整份存檔以舊值覆蓋（ＡＭ６３ 同型）。
-    ★★★用途：GitHub 公開倉庫連續 60 天無提交會自動停用排程且不通知，心跳是唯一能察覺「根本沒執行」的機制；
-      網頁逾 26 小時無成功紀錄須醒目警示（ＡＭ６０ 變形三）。"""
-    try:
-        import json, os
-        import requests as _req
-        cred_json = os.environ.get(FIREBASE_CRED_ENV)
-        if not cred_json:
-            print('  ⚠️ 心跳未寫入：無 Firebase 憑證')
-            return False
-        token = _firestore_token()
-        if not token:
-            print('  ⚠️ 心跳未寫入：取不到 Firestore token')
-            return False
-        _now = datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M:%S')
-        url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
-               f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/cloud_heartbeat")
-        payload = {'fields': {
-            'last_run': {'stringValue': _now},
-            'ok': {'booleanValue': bool(ok)},
-            'sent': {'integerValue': str(int(sent))},
-            'err': {'stringValue': str(err)[:120]},
-            'version': {'stringValue': SCRIPT_VERSION},
-        }}
-        r = _req.patch(url, headers={"Authorization": f"Bearer {token}"}, json=payload, timeout=10)
-        if r.status_code not in (200, 201):
-            print(f'  ❌ 心跳寫入失敗：HTTP {r.status_code}')
-            return False
-        print(f'  💓 雲端心跳已寫入：{_now}｜成功={ok}｜寄出 {sent} 封｜版本 {SCRIPT_VERSION}')
-        return True
-    except Exception as _e:
-        print(f'  ❌ 心跳寫入例外：{str(_e)[:80]}')
-        return False
-
 
 def save_notified_firebase(data):
     """將 notified 記錄寫入 Firebase（雲端版跨執行共用）"""
@@ -6871,17 +6819,6 @@ def main_task():
 # ============================================================
 # 【１６．執行守門員：精準測試與正式監控切換】
 # ============================================================
-def _run_with_heartbeat(_fn, _label):
-    """✅09230055【心跳包覆】嘉義房租版 09230021 提案甲⑧：★每次執行（成功或失敗都算）都要寫心跳，
-    ★★否則「根本沒執行」與「執行但沒訊號」在主帥眼中完全一樣（ＡＭ６０ 變形三）。"""
-    try:
-        _fn()
-        write_cloud_heartbeat(ok=True, sent=_SENT_COUNT[0], err='')
-    except Exception as _e:
-        write_cloud_heartbeat(ok=False, sent=_SENT_COUNT[0], err=f'{_label}:{str(_e)[:80]}')
-        raise
-
-
 if __name__ == "__main__":
     import time
     from datetime import datetime
@@ -6896,7 +6833,7 @@ if __name__ == "__main__":
 
     if TEST_MODE == 'condW':
         print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三11:30／週四15:05~週五11:30）")   # ✅09170232 清冊Ｋ１５：窗尾依 R-12 為 11:30
-        _run_with_heartbeat(scan_condition_w, 'condW')
+        scan_condition_w()
         time.sleep(3)
         exit()
 
@@ -6906,7 +6843,7 @@ if __name__ == "__main__":
     if TEST_MODE == 'intraday':
         print('🚀 主帥專用即時路線模式（台股＋美股／虛擬幣／外匯／黃金）')
         _merge_firebase_holdings()   # 與 main_task 相同：先合併網頁版登錄的持股
-        _run_with_heartbeat(scan_stock_intraday_tw, 'intraday')
+        scan_stock_intraday_tw()
         scan_stock_intraday_global()
         time.sleep(3)
         exit()
@@ -7005,7 +6942,7 @@ if __name__ == "__main__":
                 print(f"✅ 條件W時窗與台股日盤均已結束，監控結束")
                 break
             try:
-                _run_with_heartbeat(main_task, 'main')   # ✅09230055 心跳包覆
+                main_task()
             except Exception as e:
                 print(f"掃描發生錯誤: {e}")
             # ✅ 05052251：無訊號時5秒後結束（工作排程器每5分鐘自動再觸發）
@@ -7091,7 +7028,7 @@ if __name__ == "__main__":
         current_time = datetime.now(tz).strftime('%H:%M:%S')
         print(f"\n⏰ 第 {i+1}/{loops} 次掃描開始 - {current_time}")
         try:
-            _run_with_heartbeat(main_task, 'main')   # ✅09230055 心跳包覆
+            main_task()
         except Exception as e:
             print(f"掃描發生錯誤: {e}")
 
