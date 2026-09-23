@@ -1,0 +1,288 @@
+# ══════════════════════════════════════════════════════════════
+# ★★★【自我舉證表】(09021415)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
+# ══════════════════════════════════════════════════════════════
+# 結論①：期貨觸發日改為「週一不觸發／週二、週四15:05起／週三、週五到11:30」
+#   來源＝主帥 2026/09/02 14:00 訊息第2點原話（對話視窗，已寫入凍結清單 R-12）
+# 結論②：條件W 窗尾 11:00 → 11:30
+#   來源＝同上。★沿革 10:45(06/30主帥) → 11:00(08/09主帥,R-12) → 11:30(09/02主帥)
+# 結論③：台灣時間 = UTC+8，故 TW 15:05 = UTC 07:05、TW 11:30 = UTC 03:30
+#   來源＝本檔原有註解與既有 cron 換算慣例（stock_scan 08301905 全檔一致）
+# 結論⑥：'5/5 1-5 * * 1-5' 已足以涵蓋平倉監控所需時段
+#   來源＝該班次 UTC01:05~05:55＝台灣09:05~13:55，
+#         ★而 ^TWII 資料源只到 13:30 → ★★cron 略寬，無需新增班次（實算）
+# 結論④：台股盤中極端異動 F-12 必須有獨立班次
+#   來源＝3_stock_monitor_GitHub 第5085行 check_tw_intraday_extreme() 寄生在
+#         期貨5mk 分支內（實讀）→ 期貨縮窗會令其一併消失（已立為 R-13）
+# 結論⑤：condw_scan.yml 的 cron 不需異動
+#   來源＝其現有班次 '*/15 0-3 * * 3'＝UTC00:00-03:59＝台灣08:00-11:59，
+#         ★已完整涵蓋延伸後的 11:30（實算）
+#
+# ★★★【推定清單】★以下【未經實機驗證】，★若推定為假的後果如下：
+#   推定1：GitHub Actions 對 '5/5 7-15 * * 2' 這類「起始分鐘/步進」語法支援正常
+#     ・依據＝本檔原有 '5/5 1-16 * * 2'、'50/5 4-16 * * 1' 已長期在線上運作
+#     ・★推定為假的後果：該班次不觸發 → 週二夜盤無掃描；
+#       ★★可由主帥在 Actions 頁籤觀察是否有排程紀錄，★★★一眼可驗
+#   推定2：移除週一班次不影響其他功能
+#     ・依據＝Job1 台股全量掃描有自己的 '5 1 * * 1-5' 等主班次（未動）
+#     ・★推定為假的後果：週一夜盤台指期完全無監控；★★這是主帥的明確指令
+#   推定3：台指期K棒累積器在週一/三/五夜盤停止累積，影響有限
+#     ・依據＝F-11 標明「階段一只累積不判斷」；Ba_08230324 報告顯示多為死棒
+#     ・★★★推定為假的後果：CTime 去重待辦的資料樣本變少；
+#       ★已列入待辦請主帥裁示是否要另開時窗
+# ══════════════════════════════════════════════════════════════
+# ============================================================
+# GitHub Actions：台股1827支股票和期貨5分K自動掃描排程
+# 檔案位置：.github/workflows/stock_scan.yml
+# 最後更新：2026/08/06 01:05（補傳FINMIND_TOKEN至各job；期貨時段閘門已於.py同步擴展至週二~週五日盤）
+# 說明：新增22:35（證交所20:00後更新資料）
+#   scan job      → 每週一~五 09:03、12:00 和 22:33（台灣時間）自動執行（✅09230708 12:50 改 12:00）
+#   futures-scan  → ✅09021415 改為【條件W 時窗】：週二15:05~週三11:30／週四15:05~週五11:30
+#                   ＋台股極端異動F-12專用班次（週一~週五 09:05~13:30）
+#                   ★ K線週期固定5分K不變，只有觸發頻率深夜較低
+#                   由 Python 自行判斷時段，非時段直接 exit
+#
+# 【深夜01:00~05:00處理邏輯】
+#   cron仍然全時段觸發（讓Python決定要不要跑）
+#   Python判斷：
+#     無持倉 → 直接 exit（省額度）
+#     有持倉 → 只掃平倉條件，不掃買進（保護已建倉部位）
+# 台灣時間 = UTC+8
+# ============================================================
+
+name: 台股1827支股票長期投資和期貨5分K自動掃描通知
+
+on:
+  schedule:
+    # ── 台股1827支股票長期投資掃描：台灣時間 09:05 = UTC 01:05（週一~五）──
+    - cron: '3 1 * * 1-5'
+    # ── 台股1827支股票長期投資掃描：台灣時間 12:00 = UTC 04:00（週一~五）──
+    # ✅09230708 主帥 09/23 07:08：「雲端全市場掃描時間大約是50分鐘……不要是13:00掃描，要改成12:00開始掃描，
+    #   這樣我通知信大約是12:51收到，還來得及進場或出場」（原 12:48 班次約 13:51～13:56 才寄到，已過 13:30 收盤）
+    - cron: '0 4 * * 1-5'
+    # ── 台股1827支股票長期投資掃描：台灣時間 22:35 = UTC 14:35（週一~五）──
+    # ✅ v05171047：新增夜盤後掃描，使用證交所20:00後更新的資料
+    #    避開盤中時段（資料未全）和非盤中時段（Yahoo封鎖風險）
+    - cron: '33 14 * * 1-5'
+    # ✅ v05201555：週六10:00台灣時間全量1827支掃描（UTC 02:00）
+    - cron: '0 2 * * 6'
+    # ── 持股每日健檢【專屬】：台灣時間 20:00 = UTC 12:00（週一~五）✅ 08031611 ──
+    #    原綁22:35那班，因 GitHub Actions 排程延遲(實測約+80分)導致23:55才送達、擾人睡眠。
+    #    健檢無急迫性(收盤後靜態資料)，改用20:00專屬班次；證交所20:00後資料已更新。
+    #    ★此cron僅供 Job3，Job1/Job2 已加 if 守門排除之（見下方各Job）→ 不會誤觸發全量掃描。
+    - cron: '2 12 * * 1-5'
+    # ✅08301755【ＡＭ１④】台灣 20:30 —— 非急迫通知統一寄發時點
+    #   台股盤後資訊 20:00 公布（可能延遲），20:30 重算並寄出睡眠時段跳過的示警。
+    #   ★主帥指示：非急迫通知一律避開 21:30~07:30，改為當天 20:30。
+    - cron: '32 12 * * 1-5'
+
+    # ══ ✅09021415【期貨5分K cron 全面重排】主帥 2026/09/02 14:00 指令 ══
+    #   ★主帥原話：「觸發日也要改成和條件W一樣，週一不再觸發。
+    #     週二和週四，和條件W一樣，15:05開始。週三和週五，也和條件W一樣，到11:30。」
+    #   ★★Python 端 is_futures_time 已直接綁定 _condw_current_window()，
+    #     ★★★本處 cron 必須同步，否則就是 08060105 的老毛病重演
+    #     （「cron 加了但 Python 閘門擋掉」／「閘門開了但 cron 沒叫醒」）。
+    #   ★台灣時間 = UTC+8。★★cron 略寬無妨，實際窗邊界由 Python 把關。
+    #
+    # ── 窗一：週二15:05 ~ 週三11:30（台灣）──
+    # ✅09180312【甲案】期貨改為每小時觸發一次、job 內部迴圈每 5 分鐘（分鐘 08，與全市場掃描 03 分錯開）
+    - cron: '8 7-15 * * 2,4'      # 週二／週四 15:08~23:08(TW) 每小時，內部迴圈補滿至 23:58
+    - cron: '8 16-23 * * 2,4'     # 週三／週五 00:08~07:08(TW) 每小時
+    - cron: '8 0-3 * * 3,5'       # 週三／週五 08:08~11:08(TW) 每小時（窗尾 11:30 由 Python 把關）
+    # ── 窗二：週四15:05 ~ 週五11:30（台灣）──
+    #
+    # ── ✅09021415【台股盤中極端異動 F-12 專用班次】★不隨期貨時窗縮減 ──
+    #   ★理由：F-12 是台股功能（與週選擇權無關），原本寄生在期貨5mk 分支裡。
+    #     ★★期貨時窗縮成條件W 窗後，若不另開班次，
+    #     ★★★週一全天、週二/週四日盤、週三/週五11:30後的台股極端異動【全部消失】。
+    #   ★本班次【只給 Job2】，Job1 已於下方 if 明確排除，不新增全量掃描負擔。
+    # ✅09022055 本班次【同時服務兩件事】，★缺一不可：
+    #   ①台股盤中極端異動 F-12（R-13）
+    #   ②★★★持倉中的平倉監控（R-14）——★主帥 09/02 15:02 指令：
+    #     「09:05~11:30建倉，11:31後就不再觸發平倉訊號？那與放著等破產有何不同！」
+    #   ★★Python 端 _txf_data_window() 起始 09:05 已與本 cron 對齊。
+    - cron: '8 1-5 * * 1-5'       # 週一~週五 09:08~13:08(TW) 每小時，內部迴圈補滿至 13:58
+    #
+    # ── ✅09021415【已移除的舊班次】留痕不美化（ＡＭ３５：刪除前先提取資訊）──
+    #   '50/5 4-16 * * 1'／'*/15 17-21 * * 1'  → 週一，★主帥指令「週一不再觸發」
+    #   '5/5 1-16 * * 2'   → 週二日盤，★主帥指令「週二15:05開始」
+    #   '5/15 17-21 * * 2' → 週三深夜每15分，★併入 '*/5 16-23 * * 2' 改每5分
+    #   '*/5 21-23 * * 2'  → 併入 '*/5 16-23 * * 2'
+    #   '5/5 7-16 * * 4'／'*/5 17-23 * * 4' → 併入窗二兩班
+    #   '*/5 0-2 * * 5'    → 併入 '*/5 0-3 * * 5'（原只到TW10:59，涵蓋不到11:30）
+    #   '*/5 4-5 * * 3'／'5/5 1-5 * * 4'／'*/5 3-5 * * 5'（08032126 日盤補班）
+    #     → ★期貨部分由主帥指令取消；★★台股 F-12 部分由上方新班次接手
+
+  # 允許手動觸發（測試用）
+  workflow_dispatch:
+
+# ✅08251403【新增 concurrency】主帥指示「AI 若要我自己加，必須由AI自己加」，
+#   ★本區塊由 AI 直接加好，主帥不需要動手編輯任何一行。
+#   ★用途：同一個 workflow 同時只跑一個，★避免迴圈取樣時前後兩次執行重疊、
+#     ★兩個行程同時寫同一份 Firestore 文件而互相覆蓋。
+#   ★★cancel-in-progress 必須為 false：★設 true 會把累積到一半的執行砍掉。
+# ✅09180312【甲案配套】concurrency 由 workflow 層改為【各 job 各自一組】：
+#   ★原設定是整個 workflow 同時只跑一個 → 期貨迴圈跑 50 分鐘時，
+#     ★★12:48 的全市場掃描會被卡在後面排隊，等於又漏掉一次。
+#   ★★★改為每個 job 自己一組後：期貨迴圈與全市場掃描互不阻擋，
+#     ★但同一個 job 的前後兩次執行仍然不會重疊（cancel-in-progress: false）。
+
+jobs:
+  # ============================================================
+  # Job 1：台股1827支股票長期投資掃描
+  # ============================================================
+  scan:
+    concurrency:
+      group: ${{ github.workflow }}-scan
+      cancel-in-progress: false
+    # ✅ 08031611：排除持股健檢專屬班次(台灣20:00)，避免新增cron誤觸發1827支全量掃描。
+    # ✅ 08032126：再排除三個【期貨日盤補班次】(週三/四/五 至13:30)，該三班僅供 Job2。
+    #    其餘所有既有cron與手動觸發(schedule為null)行為完全不變。
+    # ✅09021415：改排除【台股極端異動F-12專用班次】'5/5 1-5 * * 1-5'；
+    #   原排除的三個 08032126 日盤補班已於本輪刪除，故一併移出 if。
+    if: >-
+      github.event.schedule != '2 12 * * 1-5' && github.event.schedule != '32 12 * * 1-5'
+      && github.event.schedule != '8 1-5 * * 1-5' && github.event.schedule != '8 7-15 * * 2,4'
+      && github.event.schedule != '8 16-23 * * 2,4' && github.event.schedule != '8 0-3 * * 3,5'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55    # 台股1827支掃描需要約45分鐘，設55分鐘避免超時
+
+    steps:
+      # 1. 取得程式碼
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      # 2. 安裝 Python 3.12
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. 安裝所需套件
+      # ✅ 2026/04/17 新增 google-auth（Firebase預篩快取+警報快取寫入）
+      #              新增 requests（Firebase REST API）
+      #              新增 beautifulsoup4（全額交割備援HTML解析）
+      - name: 安裝套件
+        run: |
+          pip install yfinance pandas pandas-ta pytz twstock google-auth requests beautifulsoup4
+
+      # ✅ 方案②(07061834) 跨輪快取：還原/保存今日月K與週K快取，免每次重抓~1827支(大幅降耗時)
+      #   金鑰用台灣日期→09:03首掃建快取，12:00/22:33命中重用；跨日自動換新鍵，Python端另有日期驗證雙保險
+      - name: 計算台灣日期(快取金鑰用)
+        id: twdate
+        run: echo "d=$(TZ=Asia/Taipei date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: 還原今日跨輪K線快取(掃描結束自動保存)
+        uses: actions/cache@v4
+        with:
+          path: 6_kline_cache.pkl
+          key: kline-tw-${{ steps.twdate.outputs.d }}
+
+      # 4. 執行台股1827支股票掃描（密碼從 GitHub Secrets 讀取）
+      # ✅ 2026/04/17 新增 FIREBASE_SERVICE_KEY（Firebase預篩快取+警報快取+notified寫入）
+      - name: 執行台股1827支股票掃描
+        env:
+          GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
+          FINMIND_TOKEN:        ${{ secrets.FINMIND_TOKEN }}   # ✅08060105 補傳：雲端原本沒傳，Python 讀不到
+          SCAN_TYPE: tw          # ✅ v05190013：告知Python此次為台股掃描
+        run: |
+          python 3_stock_monitor_GitHub.py
+
+  # ============================================================
+  # Job 2：期貨5分K掃描
+  # TEST_MODE='5mk' 由環境變數傳入，Python 自行判斷時段
+  # 非時段（週一15:01前、週三13:30後）Python 會直接 exit
+  # ============================================================
+  futures-scan:
+    concurrency:
+      group: ${{ github.workflow }}-futures
+      cancel-in-progress: false
+    # ✅ 08031611：同上，排除持股健檢專屬班次(台灣20:00)，行為其餘不變。
+    if: >-
+      github.event.schedule == '8 1-5 * * 1-5' || github.event.schedule == '8 7-15 * * 2,4'
+      || github.event.schedule == '8 16-23 * * 2,4' || github.event.schedule == '8 0-3 * * 3,5'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 58     # ✅09180312 甲案：內部迴圈約 50 分鐘，留 8 分鐘餘裕
+
+    steps:
+      # 1. 取得程式碼
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      # 2. 安裝 Python 3.12
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 3. 安裝所需套件
+      - name: 安裝套件
+        run: |
+          pip install yfinance pandas pandas-ta pytz twstock cryptography google-auth requests
+
+      # 4. 執行期貨5分K掃描
+      - name: 執行期貨5分K掃描
+        env:
+          GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          TEST_MODE:            '5mk'
+          SCAN_TYPE:            futures  # ✅ v05190013：告知Python此次為期貨掃描
+          FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
+          FINMIND_TOKEN:        ${{ secrets.FINMIND_TOKEN }}   # ✅08060105 補傳：雲端原本沒傳，Python 讀不到
+        run: |
+          # ✅09180312【甲案：單次執行內部迴圈】主帥 2026/09/18 03:12 裁示
+          #   ★背景：GitHub 對高頻排程大量丟棄——實測 09/17 20:30 部署的每 5 分鐘排程，6.5 小時只觸發 1 次；
+          #     條件W 每 15 分鐘的排程，實際約每 2～3 小時才跑一次（主帥 09/18 02:59、03:02 截圖為證）。
+          #   ★做法：改由每小時觸發一次，本次執行內部自行每 5 分鐘掃一次、連續約 50 分鐘後結束。
+          #     只要一小時內有一次觸發成功，該小時就能完整覆蓋。
+          #   ★對齊：每次結束後睡到下一個 5 分鐘整點，避免時間漂移。
+          END=$(( $(date +%s) + 3000 ))
+          while :; do
+            python 3_stock_monitor_GitHub.py || true
+            NOW=$(date +%s)
+            if [ "$NOW" -ge "$END" ]; then break; fi
+            SLEEP=$(( 300 - NOW % 300 ))
+            sleep "$SLEEP"
+          done
+
+  # ============================================================
+  # Job 3：持股每日健檢通知（✅ 07130626 新增）
+  #   ・筆電未開機也能每天收到持股健檢信（GitHub Actions 執行）
+  #   ・✅ 08031611 改綁【專屬】cron '0 12 * * 1-5'（台灣20:00）——原22:35班因Actions
+  #     延遲致23:55送達、擾人睡眠；健檢無急迫性故提前。Job1/Job2 已加 if 排除此班次。
+  #   ・SCAN_TYPE=holdings → Python 只做持股健檢，且【零示警不發信】(08031611)
+  #   ・手動 workflow_dispatch 亦可隨時執行（測試用）
+  # ============================================================
+  holdings-health:
+    concurrency:
+      group: ${{ github.workflow }}-holdings
+      cancel-in-progress: false
+    # ✅08301755【ＡＭ１④】新增 '30 12'（台灣20:30）班次，否則睡眠時段跳過的通知不會再出現。
+    if: github.event.schedule == '2 12 * * 1-5' || github.event.schedule == '32 12 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安裝套件
+        run: |
+          pip install yfinance pandas pandas-ta pytz twstock google-auth requests beautifulsoup4
+
+      - name: 執行持股每日健檢
+        env:
+          GMAIL_ACCOUNT:        ${{ secrets.GMAIL_ACCOUNT }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_KEY }}
+          FINMIND_TOKEN:        ${{ secrets.FINMIND_TOKEN }}   # ✅08060105 補傳：雲端原本沒傳，Python 讀不到
+          SCAN_TYPE:            holdings   # ✅ 07130626 告知Python此次為持股健檢
+        run: |
+          python 3_stock_monitor_GitHub.py
