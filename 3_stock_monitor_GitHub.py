@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09231503'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09231550'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -404,6 +404,8 @@ CONDW_LOOKBACK_15MK  = 5      # ✅09170846 條件W 15分K 近N根，原 18
 #   ★★★安全設計：①預設 False ②信件主旨強制冠上【測試】
 #     ③不寫入 Firebase 認領槽（不佔用真實訊號額度）④已納入凍結清單 F-16。
 CONDW_FORCE_TEST     = False  # ★True＝強制寄一封測試信後結束；★平時必須為 False
+# ✅09231550 可由排程手動觸發的勾選框開啟（主帥 09/23 15:50：主帥要能自己按一下就測，不必改程式）
+CONDW_FORCE_TEST = CONDW_FORCE_TEST or (_os.environ.get('CONDW_FORCE_TEST', '').strip().lower() in ('1', 'true', 'yes'))
 # ── ✅09022155【期貨未平倉·收盤前提醒信】主帥 2026/09/02 21:20 指令 ──────
 #     若沒有平倉，則由AI和雲端版協助寄發gmail通知信給我，提醒我期貨還有口數
 #     未平倉，務必在收盤前平倉的通知信。」
@@ -4752,6 +4754,17 @@ def scan_condition_w():
         # ══ 抓 5分K（必跑）與 15分K（CONDW_ENABLE_15MK 開啟時）══
         _res = []
         df5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
+        # ✅09231550【資料新鮮度守門】ＡＭ６６：^TWII 為現貨，夜盤無資料 → 夜間拿到的是前一日下午的舊K棒；
+        #   ★最後一根距今逾 45 分鐘即視為非即時，本次不判斷（避免以舊K棒發出訊號；主帥 09/23 15:03 條件W 查證時提出）。
+        try:
+            _lt5 = df5.index[-1]
+            _lt5 = _lt5.tz_localize('UTC') if _lt5.tzinfo is None else _lt5
+            _age5 = (datetime.now(pytz.timezone('Asia/Taipei')) - _lt5.tz_convert('Asia/Taipei')).total_seconds() / 60
+        except Exception:
+            _age5 = 0
+        if _age5 > 45:
+            print(f'  \U0001F515 條件W：^TWII 5分K 最後一根距今 {_age5:.0f} 分鐘（現貨未開盤）→ 本次不判斷')
+            return
         if df5 is not None and not df5.empty and _bar_too_old(df5, '條件W-5分K'):
             _h = _taifex_hint_text()
             if _h:
