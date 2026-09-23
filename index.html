@@ -1,6 +1,6 @@
 <!--
 ══════════════════════════════════════════════════════════════
-★★★【自我舉證表】(09181404)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
+★★★【自我舉證表】(09202157)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
 ──────────────────────────────────────────────────────────────
 　結論①W-01 預篩買進訊號從未寄出　來源＝原檔 3556 行 `})(_c2,result);`，_c2 全檔未定義 → 整個 async 區塊拋錯
 　結論②三常數與 Python 不一致　　來源＝原檔 2168 行 _p1=((0xF>>1)-4)=3、_p1d=3、_p1m=54；Python 現行皆為 5
@@ -147,7 +147,7 @@
     </style>
 </head>
 <body class="text-slate-800 antialiased">
-<!-- ✅09191203【雲端同步狀態】主帥 09/19 12:03：比照嘉義房租版，右上角顯示是否成功上傳雲端 -->
+<!-- ✅09202157【雲端同步狀態】主帥 09/19 12:03：比照嘉義房租版，右上角顯示是否成功上傳雲端 -->
 <div id="cloud-status" style="position:fixed;top:8px;right:10px;z-index:9999;font-size:12px;font-weight:900;
      padding:4px 10px;border-radius:999px;background:#eef2f7;color:#475569;box-shadow:0 1px 4px rgba(0,0,0,.12);
      max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">☁️ 尚未儲存</div>
@@ -253,7 +253,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09220248</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09202157</span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -940,7 +940,7 @@
 
                 <!-- 設定頁面 -->
         <!-- 零股計算頁面 -->
-        <!-- ✅09181348 缺陷D 修正：此處原有第二份重複的 page-calculator（5709 字元，含破損的 div 標籤），已移除；保留上方第一份 -->
+        <!-- ✅09202157 缺陷D 修正：此處原有第二份重複的 page-calculator（5709 字元，含破損的 div 標籤），已移除；保留上方第一份 -->
 <div id="page-settings" class="hide space-y-6">
             <div class="text-left px-2">
                 <h3 class="text-2xl font-black italic tracking-tight uppercase">Account Management</h3>
@@ -1045,9 +1045,7 @@
         emailjs.init('5dk4HoCBYIS7ypwiw');
         const EMAILJS_SERVICE  = 'service_q711s3u';  // ✅ v06090756：新Service ID（舊service_knhvcfj OAuth失效）
         const EMAILJS_TEMPLATE        = 'template_oqm4kw9';   // OTP用
-        const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';  // ✅09220248 改為兩版共用的通用通知模板（房租 09220137 提案）：
-        //   ★呼叫端同時傳 {subject, message}（新）與 {scan_time, signal_count, signal_body}（舊），
-        //   ★★主帥在 EmailJS 後台改模板前後【都能正常寄信】，不必同步切換。
+        const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';  // 買進通知用（需在EmailJS建立）
 
         const ALLOWED_EMAILS = [
             "shchyu61@gmail.com",
@@ -1234,7 +1232,7 @@
             return '登入失敗：' + (e && e.message ? e.message : c);
         };
 
-        // ✅09191203【雲端同步狀態】主帥 09/19 12:03：「為什麼沒有像嘉義房租版一樣……看到有沒有成功上傳到雲端？
+        // ✅09202157【雲端同步狀態】主帥 09/19 12:03：「為什麼沒有像嘉義房租版一樣……看到有沒有成功上傳到雲端？
         //   避免萬一沒有上傳成功，關閉視窗後下次電腦再開機，之前做的變更會消失！」
         //   ★原式成功時【完全沒有提示】；★★未登入或 db 未就緒時【直接 return，連失敗都不講】→ 改了等於沒改。
         window.setCloudStatus = (state, extra) => {
@@ -1362,7 +1360,7 @@
                 const _wd  = _now.getDay();
                 const _tv  = _now.getHours() * 60 + _now.getMinutes();
                 const _inFutures = (
-                    (_wd >= 1 && _wd <= 5 && _tv >= 9*60+5 && _tv <= 13*60+30) ||   // ✅09181404 日盤 09:05~13:30
+                    (_wd >= 1 && _wd <= 5 && _tv >= 9*60+5 && _tv <= 13*60+30) ||   // ✅09202157 日盤 09:05~13:30
                     (_wd === 2 && (_tv < 1*60 || _tv >= 5*60)) ||           // 週二（排除凌晨01:00~05:00）
                     (_wd === 3 && _tv <= 11*60+30)                          // 週三11:30前
                 );
@@ -1707,7 +1705,7 @@
         const _g=(a,sh=0)=>{const i=a.length-1-sh;return i>=0?a[i]:null;};
 
         // ══════════════════════════════════════════════════════════════
-        // ✅09181404【條件E：V轉／A轉補位】網頁端補齊（策略說明第七章；與 Python check_condE_long／short 同式）
+        // ✅09202157【條件E：V轉／A轉補位】網頁端補齊（策略說明第七章；與 Python check_condE_long／short 同式）
         //   ・多方：(C1 AND C2 AND C3 AND C4 AND C5 AND C6) OR (C3 AND (C11 OR C12 OR C72))
         //   ・空方：完全鏡像。
         //   ・rsi10＝RSI(10)、ema_r＝rsi10 的 EMA(5)、ma20＝20MA、bt／bb＝布林上下軌、mh＝MACD柱。
@@ -2243,11 +2241,11 @@
             }
 
             //
-            // ✅09181348 缺陷C 修正：近N根一律 5（碰軌丙案，主帥 09/17 08:46）；原為 _p1=3／_p1d=3／_p1m=54
+            // ✅09202157 缺陷C 修正：近N根一律 5（碰軌丙案，主帥 09/17 08:46）；原為 _p1=3／_p1d=3／_p1m=54
             const _p1=5,_p1d=5,_p1m=5;
             const _p1_auto = _iv === '1d' ? _p1d : _iv === '5m' ? _p1m : _p1;
             const _p2 = 35, _p3 = 1.03, _p4 = 1.00;
-            // ✅09181348 通道制門檻（與 Python _gate_lower／_gate_upper 同式，取兩制中較嚴者）
+            // ✅09202157 通道制門檻（與 Python _gate_lower／_gate_upper 同式，取兩制中較嚴者）
             const _BAND_RATIO = 0.25;   // ＝Python BAND_NEAR_RATIO
             const _gateLower = (bt,bb) => Math.min(bb*_p3, bb + ((bt-bb)/2)*_BAND_RATIO);
             const _gateUpper = (bt,bb) => Math.max(bt*_p4, bt - ((bt-bb)/2)*_BAND_RATIO);
@@ -2401,7 +2399,7 @@
 
             let _3rd_pass = false;
             let _3rd_pass_short = false;  // ✅ 05030018新增：做空專用第三道
-            // ✅09181348【第三道＝5分K OR 15分K】主帥 09/18 00:00：「全市場掃描……第三道 5分K OR 15分K（不含條件D，
+            // ✅09202157【第三道＝5分K OR 15分K】主帥 09/18 00:00：「全市場掃描……第三道 5分K OR 15分K（不含條件D，
             //   我不讓家人親友房客追高造成賠錢機率大增！）」；原本只有 5分K，家人親友房客看不到 15分K 的 A轉／V轉。
             const _thirdGate = (c5, lo5, hi5, op5, vo5) => {
                 const _r = {long:false, short:false};
@@ -2417,10 +2415,10 @@
                 const _B  = _ln.every(l => l < _bb.mid) && _hn.every(h => h < _bb.upper) && _macdUp;
                 const _As = _hn.some(h => h >= _gu) && _rsiDn && _macdDn;
                 const _Bs = _hn.every(h => h > _bb.mid) && _ln.every(l => l > _bb.lower) && _macdDn;
-                // ✅09181404 第三道同樣「A／B OR 條件E」（不含條件D，家人親友房客版）
+                // ✅09202157 第三道同樣「A／B OR 條件E」（不含條件D，家人親友房客版）
                 const _eL = (op5 && vo5) ? _condE(op5, hi5, lo5, c5, vo5, true)  : false;
                 const _eS = (op5 && vo5) ? _condE(op5, hi5, lo5, c5, vo5, false) : false;
-                _r.long  = window.stagePass(op5 || [], hi5, lo5, c5, true,  true);   // ✅09191203
+                _r.long  = window.stagePass(op5 || [], hi5, lo5, c5, true,  true);   // ✅09202157
                 _r.short = window.stagePass(op5 || [], hi5, lo5, c5, false, true);
                 return _r;
             };
@@ -2445,7 +2443,7 @@
                 let _g5 = {long:false, short:false}, _g15 = {long:false, short:false};
                 try { const _d5  = await _fetchTf('5m');  _g5  = _thirdGate(_d5.c,  _d5.lo,  _d5.hi,  _d5.op,  _d5.vo);  } catch(e5) {}
                 try { const _d15 = await _fetchTf('15m'); _g15 = _thirdGate(_d15.c, _d15.lo, _d15.hi, _d15.op, _d15.vo); } catch(e15) {}
-                _3rd_pass       = _g5.long  || _g15.long;    // ✅09181348 5分K OR 15分K
+                _3rd_pass       = _g5.long  || _g15.long;    // ✅09202157 5分K OR 15分K
                 _3rd_pass_short = _g5.short || _g15.short;
             } catch(e) { _3rd_pass = false; _3rd_pass_short = false; }
 
@@ -2487,19 +2485,19 @@
                 _3rd_pass_short = _5mRsiShortOk && _5mMacdShortOk;
                 }
                 } catch(e) { }
-            };   // ← _legacy3rd 結束（✅09181348 不呼叫，僅保留對照）
+            };   // ← _legacy3rd 結束（✅09202157 不呼叫，僅保留對照）
 
             // ✅ 第二道條件式邏輯：
             // 低位階（A/B/C）→ eLeader 必要
             // 高位階（條件D）→ eLeader 可選
-            // ✅09181404 條件E 接入第一道（策略說明 1-3：條件 A／B／C OR 條件E OR 條件F(eLeader)）
+            // ✅09202157 條件E 接入第一道（策略說明 1-3：條件 A／B／C OR 條件E OR 條件F(eLeader)）
             const _opens_all = (yResult.indicators.quote[0].open  ||[]).filter(v => v != null && !isNaN(v));
             const _vols_all  = (yResult.indicators.quote[0].volume||[]).filter(v => v != null && !isNaN(v));
             const _condE_long  = _condE(_opens_all, highs, lows, closes, _vols_all, true);
             const _condE_short = _condE(_opens_all, highs, lows, closes, _vols_all, false);
             const _abc_pass = ((_r1 || _r2 || _r3) && rsiNow > _p2) || _condE_long;
             const _d_pass   = _r4;  // 條件D（上軌追高）
-            // ✅09181348【條件D 前提改為第一道 AND 第二道】主帥 09/18 02:05：「必須先達成第一道和第二道的條件，
+            // ✅09202157【條件D 前提改為第一道 AND 第二道】主帥 09/18 02:05：「必須先達成第一道和第二道的條件，
             //   才會觸發條件D 的正式進場決策」；原式 (_abc_pass && _el2nd) || _d_pass 讓條件D 可略過前兩道。
             const _1st2nd_pass = (_abc_pass && _el2nd) || (_d_pass && _abc_pass && _el2nd);
 
@@ -2626,7 +2624,7 @@
             // 新版：空頭路線也需要 _1st2nd_pass_short（第一道+第二道）+ 第三道RSI↓MACD↓
             // ✅ 05030434修正：_sell_abc 使用正確空方第一道+第二道+第三道（完全鏡像多方）
             const _sell_abc = _abc_pass_short && _el2nd_short && _3rd_pass_short;
-            // ✅09190211【出場前提】主帥 09/19 01:52：第一道週期（此處＝本週期資料，長中期＝週K）
+            // ✅09202157【出場前提】主帥 09/19 01:52：第一道週期（此處＝本週期資料，長中期＝週K）
             //   近 5 根至少 1 根最高價碰上軌（做多出場）／最低價碰下軌（做空回補），否則不發出場訊號。
             //   ★主帥 09/19 01:27 截圖：美股 O 週K 現價 56.6、上軌 66.16，遠離上軌多根仍一直收到平倉信。
             const _exitStage1 = (isLong) => {
@@ -2639,7 +2637,7 @@
                                   : lows.slice(-_p1m).some(l => l <= _gl);
                 } catch (e) { return true; }
             };
-            // ✅09190211 出場前提的週期意義（主帥 09/19 02:11）：本函式用的是【本次分析的週期】資料——
+            // ✅09202157 出場前提的週期意義（主帥 09/19 02:11）：本函式用的是【本次分析的週期】資料——
             //   ★長期／中期路線＝週K（1 根＝1 週）；★★短線與期貨、週選＝60分K（1 根＝60 分鐘）。
             //   ★★★做多平倉看上軌(A轉)、做空回補看下軌(V轉)，與「部位方向」是兩件事。
             const _exitOkLong  = _exitStage1(true);
@@ -2690,7 +2688,8 @@
                     to_email: currentUserEmail,
                     scan_time: scanTime,
                     signal_count: newSignals.length,
-                    signal_body: body, subject: '股票PRO｜買進通知 ' + String(newSignals.length) + '（' + String(scanTime) + '）', message: String(body), });
+                    signal_body: body,
+                });
                 newSignals.forEach(s => notifiedToday.add(s.code));
                 window.showAlert(`📧 已發送 ${newSignals.length} 支買進訊號通知到 ${currentUserEmail}`);
                 console.log('✅ 買進通知已發送');
@@ -2720,7 +2719,8 @@
                     to_email: currentUserEmail,
                     scan_time: scanTime,
                     signal_count: `賣出 ${newSignals.length}`,
-                    signal_body: body, subject: '股票PRO｜買進通知 ' + String(`賣出 ${newSignals.length) + '（' + String(scanTime) + '）', message: String(body), });
+                    signal_body: body,
+                });
                 newSignals.forEach(s => notifiedSellToday.add(s.code));
                 window.showAlert(`📧 已發送 ${newSignals.length} 支賣出訊號通知到 ${currentUserEmail}`);
             } catch(e) {
@@ -3071,7 +3071,7 @@
             const now = new Date();
             const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
-            // ✅09181404 時窗更新為現行定義（R-12）：週二15:05→週三11:30、週四15:05→週五11:30，
+            // ✅09202157 時窗更新為現行定義（R-12）：週二15:05→週三11:30、週四15:05→週五11:30，
             //   另加平日日盤 09:05~13:30；原本寫「週一12:50後」已作廢。
             const inFutures = (
                 (wd >= 1 && wd <= 5 && tv >= 9*60+5 && tv <= 13*60+30) ||
@@ -3115,7 +3115,7 @@
         // ── 期貨5分K診斷（專屬 shchyu61@gmail.com）────────────────
 
         // ══════════════════════════════════════════════════════════════
-        // ✅09181404【網頁端補齊：期貨 15分K ＋ 條件W 週選擇權】
+        // ✅09202157【網頁端補齊：期貨 15分K ＋ 條件W 週選擇權】
         //   ・第三道判斷抽成全域 window._gate3，與 analyzeStock 內的第三道同一套規則
         //     （近5根碰軌用通道制取較嚴者、前1根→當根轉折、條件A／B OR 條件E）。
         //   ・期貨：5分K 與 15分K 各自判斷、各自發信（策略說明第九章 9-1）。
@@ -3125,13 +3125,13 @@
         // ══════════════════════════════════════════════════════════════
 
         // ══════════════════════════════════════════════════════════════
-        // ✅09191203【三道統一判斷 stagePass】主帥 2026/09/19 09:43「乙的加強版」、10:15~11:08 逐項定義
+        // ✅09202157【三道統一判斷 stagePass】主帥 2026/09/19 09:43「乙的加強版」、10:15~11:08 逐項定義
         //   ・進場：碰軌(近5) AND OSC 前置(前2→前1) AND 轉折(前1→當根，以最高／最低價) AND 前1根實體
         //   ・出場：碰軌方向相反 AND OSC 前置方向相反 AND 轉折方向相反；★不看實體
         //   ・★移除舊制「3 根內有效」與「條件E／eLeader 可單獨通過」（美股 MMM 誤發成因）
         // ══════════════════════════════════════════════════════════════
 
-        // ✅09202157【空 catch 可見化】房租版 09202120 第四之四節提報同型：
+        // ✅09202157【空 catch 可見化】房租版 09202157 第四之四節提報同型：
         //   ★寫入或寄信失敗被空 catch 吞掉 → ★★畫面完全正常，★★★失敗永遠不會被發現。
         //   ・本函式不改變流程（仍不中斷使用者操作），★只把失敗記到主控台與雲端狀態列。
         window._silentFail = (where, e) => {
@@ -3195,7 +3195,7 @@
                 const _dn = _rsiNow < _rsiPrv && _mh.now < _mh.prev;
                 const _eL = window._condE ? window._condE(op, hi, lo, cl, vo, true)  : false;
                 const _eS = window._condE ? window._condE(op, hi, lo, cl, vo, false) : false;
-                // ✅09191203 改用 stagePass（三道同一套規則）
+                // ✅09202157 改用 stagePass（三道同一套規則）
                 _r.long  = window.stagePass(op, hi, lo, cl, true,  true);
                 _r.short = window.stagePass(op, hi, lo, cl, false, true);
                 _r.rsiNow = _rsiNow; _r.rsiPrv = _rsiPrv; _r.boll = _b;
@@ -3235,7 +3235,7 @@
 
         // 期貨 15分K（與 5分K 併行，各自發信）＋ 條件W
 
-        // ✅09200000【跨週期去重】主帥 09/18 08:24 截圖檔名即指令：「1天內的5分K和15分K，請合併成1封信通知我1次就好」；
+        // ✅09202157【跨週期去重】主帥 09/18 08:24 截圖檔名即指令：「1天內的5分K和15分K，請合併成1封信通知我1次就好」；
         //   ★09/19 23:46 再次明示：同一標的同方向，第 1 筆（5分K 或 15分K）先觸發後，第 2 筆不再寄。
         //   ★★去重鍵用【標的＋方向＋日期】，★★★週期【不放進鍵裡】，否則兩個週期各算一把鍵＝沒去重。
         window._tfOnce = (code, dir) => {
@@ -3254,7 +3254,7 @@
                 const _d15 = await window._fetchTW('15m');
                 const _g = window._gate3(_d15.op, _d15.hi, _d15.lo, _d15.c, _d15.vo, 5);
                 const _px = _d15.c[_d15.c.length - 1];
-                if ((_g.long || _g.short) && window._tfOnce('TWII', _g.long ? 'long' : 'short')) {   // ✅09200000 跨週期去重
+                if ((_g.long || _g.short) && window._tfOnce('TWII', _g.long ? 'long' : 'short')) {   // ✅09202157 跨週期去重
                     const _isL = _g.long;
                     const _body = `${_isL ? '⭐【期貨15分K買進訊號】⭐' : '🔻【期貨15分K做空訊號】🔻'}
 標的：^TWII 台灣加權指數（台指期替代標的）
@@ -3265,7 +3265,7 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
 時間：${_now}`;
                     await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                         to_email: currentUserEmail, scan_time: _now,
-                        signal_count: '期貨15分K 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('期貨15分K 1') + '（' + String(_now) + '）', message: String(_body), });
+                        signal_count: '期貨15分K 1', signal_body: _body });
                 }
             } catch (e) { console.log('期貨15分K：', e); }
             // ② 條件W（只跑第三道，5分K OR 15分K）
@@ -3280,7 +3280,7 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
                 }
                 if (!_hit) return;
                 const _isCall = _hit.g.long;
-                if (!window._tfOnce('CONDW', _isCall ? 'call' : 'put')) return;   // ✅09200000 跨週期去重（5分K 與 15分K 共用一把鍵）
+                if (!window._tfOnce('CONDW', _isCall ? 'call' : 'put')) return;   // ✅09202157 跨週期去重（5分K 與 15分K 共用一把鍵）
                 const _body = `${_isCall ? '⭐【條件W 週選擇權：buy CALL】⭐' : '🔻【條件W 週選擇權：buy PUT】🔻'}
 時窗：${_win === 'W2' ? '週二15:05→週三11:30' : '週四15:05→週五11:30'}
 週期：${_hit.iv === '5m' ? '5分K' : '15分K'}（條件W 只跑第三道，不看前兩道）
@@ -3293,7 +3293,7 @@ ${window._strikeHint(_hit.px, _isCall)}
 時間：${_now}`;
                 await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail, scan_time: _now,
-                    signal_count: '條件W 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('條件W 1') + '（' + String(_now) + '）', message: String(_body), });
+                    signal_count: '條件W 1', signal_body: _body });
             } catch (e) { console.log('條件W：', e); }
         };
 
@@ -3303,11 +3303,11 @@ ${window._strikeHint(_hit.px, _isCall)}
                 return;
             }
 
-            // 時段檢查（✅09181404 現行時窗：日盤 09:05~13:30、週二/週四 15:05 起跨夜至隔日 11:30）
+            // 時段檢查（✅09202157 現行時窗：日盤 09:05~13:30、週二/週四 15:05 起跨夜至隔日 11:30）
             const now = new Date();
             const wd  = now.getDay();
             const tv  = now.getHours() * 60 + now.getMinutes();
-            // ✅09181404 時窗更新為現行定義（R-12）：週二15:05→週三11:30、週四15:05→週五11:30，
+            // ✅09202157 時窗更新為現行定義（R-12）：週二15:05→週三11:30、週四15:05→週五11:30，
             //   另加平日日盤 09:05~13:30；原本寫「週一12:50後」已作廢。
             const inFutures = (
                 (wd >= 1 && wd <= 5 && tv >= 9*60+5 && tv <= 13*60+30) ||
@@ -3397,7 +3397,7 @@ ${window._strikeHint(_hit.px, _isCall)}
                     if (!boll || rsiNow === null || !macd) continue;
 
                     const rsiRising   = rsiNow > rsiPrv;
-                    const rsiFalling  = rsiNow < rsiPrv;   // ✅09181348 W-02：平倉／做空用，原本沒有這個變數
+                    const rsiFalling  = rsiNow < rsiPrv;   // ✅09202157 W-02：平倉／做空用，原本沒有這個變數
                     const macdRising  = macd.now > macd.prev;
                     const rsifalling  = rsiNow < rsiPrv;
                     const macdFalling = macd.now < macd.prev;
@@ -3420,7 +3420,7 @@ ${window._strikeHint(_hit.px, _isCall)}
                     const _5mk_B  = _5mk_x2 && _5mk_x3 && _5mk_x4 && macdRising;
                     const _5mk_buy = (_5mk_A || _5mk_B) && rsiNow > _p2;
 
-                    // ✅09181348 通道制門檻，與 Python 一致（取兩制中較嚴者）；並改為【近 _p1m 根】任一最低／最高價碰軌
+                    // ✅09202157 通道制門檻，與 Python 一致（取兩制中較嚴者）；並改為【近 _p1m 根】任一最低／最高價碰軌
                     const _gL = _gateLower(boll.upper, boll.lower), _gU = _gateUpper(boll.upper, boll.lower);
                     const _lowsN  = (yResult.indicators.quote[0].low  ||[]).filter(v=>v!=null&&!isNaN(v)).slice(-_p1m);
                     const _highsN = (yResult.indicators.quote[0].high ||[]).filter(v=>v!=null&&!isNaN(v)).slice(-_p1m);
@@ -3453,7 +3453,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '期貨買進 1',
-                                signal_body: body, subject: '股票PRO｜買進通知 ' + String('期貨買進 1') + '（' + String(scanTime) + '）', message: String(body), });
+                                signal_body: body,
+                            });
                             window.showAlert(`⭐ ${ticker} 期貨5分K買進訊號！Gmail已發送`);
                             // ✅ 方案A：買進訊號發出 → 自動標記Firebase持倉=true
                             try {
@@ -3465,7 +3466,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                             } catch (e) { window._silentFail('寫入或寄信失敗', e); }
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
-                    } else if (rsiFalling && macdFalling && nearUpper) {   // ✅09181348 W-02 修正：原寫 rsiRising（RSI↑）與平倉語意相反；平倉＝前1根→當根 RSI↓ AND MACD柱↓ AND 近5根碰上軌
+                    } else if (rsiFalling && macdFalling && nearUpper) {   // ✅09202157 W-02 修正：原寫 rsiRising（RSI↑）與平倉語意相反；平倉＝前1根→當根 RSI↓ AND MACD柱↓ AND 近5根碰上軌
                         // 平倉訊號：發Gmail
                         const body = `🔔【期貨5分K平倉訊號】🔔
 標的：${ticker} ${name}
@@ -3477,7 +3478,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '期貨平倉 1',
-                                signal_body: body, subject: '股票PRO｜買進通知 ' + String('期貨平倉 1') + '（' + String(scanTime) + '）', message: String(body), });
+                                signal_body: body,
+                            });
                             window.showAlert(`🔔 ${ticker} 期貨5分K平倉訊號！Gmail已發送`);
                             // ✅ 方案A：平倉訊號發出 → 自動清除Firebase持倉=false
                             try {
@@ -3505,7 +3507,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '期貨做空 1',
-                                signal_body: body, subject: '股票PRO｜買進通知 ' + String('期貨做空 1') + '（' + String(scanTime) + '）', message: String(body), });
+                                signal_body: body,
+                            });
                             window.showAlert(`🔻 ${ticker} 期貨5分K做空訊號！Gmail已發送`);
                             // 自動標記空倉+清除多倉
                             try {
@@ -3530,7 +3533,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 to_email: currentUserEmail,
                                 scan_time: scanTime,
                                 signal_count: '平空回補 1',
-                                signal_body: body, subject: '股票PRO｜買進通知 ' + String('平空回補 1') + '（' + String(scanTime) + '）', message: String(body), });
+                                signal_body: body,
+                            });
                             window.showAlert(`🟢 ${ticker} 平空回補訊號！Gmail已發送`);
                             try {
                                 await initFirebaseAuth();
@@ -3554,7 +3558,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             } finally {
                 btn.disabled = false;
             }
-            try { await window.scanFutures15mAndCondW(); } catch(e) { console.log('15分K／條件W：', e); }   // ✅09181404 每輪一併掃
+            try { await window.scanFutures15mAndCondW(); } catch(e) { console.log('15分K／條件W：', e); }   // ✅09202157 每輪一併掃
         };
 
 
@@ -3900,7 +3904,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                     });
                                 }
                             }catch (e) { window._silentFail('寫入或寄信失敗', e); }
-                        })(code,result);   // ✅09181348 W-01 修正：原為未定義的 _c2 → 整個 async 區塊拋錯，預篩買進訊號從此不寫入當日訊號表、不顯示卡片、不寄信
+                        })(code,result);   // ✅09202157 W-01 修正：原為未定義的 _c2 → 整個 async 區塊拋錯，預篩買進訊號從此不寫入當日訊號表、不顯示卡片、不寄信
                         (async function(_c,_r){
                             try {
                                 await initFirebaseAuth();
@@ -4279,13 +4283,13 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             const val = input.value.trim().toUpperCase();
             const cat = document.getElementById('new-watchlist-cat')?.value || 'tw';
             if (val && !watchlist.some(s => s.code === val)) {
-                // ✅09181348 W-16：待買觀察加入【做多／做空】方向（主帥 09/18 08:27：看空的外匯只能放持股清單）
+                // ✅09202157 W-16：待買觀察加入【做多／做空】方向（主帥 09/18 08:27：看空的外匯只能放持股清單）
                 watchlist.push({ code: val, cat, direction: 'long' }); input.value = '';
                 fetchStockName(val); // 自動抓取名稱
                 window.renderWatchlist(); await saveToCloud();
             }
         });
-        // ✅09181348 W-16：切換待買觀察的做多／做空；Python 端讀 watchlist 時一併讀 direction
+        // ✅09202157 W-16：切換待買觀察的做多／做空；Python 端讀 watchlist 時一併讀 direction
         window.toggleWatchDir = async (code) => {
             const _it = watchlist.find(s => s.code === code);
             if (!_it) return;
