@@ -97,11 +97,11 @@ jobs:
     steps:
       # 1. 取得程式碼
       - name: 取得程式碼
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5   # ✅09240524 Node.js 24（主帥 09/24 05:24 同意；GitHub 09/16 已移除 Node.js 20）
 
       # 2. 安裝 Python 3.12
       - name: 安裝 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6   # ✅09240524 Node.js 24
         with:
           python-version: '3.12'
 
