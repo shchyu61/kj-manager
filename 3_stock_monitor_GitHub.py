@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09230708'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09231503'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -1802,7 +1802,7 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         if not token:
             print('  ⚠️ 心跳未寫入：取不到 Firestore token')
             return False
-        _now = datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M:%S')
+        _now = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d %H:%M:%S')   # ✅09231503 原寫 TW_TZ（未定義）→ 心跳自 09230055 起從未寫成功
         url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/cloud_heartbeat")
         payload = {'fields': {
@@ -4889,7 +4889,7 @@ def _hh_snapshot(_d, _label):
 def check_holdings_health():
     """✅ (07130626)【持股每日健檢通知】主帥指定功能
     ・對所有持股（台股/美股/虛擬幣/外匯）計算【長期＝月K】與【中期＝週K】的
-      布林／RSI／MACD，並依【混合模式＝OR】（長期 or 中期任一觸發出場即示警）
+      布林／RSI／MACD；★（✅09231503 起）出場示警改為三道 AND（原「混合模式＝OR」廢止，見下方出場判斷）
       給出「續抱持有」或「建議評估賣出/回補」，彙整成【一封】Gmail。
     ・出場判斷完全沿用系統既有策略函式（check_sell_condition／check_sell_condD；
       空單走鏡像 check_cover_condition／check_cover_condD）→ 與掃描策略完全一致。
@@ -4942,23 +4942,46 @@ def check_holdings_health():
 
             _px = float(_im['Close'].iloc[-1])
 
-            # 出場判斷：沿用系統既有策略（做多＝賣出；做空＝回補），混合模式 OR
-            if _is_short:
-                _cdok = _has_condd_entry(_tk)   # ✅09171113 條件D 特殊出場只對條件D 進場的持股
-                _s_m = check_cover_condition(_im); _sd_m, _md_m = check_cover_condD(_im) if _cdok else (False, '')
-                _s_w = check_cover_condition(_iw); _sd_w, _md_w = check_cover_condD(_iw) if _cdok else (False, '')
-                _act = '建議評估【回補】(空單獲利了結)'
-            else:
-                _cdok = _has_condd_entry(_tk)   # ✅09171113
-                _s_m = check_sell_condition(_im); _sd_m, _md_m = check_sell_condD(_im) if _cdok else (False, '')
-                _s_w = check_sell_condition(_iw); _sd_w, _md_w = check_sell_condD(_iw) if _cdok else (False, '')
-                _act = '建議評估【賣出】(獲利了結)'
-
+            # ✅09231503【出場三道 AND．持股健檢】★原為「混合模式 OR：月K 或週K 任一觸發即示警」——
+            #   ★違反主帥 09/19 10:47 b「第一道 and 第二道 and 第三道（不是 or）」與 09/22 06:40 裁示甲；
+            #   ★★正是主帥 09/22 04:43 所罵「怎麼可以只用單一週期就建議我出場」的同型（主帥 09/23 15:03 要求全面查衝突時查出）。
+            #   ★改為與全市場持股出場（scan_stock）同一套：第一道（月K OR 週K）AND 第二道（日K）AND 第三道（5分K OR 15分K），
+            #     各道 stage_pass(entry=False)（含 RSI 轉向、不看實體）；★條件D 進場的持股，第三道另可用條件D 出場A／B。
+            _xl = not _is_short
+            _act = '建議評估【回補】(空單獲利了結)' if _is_short else '建議評估【賣出】(獲利了結)'
+            _gm = bool(stage_pass(_im, _xl, entry=False)) if _im is not None else False
+            _gw = bool(stage_pass(_iw, _xl, entry=False)) if _iw is not None else False
             _hits = []
-            if _s_m:  _hits.append('長期(月K) 出場訊號')
-            if _sd_m: _hits.append(f'長期(月K) {_md_m}')
-            if _s_w:  _hits.append('中期(週K) 出場訊號')
-            if _sd_w: _hits.append(f'中期(週K) {_md_w}')
+            if _gm or _gw:
+                try:
+                    _idd = get_stock_data(_tk, period='2y', interval='1d')
+                    _idd = calc_indicators(_idd) if (_idd is not None and len(_idd) >= 30) else None
+                except Exception:
+                    _idd = None
+                if _idd is not None and stage_pass(_idd, _xl, entry=False):
+                    _cdok = _has_condd_entry(_tk)
+                    for _lbl3, _per3 in (('5分K', '5d'), ('15分K', '1mo')):
+                        try:
+                            _d3 = get_stock_data(_tk, period=_per3, interval=_lbl3.replace('分K', 'm'))
+                            _d3 = calc_indicators(_d3) if (_d3 is not None and len(_d3) >= 26) else None
+                        except Exception:
+                            _d3 = None
+                        if _d3 is None:
+                            continue
+                        _cdx = False
+                        if _cdok:
+                            try:
+                                _cdx = bool((check_cover_condD(_d3) if _is_short else check_sell_condD(_d3))[0])
+                            except Exception:
+                                _cdx = False
+                        if stage_pass(_d3, _xl, entry=False) or _cdx:
+                            _nm = '長期+中期' if (_gm and _gw) else ('長期(月K)' if _gm else '中期(週K)')
+                            _hits.append(f'{_nm} 第一道 AND 日K 第二道 AND {_lbl3} 第三道' + ('（條件D 出場）' if _cdx else ''))
+                            break
+                    else:
+                        print(f"  \U0001F515 {_name} 健檢：前兩道成立，第三道（5分K OR 15分K）未成立 → 不示警")
+                else:
+                    print(f"  \U0001F515 {_name} 健檢：第一道成立，第二道（日K）未成立 → 不示警")
 
             if _hits:
                 # ✅ (08031611)【防狼來了】只有【觸發出場條件】者才寫進信中
