@@ -68,6 +68,14 @@ on:
 
   # 允許手動觸發（測試用）
   workflow_dispatch:
+    # ✅09231550 主帥 09/23 15:50：主帥要能自己按一下就測條件W 管線，不必改程式
+    #   ★用法：Actions → 條件W週選擇權雙向雲端掃描 → Run workflow → 勾選「強制測試」→ Run workflow
+    #   ★★勾選時只跑一次就結束，寄出一封「🧪【測試】條件W 管線測試」；★不勾選＝與排程完全相同
+    inputs:
+      force_test:
+        description: '強制測試：寄一封條件W 管線測試信後結束（不影響正式訊號）'
+        type: boolean
+        default: false
 
 # ✅08251403【新增 concurrency】主帥指示「AI 若要我自己加，必須由AI自己加」，
 #   ★本區塊由 AI 直接加好，主帥不需要動手編輯任何一行。
@@ -122,6 +130,11 @@ jobs:
           #   ★做法：改由每小時觸發一次，本次執行內部自行每 5 分鐘掃一次、連續約 50 分鐘後結束。
           #     只要一小時內有一次觸發成功，該小時就能完整覆蓋。
           #   ★對齊：每次結束後睡到下一個 5 分鐘整點，避免時間漂移。
+          # ✅09231550 強制測試：只跑一次就結束（否則內部迴圈會連寄 50 分鐘測試信）
+          if [ "${{ inputs.force_test }}" = "true" ]; then
+            CONDW_FORCE_TEST=true python 3_stock_monitor_GitHub.py || true
+            exit 0
+          fi
           END=$(( $(date +%s) + 3000 ))
           while :; do
             python 3_stock_monitor_GitHub.py || true
