@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09240542'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09250148'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -16,7 +16,7 @@ SCRIPT_VERSION = '09240542'   # ✅ 鐵律V2：全檔唯一版本識別處，須
 #   ①全市場掃描　　　：月K OR 週K → 日K → 5分K OR 15分K（不含條件D）
 #   ②長期／中期即時　：月K OR 週K → 日K → 5分K OR 15分K（含條件D）★主帥專用
 #   ③短線／當沖　　　：日K OR 60分K → 30分K → 5分K OR 15分K（含條件D）★主帥專用，預設關閉
-# 期貨與週選擇權：第一道 日K OR ^TWII 60分K OR EWT 60分K → 第二道 EWT 30分K → 第三道 5分K OR 15分K
+# 期貨與週選擇權：第一道 日K OR ^TWII 60分K OR EWT 60分K → 第二道 ^TWII 30分K OR EWT 30分K → 第三道 5分K OR 15分K   # ✅09250148 註解更正（程式 09221912 起即為兩者擇一；主帥 09/22 19:12）
 # =========================
 # 快取設定（週K決定要不要看，日K決定準不準，5分K決定何時動手）
 USE_CACHE = True
@@ -5074,8 +5074,8 @@ def check_holdings_health():
     _body = (
         f"【持股健檢・出場示警】{_now}（台灣時間）\n"
         f"{'='*46}\n"
-        f"判斷方式＝混合模式(OR)：長期(月K) 或 中期(週K) 任一觸發出場條件即示警；\n"
-        f"出場條件與主掃描系統【完全相同】(賣出條件／條件D出場；空單為回補鏡像)。\n"
+        f"判斷方式＝出場三道 AND：第一道（長期月K OR 中期週K）AND 第二道（日K）AND 第三道（5分K OR 15分K）；\n"   # ✅09250148 甲案：原寫「混合模式(OR)」與 09231503 三道 AND 程式不符
+        f"出場條件與全市場持股出場【完全相同】（條件D 進場的持股，第三道另可用條件D 出場A／B；空單為回補鏡像）。\n"
         f"※ 未觸發出場者不列入本信（僅統計）；零示警日【不發信】。\n"
         f"{'='*46}\n\n"
         + "\n".join(_lines)
@@ -6590,12 +6590,14 @@ def main_task():
                     # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
                     _twf = datetime.now(pytz.timezone('Asia/Taipei'))
                     _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
-                    if _claim_alert_firebase(f'futtf_{ticker}_buy_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
+                    _dup_tf = (_claim_alert_firebase(f'futtf_{ticker}_buy_{_sf}', _twf.strftime('%Y-%m-%d')) is False)   # ✅09250148 甲案：原 else 只包住 hasattr 一行、寄信區塊縮排在外 → 跨週期去重失效；改用旗標，寄信區塊一行不動
+                    if _dup_tf:
                         print(f'  🔕 期貨跨週期去重：{ticker} buy 本時段已由另一週期通知過，跳過')
-                    else:
-                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
-                    if len(send_gmail._futures_log) >= 2:
+                    if _dup_tf:
+                        pass   # ✅09250148 本時段已由另一週期通知過 → 不寄
+                    elif len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
                     else:
                         send_gmail._futures_log.append(_now_ts)
@@ -6629,12 +6631,14 @@ def main_task():
                     # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
                     _twf = datetime.now(pytz.timezone('Asia/Taipei'))
                     _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
-                    if _claim_alert_firebase(f'futtf_{ticker}_close_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
+                    _dup_tf = (_claim_alert_firebase(f'futtf_{ticker}_close_{_sf}', _twf.strftime('%Y-%m-%d')) is False)   # ✅09250148 甲案：原 else 只包住 hasattr 一行、寄信區塊縮排在外 → 跨週期去重失效；改用旗標，寄信區塊一行不動
+                    if _dup_tf:
                         print(f'  🔕 期貨跨週期去重：{ticker} close 本時段已由另一週期通知過，跳過')
-                    else:
-                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
-                    if len(send_gmail._futures_log) >= 2:
+                    if _dup_tf:
+                        pass   # ✅09250148 本時段已由另一週期通知過 → 不寄
+                    elif len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）"); pass
                     else:
                         send_gmail._futures_log.append(_now_ts)
@@ -6662,12 +6666,14 @@ def main_task():
                     # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
                     _twf = datetime.now(pytz.timezone('Asia/Taipei'))
                     _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
-                    if _claim_alert_firebase(f'futtf_{ticker}_buy_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
-                        print(f'  🔕 期貨跨週期去重：{ticker} buy 本時段已由另一週期通知過，跳過')
-                    else:
-                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    _dup_tf = (_claim_alert_firebase(f'futtf_{ticker}_sell_{_sf}', _twf.strftime('%Y-%m-%d')) is False)   # ✅09250148 甲案：原 else 只包住 hasattr 一行、寄信區塊縮排在外 → 跨週期去重失效；改用旗標，寄信區塊一行不動；去重鍵原誤用 buy，改為 sell（與 15分K 路徑 futtf_{_tk}_{_dir} 一致）
+                    if _dup_tf:
+                        print(f'  🔕 期貨跨週期去重：{ticker} sell 本時段已由另一週期通知過，跳過')
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
-                    if len(send_gmail._futures_log) >= 2:
+                    if _dup_tf:
+                        pass   # ✅09250148 本時段已由另一週期通知過 → 不寄
+                    elif len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
@@ -6698,12 +6704,14 @@ def main_task():
                     # ✅09192346 期貨跨週期去重（與 15分K 共用同一把鍵）
                     _twf = datetime.now(pytz.timezone('Asia/Taipei'))
                     _sf = 'day' if (9*60+5 <= (_twf.hour*60+_twf.minute) <= 13*60+30) else 'night'
-                    if _claim_alert_firebase(f'futtf_{ticker}_buy_{_sf}', _twf.strftime('%Y-%m-%d')) is False:
-                        print(f'  🔕 期貨跨週期去重：{ticker} buy 本時段已由另一週期通知過，跳過')
-                    else:
-                      if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
+                    _dup_tf = (_claim_alert_firebase(f'futtf_{ticker}_cover_{_sf}', _twf.strftime('%Y-%m-%d')) is False)   # ✅09250148 甲案：原 else 只包住 hasattr 一行、寄信區塊縮排在外 → 跨週期去重失效；改用旗標，寄信區塊一行不動；去重鍵原誤用 buy，改為 cover（與 15分K 路徑 futtf_{_tk}_{_dir} 一致）
+                    if _dup_tf:
+                        print(f'  🔕 期貨跨週期去重：{ticker} cover 本時段已由另一週期通知過，跳過')
+                    if not hasattr(send_gmail, '_futures_log'): send_gmail._futures_log = []
                     send_gmail._futures_log = [t for t in send_gmail._futures_log if _now_ts - t < 300]
-                    if len(send_gmail._futures_log) >= 2:
+                    if _dup_tf:
+                        pass   # ✅09250148 本時段已由另一週期通知過 → 不寄
+                    elif len(send_gmail._futures_log) >= 2:
                         print(f"  ⚠️ {ticker} 5分鐘內已發2封，跳過（防吵機制）")
                     else:
                         send_gmail._futures_log.append(_now_ts)
