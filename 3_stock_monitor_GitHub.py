@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09250148'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09251623'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -923,6 +923,54 @@ def get_cash_delivery_set():
 # ============================================================
 # 【４．交易時段與數據抓取核心】
 # ============================================================
+_TW_CLOSED_CACHE = {'date': None, 'closed': None}
+
+
+def _tw_market_closed_today():
+    """✅09251507【休市判斷．主帥 09/25 15:07 甲案①】^TWII 日K 最後一根不是今天，且已過 09:30 → 視為休市。
+    ・用資料判定，不寫死假日表（中秋、教師節等臨時休市都涵蓋）。
+    ・只判平日（週一～週五）；週六全量重建另有流程，不受影響。
+    ・09:30 前無法判定 → 視為開市；取不到資料或任何例外 → 視為開市（★防護本身不得造成漏掃）。
+    ・保險：日K 判為休市時，再看 ^TWII 5分K 最後一根；若是今天的資料 → 仍視為開市（避免誤判整天漏掃）。
+    ・同一天只判定一次（快取當日結果）。
+    ・依據：本檔 check_tw_intraday_extreme 註明「盤中時 yfinance 的日K最後一根是今天的未完成棒」。
+    """
+    try:
+        _n = _now_tw()
+        if _n.weekday() > 4:
+            return False
+        if (_n.hour * 60 + _n.minute) < 9 * 60 + 30:
+            return False
+        _d = _n.strftime('%Y-%m-%d')
+        if _TW_CLOSED_CACHE['date'] == _d and _TW_CLOSED_CACHE['closed'] is not None:
+            return _TW_CLOSED_CACHE['closed']
+        def _last_day(_df):
+            _t = pd.Timestamp(_df.index[-1])
+            if _t.tz is not None:
+                _t = _t.tz_convert('Asia/Taipei')
+            return _t.strftime('%Y-%m-%d')
+        _dd = _normalize_df(yf.download('^TWII', period='7d', interval='1d', progress=False))
+        if _dd is None or len(_dd) == 0:
+            return False
+        _ld = _last_day(_dd)
+        _closed = (_ld != _d)
+        if _closed:
+            try:
+                _d5 = _normalize_df(yf.download('^TWII', period='1d', interval='5m', progress=False))
+                if _d5 is not None and len(_d5) > 0 and _last_day(_d5) == _d:
+                    _closed = False
+            except Exception:
+                pass
+        _TW_CLOSED_CACHE.update({'date': _d, 'closed': _closed})
+        if _closed:
+            print(f'  \U0001F3D6️ 台股休市判斷：^TWII 日K 最後一根為 {_ld}，今天 {_d} 無交易 → 視為休市，台股相關掃描跳過')
+            _feat('tw_holiday', f'休市（^TWII 最後一根 {_ld}）')
+        return _closed
+    except Exception as _e:
+        print(f'  ⚠️ 台股休市判斷失敗（{str(_e)[:40]}）→ 視為開市，照常掃描')
+        return False
+
+
 def get_active_markets():
     """判斷現在哪些市場在交易中（台灣時間）"""
     tz = pytz.timezone('Asia/Taipei')
@@ -937,7 +985,7 @@ def get_active_markets():
     # 週一到週五才有台股和美股
     if weekday <= 4:
         # 台股：09:00～13:30
-        if 9*60 <= time_val <= 13*60+30:
+        if 9*60 <= time_val <= 13*60+30 and not _tw_market_closed_today():   # ✅09251507 甲案①：休市日台股相關掃描全部跳過
             active.append('TW')
     # ✅ 週六補跑：強制加入台股（確保預篩快取能上傳）
     elif weekday == 5:
@@ -1273,6 +1321,8 @@ def check_tw_intraday_extreme():
             return                      # 非台股交易時段，直接跳過
         if _n.weekday() > 4:
             return                      # 週末不跑
+        if _tw_market_closed_today():
+            return                      # ✅09251507 甲案①：休市日不偵測
         _today_str = _n.strftime('%Y-%m-%d')
 
         # ── 取昨收（加權指數日K）──
@@ -1717,6 +1767,95 @@ def maybe_flush_digest():
         _flush_digest()
 
 NOTIFY_KINDS = ('急迫', '次日有效', '一般')
+# ✅09251623【⑤⑥ 補寄】嘉義房租版 09251438 第一之二節⑤⑥（主帥 09/25 08:57 於房租版裁示甲案；股票PRO 同一套寄信程式）：
+#   ⑤ 原本【次日有效】在睡眠時段只印一行即 return True，★沒有存到任何地方＝丟棄且回報成功；
+#   ⑥ 原本【一般】只存記憶體 _PENDING_DIGEST，靠 20:30 班重算；★GitHub 把 20:30 班延到 21:30 後（房租 09/24 實測延到 01:25），
+#     重算又落入睡眠時段 → 永遠不寄。★改為：寫入跨執行保存的待補寄清單，下一次非睡眠時段執行時寄出。
+#   ・保存位置：雲端＝Firestore artifacts/{appId}/public/pending_notify；本機＝同資料夾 5_pending_notify.json。
+#   ・其他睡眠時段班次（22:33、每小時）的【一般】通知維持原規則（不寄，由下一個 20:30 班重算），避免同內容寄兩次。
+_PENDING_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), '5_pending_notify.json')
+
+def _pending_url():
+    return (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+            f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/pending_notify")
+
+def _pending_load():
+    """讀待補寄清單；讀不到回傳空清單（失敗會印出，不靜默）"""
+    try:
+        if IS_GITHUB_ACTIONS:
+            import requests as _req
+            _tk = _firestore_token()
+            if not _tk:
+                print('  ⚠️ 待補寄清單讀取失敗：取不到 Firestore token')
+                return []
+            _r = _req.get(_pending_url(), headers={'Authorization': f'Bearer {_tk}'}, timeout=10)
+            if _r.status_code != 200:
+                return []
+            return json.loads((((_r.json() or {}).get('fields') or {}).get('items') or {}).get('stringValue', '[]'))
+        if os.path.exists(_PENDING_LOCAL):
+            with open(_PENDING_LOCAL, 'r', encoding='utf-8') as _f:
+                return json.load(_f)
+    except Exception as _e:
+        print(f'  ⚠️ 待補寄清單讀取失敗：{str(_e)[:80]}')
+    return []
+
+def _pending_save(_items):
+    try:
+        if IS_GITHUB_ACTIONS:
+            import requests as _req
+            _tk = _firestore_token()
+            if not _tk:
+                print('  ❌ 待補寄清單寫入失敗：取不到 Firestore token')
+                return False
+            _r = _req.patch(_pending_url(), headers={'Authorization': f'Bearer {_tk}'}, timeout=10,
+                            json={'fields': {'items': {'stringValue': json.dumps(_items, ensure_ascii=False)}}})
+            if _r.status_code not in (200, 201):
+                print(f'  ❌ 待補寄清單寫入失敗：HTTP {_r.status_code}')
+                return False
+            return True
+        with open(_PENDING_LOCAL, 'w', encoding='utf-8') as _f:
+            json.dump(_items, _f, ensure_ascii=False)
+        return True
+    except Exception as _e:
+        print(f'  ❌ 待補寄清單寫入失敗：{str(_e)[:80]}')
+        return False
+
+def _is_delayed_digest_run():
+    """本次執行是否為被延到睡眠時段的 20:30 班（讀 GitHub 排程事件的 cron 字串；本機一律 False）"""
+    try:
+        _p = os.environ.get('GITHUB_EVENT_PATH', '')
+        if not _p or not os.path.exists(_p):
+            return False
+        with open(_p, 'r', encoding='utf-8') as _f:
+            _cr = str((json.load(_f) or {}).get('schedule') or '').split()
+        if len(_cr) < 2 or not (_cr[0].isdigit() and _cr[1].isdigit()):
+            return False
+        return ((int(_cr[1]) + 8) % 24, int(_cr[0])) == tuple(DIGEST_SEND_HHMM) and _in_quiet_hours()
+    except Exception:
+        return False
+
+def _biz_md():
+    """營業日 M/D：07:30 前屬前一天的班次（比照房租 rental_cloud_notify 09250857）"""
+    from datetime import timedelta
+    _d = datetime.now(pytz.timezone('Asia/Taipei')) - timedelta(hours=QUIET_END_HHMM[0], minutes=QUIET_END_HHMM[1])
+    return f'{_d.month}/{_d.day}'
+
+def flush_pending_notify():
+    """非睡眠時段執行時，寄出待補寄清單（寄成功才移除，失敗留待下次）"""
+    if _in_quiet_hours():
+        return 0
+    _items = _pending_load()
+    if not _items:
+        return 0
+    _left, _n = [], 0
+    for _it in _items:
+        if send_gmail(_it.get('subject', '（補寄）'), _it.get('body', ''), urgent=True):
+            _n += 1
+        else:
+            _left.append(_it)
+    _pending_save(_left)
+    print(f'  📮 待補寄清單：寄出 {_n} 則、留待下次 {len(_left)} 則')
+    return _n
 _SENT_COUNT = [0]   # ✅09230055 心跳用：本次執行成功寄出的封數   # ✅09230055 嘉義房租版 09230021 提案甲⑦：通知信三級分類
 
 
@@ -1733,9 +1872,15 @@ def send_gmail(subject, body, urgent=False, kind='一般'):
     _kind = '急迫' if urgent else (kind if kind in NOTIFY_KINDS else '一般')
     _shown = subject if os.environ.get('DEBUG_LOG') == '1' else '（主旨不印入公開執行紀錄；DEBUG_LOG=1 才印）'
     if _kind != '急迫' and _in_quiet_hours():
-        if _kind == '次日有效':
-            print(f"  🌙 睡眠時段(21:30~07:30)，【次日有效】通知延到次日 07:30 後第一個可寄時點：{_shown}")
-            return True
+        if _kind == '次日有效' or _is_delayed_digest_run():   # ✅09251623 ⑤⑥ 存入待補寄清單（原本⑤只印一行即回報成功＝丟棄）
+            _sub2 = subject if _kind == '次日有效' else f'【補寄：{_biz_md()} 排程延遲】' + subject
+            _its = _pending_load()
+            if not any(_x.get('subject') == _sub2 and _x.get('body') == body for _x in _its):
+                _its.append({'subject': _sub2, 'body': body, 'kind': _kind,
+                             'queued_at': datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d %H:%M')})
+            _ok2 = _pending_save(_its)
+            print(f"  🌙 睡眠時段(21:30~07:30)，【{_kind}】通知存入待補寄清單（{'成功' if _ok2 else '失敗'}），07:30 後第一次執行寄出：{_shown}")
+            return _ok2
         _PENDING_DIGEST.append((subject, body))
         print(f"  🌙 睡眠時段(21:30~07:30)，【一般】通知不寄發：{_shown}")
         print(f"     → 改由 20:30 排程(cron: 30 12 * * 1-5, UTC)重算後寄出")
@@ -1834,14 +1979,23 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         _dates = [v.get('stringValue', '') for v in (((_old.get('ok_dates') or {}).get('arrayValue') or {}).get('values') or [])
                   if v.get('stringValue')]
         _last_ok, _streak, _total = _sv('last_ok'), _iv('ok_streak'), _iv('sent_total')
+        # ✅09251623【⑦ 心跳只算準時】房租 09251438 ⑦（主帥 09/25 08:57 回報：延到 01:25 執行、寄出 0 封，仍顯示「連續 3 天正常」）：
+        #   ★連續天數與近 7 天日期只記【非睡眠時段】成功執行的日子；★舊紀錄算法不同，首次換算時不沿用（比照房租版）。
+        _ontime = bool(ok) and not _in_quiet_hours(_dt)
+        if _sv('streak_rule') != 'ontime':
+            _dates, _streak = [], 0
         if ok:
             _last_ok = _now
+        if _ontime:
             if _today not in _dates:
                 _yday = (_dt - timedelta(days=1)).strftime('%Y-%m-%d')
                 _streak = (_streak + 1) if (_dates and _dates[-1] == _yday) else 1
                 _dates = (_dates + [_today])[-7:]
+        if ok:
             _total += int(sent)
         payload = {'fields': {
+            'streak_rule': {'stringValue': 'ontime'},
+            'last_run_ontime': {'booleanValue': _ontime},
             'last_run': {'stringValue': _now},
             'last_run_ok': {'booleanValue': bool(ok)},
             'last_ok': {'stringValue': _last_ok},
@@ -4382,6 +4536,48 @@ def write_tw_prescreened(codes_list, indicators_dict=None):
     except Exception as e: print(f"  ⚠️ 預篩寫入異常：{e}"); return False
 
 
+def write_tw_prescreen_status(stage, pass_count=None):
+    """✅09251507【預篩掃描狀態．主帥 09/25 15:07 甲案②】只更新狀態欄位，不動預篩清單（updateMask）。
+    ・stage='start'：台股掃描開始 → 寫 last_scan_start
+    ・stage='end'  ：台股掃描結束 → 寫 last_scan_end、last_pass_count（★清單為空也寫）
+    ・用途：分辨「掃完但 0 支通過」與「沒跑完（逾時中斷）」；網頁讀的 updated_at 與 codes 不受影響。
+    ★★必須排在 write_tw_prescreened 之後呼叫：後者整份寫入（不帶 updateMask），會把本函式寫的欄位洗掉。
+    """
+    try:
+        import json, os, requests as _req
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json:
+            return False
+        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(json.loads(cred_json),
+            scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        _now = _now_tw().strftime('%Y/%m/%d %H:%M')
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened")
+        if stage == 'start':
+            _fields = {"last_scan_start": {"stringValue": _now}}
+        else:
+            _fields = {"last_scan_end": {"stringValue": _now},
+                       "last_pass_count": {"integerValue": str(int(pass_count or 0))}}
+        _mask = '&'.join(f'updateMask.fieldPaths={k}' for k in _fields)
+        _r = _req.patch(f"{_url}?{_mask}", timeout=15,
+            headers={"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"},
+            json={"fields": _fields})
+        _ok = _r.status_code in (200, 201)
+        print(f"  {'📝' if _ok else '⚠️'} 預篩掃描狀態（{'開始' if stage == 'start' else '結束'}）"
+              f"{'已寫入' if _ok else f'寫入失敗 HTTP {_r.status_code}'}：{_now}"
+              + ('' if stage == 'start' else f'，本次通過 {int(pass_count or 0)} 支'))
+        return _ok
+    except Exception as _e:
+        print(f"  ⚠️ 預篩掃描狀態寫入異常：{str(_e)[:60]}")
+        return False
+
+
 def write_alerts_to_firebase(delist_list, cash_list):
     """寫入下市警報+全額交割到Firebase"""
     try:
@@ -6061,6 +6257,7 @@ def main_task():
         global _tw_prescreened
         _tw_prescreened = []
         _prescreened_ind = {}  # ✅ 05041037
+        write_tw_prescreen_status('start')   # ✅09251507 甲案②：記錄台股掃描開始（沒跑完時只會有開始、沒有結束）
 
         prefetch_realtime_prices(tw_list, '台股')   # ✅08061155 批次預抓即時價
         for i, ticker in enumerate(tw_list):
@@ -6136,6 +6333,7 @@ def main_task():
                 write_tw_stock_names()
         else:
             print('\n🔍 本次預篩：無台股通過條件')
+        write_tw_prescreen_status('end', len(_tw_prescreened))   # ✅09251507 甲案②：清單為空也寫；★排在 write_tw_prescreened 之後
 
 # ── 美股掃描（加入道瓊週K過濾，對應截圖轉折邏輯） ──────────
     if TEST_MODE in ('5mk', 'futures'):
@@ -6989,6 +7187,10 @@ def _run_with_heartbeat(_fn, _label):
     ★★否則「根本沒執行」與「執行但沒訊號」在主帥眼中完全一樣（ＡＭ６０ 變形三）。"""
     try:
         _fn()
+        try:
+            flush_pending_notify()   # ✅09251623 ⑤⑥ 非睡眠時段執行時寄出待補寄清單
+        except Exception as _e2:
+            print(f'  ❌ 待補寄清單寄送例外：{str(_e2)[:80]}')
         write_cloud_heartbeat(ok=True, sent=_SENT_COUNT[0], err='')
     except Exception as _e:
         write_cloud_heartbeat(ok=False, sent=_SENT_COUNT[0], err=f'{_label}:{str(_e)[:80]}')

@@ -1,5 +1,14 @@
 <!--
 ══════════════════════════════════════════════════════════════
+★★★【自我舉證表】(09251623)　網頁同型缺陷三項（嘉義房租版 09251438 第一節①②③；比照主帥 09/25 13:05 於房租版裁示之甲案）
+　①非管理員登入紀錄寫不進　來源＝原檔 1333 行 getDoc(login_log)；規則② read 只准 isLandlord() → 非房東在「讀」即被擋，進 1342 行空 catch
+　　修法＝非管理員改 updateDoc＋arrayUnion 只在尾端追加一筆（不讀）；文件不存在時改 setDoc 建立；管理員維持讀→前加→留200筆，讀出後先依 ts 排序
+　②1342 行空 catch　修法＝管理員走 window._silentFail（雲端狀態列可見）；非管理員印主控台（不讓家人房客看到紅色錯誤）
+　③4846 行未轉義　來源＝今日買進訊號把代碼 t 與 s.condition 直接插入 innerHTML／data-*；signals_ 文件規則③為 isAuthed() 可寫 → 修法＝一律 window._esc()
+──────────────────────────────────────────────────────────────
+★★★【推定清單】(09251623)：①login_log 文件只有 logs 一欄（本檔 1341、4420 行只寫 logs）→ 若為假，非管理員追加會被 appendOnly 的 hasOnly 擋下（登入本身不受影響）
+　②規則②須加 appendOnly('logs') 才放行非管理員追加（主帥部署規則前，非管理員紀錄照舊寫不進，與修改前相同，不會更糟）
+──────────────────────────────────────────────────────────────
 ★★★【自我舉證表】(09181404)　依鐵律ＡＭ２５②：每條關鍵結論須指回來源
 ──────────────────────────────────────────────────────────────
 　結論①W-01 預篩買進訊號從未寄出　來源＝原檔 3556 行 `})(_c2,result);`，_c2 全檔未定義 → 整個 async 區塊拋錯
@@ -257,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09240524</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09251623</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
@@ -1026,7 +1035,7 @@
     </div>
 
     <script type="module">
-        import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { doc, setDoc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";   // ✅09251623 非管理員登入紀錄只追加（房租 09251438 ①a）
         import { signInAnonymously, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // ✅ 確保盾牌等圖示一定渲染（module script為defer，需手動補觸發）
@@ -1326,20 +1335,33 @@
             } catch (e) { window._silentFail('寫入或寄信失敗', e); }
         };
 
+        // ✅09251623【登入紀錄：非管理員只追加】嘉義房租版 09251438 ①（主帥 09/25 13:05 於房租版裁示甲案；房租 12:57 實測同型失敗、13:31 修好）：
+        //   ★原式先 getDoc 讀整份（規則② read 只准房東）→ 家人、房客在「讀」這一步就被擋，進空 catch，什麼都沒寫。
+        //   ★非管理員：不讀，只在尾端追加一筆（規則② 須有 appendOnly('logs')）；★管理員：維持讀→前加→留 200 筆，讀出後先依 ts 由新到舊排序。
         const _writeLoginLog = async (email, success, reason='', method='') => {
             try {
                 await initFirebaseAuth();
                 const _logRef = doc(window.db,'artifacts',window.appId,'public','login_log');
-                const _existing = await getDoc(_logRef);
-                const _logs = (_existing.exists() ? _existing.data().logs : []) || [];
-                _logs.unshift({
-                    email, success, reason, method,
+                const _entry = { email, success, reason, method,
                     time: new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'}),
-                    ts: Date.now()
-                });
-                // 只保留最近100筆
+                    ts: Date.now() };
+                if (!isAdminAuth()) {
+                    try { await updateDoc(_logRef, { logs: arrayUnion(_entry) }); }
+                    catch (e1) {
+                        if (e1 && e1.code === 'not-found') await setDoc(_logRef, { logs: [_entry] });   // 文件不存在：規則② create 放行
+                        else throw e1;
+                    }
+                    return;
+                }
+                const _existing = await getDoc(_logRef);
+                const _logs = ((_existing.exists() ? _existing.data().logs : []) || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+                _logs.unshift(_entry);
+                // 只保留最近200筆
                 await setDoc(_logRef, { logs: _logs.slice(0,200) }, { merge: true });
-            } catch(e) { /* 不影響登入流程 */ }
+            } catch(e) {   // ✅09251623 房租 09251438 ②：原為空 catch（寫入失敗完全無聲）
+                if (isAdminAuth()) window._silentFail('登入紀錄寫入', e);
+                else console.error('[登入紀錄寫入失敗]', e && e.message ? e.message : e);   // 不影響登入流程
+            }
         };
 
         // ✅09240105【網頁顯示雲端心跳】主帥 09/24 01:05 核准（ＡＭ１⑧）：顯示雲端最後執行時間；逾 26 小時無成功紀錄或最近一次失敗 → 紅色警示。
@@ -4351,7 +4373,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if (!_snap.exists() || !_snap.data().logs?.length) {
                     logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">尚無紀錄</div>'; return;
                 }
-                let logs = _snap.data().logs || [];
+                // ✅09251623 非管理員紀錄追加在尾端 → 顯示與統計前一律依 ts 由新到舊排序（房租 09251438 ①c）
+                let logs = (_snap.data().logs || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
                 // 篩選
                 if (_logFilter === 'success')  logs = logs.filter(l => l.success);
                 if (_logFilter === 'fail')      logs = logs.filter(l => !l.success);
@@ -4360,7 +4383,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     logList.innerHTML = '<div style="color:#6a4080;padding:0.5rem;">此類別無紀錄</div>'; return;
                 }
                 // ✅ v05191209修正：各帳號各自登入次數統計（只計成功登入）
-                const _allLogs = _snap.data().logs || [];
+                const _allLogs = (_snap.data().logs || []).slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
                 const _me = currentUserEmail || '';
                 const _cntMap = {};
                 _allLogs.filter(l => l.success && l.email).forEach(l => {
@@ -4832,6 +4855,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
         };
         var _purchaseCache={};
         function _todayStr(offset){var d=new Date();d.setDate(d.getDate()+(offset||0));return d.getFullYear().toString()+(('0'+(d.getMonth()+1)).slice(-2))+(('0'+d.getDate()).slice(-2));}
+        // ✅09251623 房租 09251438 ③：signals_ 文件任何登入者可寫，代碼與條件插入畫面前一律轉義
         window.loadBuySignals=async function(){
             var sl=document.getElementById('signals-list'),btnC=document.getElementById('btn-confirm-purchases');
             if(!sl)return;sl.textContent='讀取中...';
@@ -4843,7 +4867,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if(!tickers.length){sl.textContent='今日尚無買進訊號';if(btnC)btnC.classList.add('hide');return;}
                 var ps=parseFloat(document.getElementById('calc-per-stock').value)||500;
                 var html='';
-                tickers.forEach(function(t){var s=sigs[t];var tk=s.price<=10?0.01:s.price<=50?0.05:s.price<=100?0.1:s.price<=500?0.5:s.price<=1000?1:5;var lm=Math.floor(s.price*1.1/tk)*tk;var sh=Math.floor(ps/lm)||1;var amt=(lm*sh).toFixed(0);html+='<label class="flex items-center gap-1 mb-1 cursor-pointer"><input type="checkbox" class="signal-chk" data-ticker="'+t+'" data-lim="'+lm+'" data-sh="'+sh+'" data-amt="'+amt+'" data-cond="'+(s.condition||'做多進場')+'"><span><b>'+t+'</b> 進場'+s.price.toFixed(2)+'→漲停估'+lm.toFixed(2)+'　建議'+sh+'股≈'+amt+'元</span></label>';});
+                tickers.forEach(function(t){var s=sigs[t];var tk=s.price<=10?0.01:s.price<=50?0.05:s.price<=100?0.1:s.price<=500?0.5:s.price<=1000?1:5;var lm=Math.floor(s.price*1.1/tk)*tk;var sh=Math.floor(ps/lm)||1;var amt=(lm*sh).toFixed(0);html+='<label class="flex items-center gap-1 mb-1 cursor-pointer"><input type="checkbox" class="signal-chk" data-ticker="'+window._esc(t)+'" data-lim="'+lm+'" data-sh="'+sh+'" data-amt="'+amt+'" data-cond="'+window._esc(s.condition||'做多進場')+'"><span><b>'+window._esc(t)+'</b> 進場'+s.price.toFixed(2)+'→漲停估'+lm.toFixed(2)+'　建議'+sh+'股≈'+amt+'元</span></label>';});
                 sl.innerHTML=html;if(btnC)btnC.classList.remove('hide');
             }catch(e){sl.textContent='載入失敗';}
         };
