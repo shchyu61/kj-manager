@@ -92,7 +92,7 @@ jobs:
   # ============================================================
   condw-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 358   # ✅09231655 乙2：內部迴圈 345 分鐘，留 13 分鐘餘裕（GitHub 上限 360）
+    timeout-minutes: 358   # ✅09231655 乙2；✅09261759 甲-3：內部迴圈改 340 分鐘，留 18 分鐘餘裕
 
     steps:
       # 1. 取得程式碼
@@ -140,9 +140,11 @@ jobs:
           #     條件W 今天在 09:00～11:30 現貨時段只掃了約 10 分鐘）。
           #   ★做法：每次觸發後內部迴圈由 50 分鐘延長為 345 分鐘（5 小時 45 分），GitHub 單次上限 360 分鐘；
           #     觸發即使 3～5 小時才來一次，也能接續涵蓋。★公開倉庫的執行時數免費。
-          END=$(( $(date +%s) + 20700 ))
+          # ✅09261759 甲-3：345 分 → 340 分（避免加上安裝時間撞 358 分逾時）；Python 判定時段外會寫 /tmp/kj_stop_loop → 迴圈立即結束，不空轉（主帥 2026/09/26 17:12「是誰授權你將程式碼設計成【每天接力】或【全天接力】!?」、17:29「Q1、Q2、Q4照建議」、17:37「Q5 照建議」）
+          END=$(( $(date +%s) + 20400 ))
           while :; do
             python 3_stock_monitor_GitHub.py || true
+            if [ -f /tmp/kj_stop_loop ]; then echo "🛑 $(cat /tmp/kj_stop_loop)：已在時段外，迴圈結束"; break; fi
             NOW=$(date +%s)
             if [ "$NOW" -ge "$END" ]; then break; fi
             SLEEP=$(( 300 - NOW % 300 ))
