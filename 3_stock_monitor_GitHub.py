@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09251623'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09261759'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
 # ══════════════════════════════════════════════════════════════
@@ -525,6 +525,40 @@ ENABLE_SHORT_STOP_LOSS = False   # 做空停損開關（False=未啟用）
 # 【３．套件引用】
 # ============================================================
 import yfinance as yf
+# ✅09261759【Q4② Yahoo 限流：先等再試】主帥 2026/09/26 17:29「Q4 照建議」
+#   ★依據：yfinance 對大量抓取回傳 Too Many Requests（09/19 有 1000 支以上選股程式回報；本程式第 766 行原只「跳過」）
+#   ★做法：偵測到限流 → 依序等 30、60 秒後重試（最多 2 次）；連續 3 次限流 → 本行程暫停 120 秒一次（斷路器）
+#   ★不改抓取內容與任何訊號條件；非限流錯誤、正常回傳一律原樣交回
+_YF_DL_ORIG = yf.download
+_YF_RL_STREAK = [0]
+def _yf_is_rate_limited(_err_text):
+    return any(k in str(_err_text) for k in ('Too Many Requests', 'Rate limited', 'YFRateLimit', '429'))
+def _yf_download_rl(*_a, **_k):
+    import time as _tm
+    for _i in range(3):
+        _rl = False
+        try:
+            _res = _YF_DL_ORIG(*_a, **_k)
+            try:
+                _errs = getattr(getattr(yf, 'shared', None), '_ERRORS', {}) or {}
+                _rl = bool(_errs) and any(_yf_is_rate_limited(v) for v in _errs.values()) and (_res is None or len(_res) == 0)
+            except Exception:
+                _rl = False
+            if not _rl:
+                _YF_RL_STREAK[0] = 0
+                return _res
+        except Exception as _e:
+            if not _yf_is_rate_limited(_e):
+                raise
+            _rl = True
+        _YF_RL_STREAK[0] += 1
+        if _YF_RL_STREAK[0] >= 3:
+            print('  🧯 Yahoo 連續限流 3 次 → 暫停 120 秒（斷路器）'); _tm.sleep(120); _YF_RL_STREAK[0] = 0
+        if _i < 2:
+            _w = 30 * (2 ** _i)
+            print(f'  ⏳ Yahoo 限流 → 等 {_w} 秒後重試（第 {_i + 1} 次）'); _tm.sleep(_w)
+    return _YF_DL_ORIG(*_a, **_k)
+yf.download = _yf_download_rl
 import pandas as pd
 import pandas_ta as ta
 import smtplib
@@ -1834,6 +1868,69 @@ def _is_delayed_digest_run():
     except Exception:
         return False
 
+def _kj_stop_loop(_why):
+    """✅09261759【時段外迴圈自動結束】雲端 yml 的 bash 迴圈看到 /tmp/kj_stop_loop 即停止，不再空轉到 340 分鐘。
+    ★依據：主帥 09/26 17:12「是誰授權你將程式碼設計成【每天接力】或【全天接力】!?」、17:29「Q1、Q2、Q4照建議」——
+      期貨／條件W 只在週二、週四 15:05 起到週三、週五的時窗內跑；GitHub 使用條款禁止負擔與效益不成比例的長時間佔用。本機版不寫。"""
+    if not IS_GITHUB_ACTIONS:
+        return
+    try:
+        with open('/tmp/kj_stop_loop', 'w', encoding='utf-8') as _f:
+            _f.write(_why)
+        print(f'  🛑 {_why}：已過時段 → 通知雲端迴圈結束（不空轉）')
+    except Exception as _e:
+        print(f'  ⚠️ 迴圈停止標記寫入失敗：{str(_e)[:60]}')
+
+def _tw_scan_slot():
+    """✅09261759【Q5／甲-1】本次執行是否為台股全量（預篩）掃描班；是則回傳 '1200' 或 'sat'，否則 None。
+    ・雲端：讀 GitHub 排程事件的 cron 字串——'0 4 * * 1-5'＝平日 12:00 班、'0 2 * * 6'＝週六 10:00 全量重建。
+    ・本機（筆電工作排程器，主帥 16:41 b 點：平日 11:55 啟動）：平日 11:45～13:30 執行即視為 12:00 班。
+    ・09:05 台股班已取消、22:33 班只掃美股（主帥 17:37「Q5 照建議」）。依據：主帥 2026/09/26 17:12～17:37（Q1～Q5 選定；16:41「全部照建議」；16:55 提醒甲案）"""
+    import os as _o, json as _j
+    if not IS_GITHUB_ACTIONS:
+        _t = _now_tw()
+        return '1200' if (_t.weekday() <= 4 and (11 * 60 + 45) <= _t.hour * 60 + _t.minute <= (13 * 60 + 30)) else None
+    try:
+        _p = _o.environ.get('GITHUB_EVENT_PATH', '')
+        if not _p or not _o.path.exists(_p):
+            return None
+        with open(_p, 'r', encoding='utf-8') as _f:
+            _cr = ' '.join(str((_j.load(_f) or {}).get('schedule') or '').split())
+        return {'0 4 * * 1-5': '1200', '0 2 * * 6': 'sat'}.get(_cr)
+    except Exception:
+        return None
+
+def _tw_scan_status_write(_slot, _by, _hhmm):
+    """✅09261759【提醒功能甲案】把台股掃描實際由誰、幾點執行寫入 Firestore（artifacts/{appId}/public/tw_scan_status），供網頁顯示
+    「筆電排程要不要開／可以關」。只寫狀態、不寄信（主帥 16:55：不要每天固定寄信，避免狼來了）。"""
+    try:
+        import json as _j, requests as _rq
+        _tk = _firestore_token()
+        if not _tk:
+            print('  ⚠️ 台股掃描狀態未寫入：取不到 Firestore token'); return False
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_scan_status")
+        _h = {'Authorization': f'Bearer {_tk}'}
+        _old = []
+        _g = _rq.get(_url, headers=_h, timeout=10)
+        if _g.status_code == 200:
+            _old = _j.loads((((_g.json() or {}).get('fields') or {}).get('hist') or {}).get('stringValue', '[]'))
+        _d = _now_tw().strftime('%Y-%m-%d')
+        _old = [x for x in _old if x.get('date') != _d or x.get('slot') != _slot] + [{'date': _d, 'slot': _slot, 'by': _by, 'at': _hhmm}]
+        _r = _rq.patch(_url, headers=_h, timeout=10, json={'fields': {'hist': {'stringValue': _j.dumps(_old[-14:], ensure_ascii=False)}}})
+        return _r.status_code in (200, 201)
+    except Exception as _e:
+        print(f'  ⚠️ 台股掃描狀態寫入例外：{str(_e)[:60]}'); return False
+
+def _crypto_has_position():
+    """✅09261759【Q3】有虛擬幣多單或空單（程式常數＋網頁版持股）才全天掃；否則只掃 07:30～21:30（主帥 17:29）"""
+    try:
+        if list(HOLDINGS_CRYPTO):
+            return True
+        return any(_intraday_cat(str(x).upper()) == 'crypto' for x in HOLDINGS_SHORT if not str(x).isdigit())
+    except Exception:
+        return True   # 判斷失敗時保守全天，不漏出場
+
 def _biz_md():
     """營業日 M/D：07:30 前屬前一天的班次（比照房租 rental_cloud_notify 09250857）"""
     from datetime import timedelta
@@ -1996,6 +2093,7 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         payload = {'fields': {
             'streak_rule': {'stringValue': 'ontime'},
             'last_run_ontime': {'booleanValue': _ontime},
+            'last_ontime_at': {'stringValue': _now if _ontime else _sv('last_ontime_at')},   # ✅09261759 題2：最後準時時間（非睡眠時段成功）；網頁紅字改看此欄（ＡＭ１⑧；房租 09261526 ④）
             'last_run': {'stringValue': _now},
             'last_run_ok': {'booleanValue': bool(ok)},
             'last_ok': {'stringValue': _last_ok},
@@ -2012,7 +2110,7 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         if r.status_code not in (200, 201):
             print(f'  ❌ 心跳寫入失敗：HTTP {r.status_code}')
             return False
-        print(f'  💓 雲端心跳已寫入：{_now}｜成功={ok}｜最後成功 {_last_ok or "無"}｜連續 {_streak} 天｜版本 {SCRIPT_VERSION}')
+        print(f'  💓 雲端心跳已寫入：{_now}｜成功={ok}｜最後成功 {_last_ok or "無"}｜最後準時 {(_now if _ontime else _sv("last_ontime_at")) or "無"}｜連續 {_streak} 天｜版本 {SCRIPT_VERSION}')
         return True
     except Exception as _e:
         print(f'  ❌ 心跳寫入例外：{str(_e)[:80]}')
@@ -5924,7 +6022,10 @@ def scan_stock_intraday_global():
         act = get_active_markets()
         _t = datetime.now(pytz.timezone('Asia/Taipei')); _wd = _t.weekday(); _tv = _t.hour * 60 + _t.minute
         _fxg = not (_wd == 6 or (_wd == 5 and _tv >= 6 * 60) or (_wd == 0 and _tv < 6 * 60))
-        open_cat = {'us': 'US' in act, 'crypto': True, 'fx': _fxg, 'gold': _fxg}
+        _cry = _crypto_has_position() or ((7 * 60 + 30) <= _tv < (21 * 60 + 30))   # ✅09261759 Q3：有虛擬幣持倉才全天，否則 07:30～21:30（主帥 17:29）
+        open_cat = {'us': 'US' in act, 'crypto': _cry, 'fx': _fxg, 'gold': _fxg}
+        if not any(open_cat.values()) and 'TW' not in act:
+            _kj_stop_loop('即時路線')   # ✅09261759 無任何市場開市 → 迴圈結束
         short_set = set(str(x).upper() for x in HOLDINGS_SHORT if not str(x).isdigit())
         long_set, codes = set(), []
         def _add(c):
@@ -6169,6 +6270,32 @@ def main_task():
 
     # ✅ 主流程一定要執行(不能縮在 if 裡)
     active_markets = get_active_markets()
+    # ✅09261759【Q5／甲-1／同班只跑一次／提醒甲案】主帥 2026/09/26 17:12～17:37（Q1～Q5 選定；16:41「全部照建議」；16:55 提醒甲案）
+    #   ・台股全量（預篩）每天只掃 12:00 一班＋週六 10:00 全量重建；筆電與雲端誰先搶到佔位誰掃，另一台不掃台股（丁案：不會各寄一封）
+    #   ・雲端備援班遲到才掃（台灣 12:30 以後）＝筆電當天沒跑 → 當天寄一封提醒（只一次），並寫狀態給網頁
+    _slot14 = _tw_scan_slot() if (SCAN_TYPE in ('tw', 'tw_full') and TEST_MODE is False) else None
+    if _slot14:
+        _t14 = _now_tw(); _d14 = _t14.strftime('%Y-%m-%d'); _hm14 = _t14.strftime('%H:%M')
+        _cl14 = _claim_alert_firebase(f'twscan_{_slot14}', _d14)
+        if _cl14 is False:
+            if 'TW' in active_markets:
+                active_markets.remove('TW')
+            print(f'  ⏭️ 台股 {_slot14} 班今日已由另一台機器執行，本班不再掃台股（同班只跑一次）')
+            if IS_GITHUB_ACTIONS and _slot14 == '1200':
+                _tw_scan_status_write('1200c', '雲端備援抵達', _hm14)   # 記下雲端備援幾點到，網頁據此判斷筆電排程可否關閉
+        else:
+            if 'TW' not in active_markets and not _tw_market_closed_today():
+                active_markets.append('TW')
+                print(f'  ✅ 甲-1：本班為台股掃描班（{_slot14}），不論執行時點一律掃台股（GitHub 排程延後不再整班跳過）')
+            _by14 = '雲端' if IS_GITHUB_ACTIONS else '筆電'
+            _tw_scan_status_write(_slot14, _by14, _hm14)
+            if IS_GITHUB_ACTIONS and _slot14 == '1200' and _t14.hour * 60 + _t14.minute > 12 * 60 + 30 \
+                    and _claim_alert_firebase('twremind_1200', _d14) is True:
+                send_gmail(f'⏰【提醒】今天 12:00 台股掃描延到 {_hm14} 才由雲端執行',
+                           f'今天（{_d14}）12:00 的台股掃描，筆電工作排程器沒有執行，改由雲端備援在 {_hm14} 才完成（GitHub 排程延後）。\n\n'
+                           '★建議開啟筆電工作排程器：只開 3_stock_monitor.py，平日 11:55 啟動（主帥 09/26 16:41 定案）。\n'
+                           '★本信每天最多一封，只在筆電沒跑、雲端又遲到時才寄；筆電正常執行的日子不會收到。\n'
+                           '★網頁心跳列有「台股 12:00 掃描」近況，可判斷排程要不要開或可以關。')
 
     # (以下請確保第 13, 14 章的掃描與發信代碼, 全部都要縮排在 def main_task 之下)
     print(f"\n{'='*55}")
@@ -7086,6 +7213,8 @@ def main_task():
             # ✅08091324【🔴A】改用 Firebase 原子佔位（跨雲端並行行程安全）
             #   原寫法只看本地 4_notified_today.json，雲端多個 job 各持一份，
             #   彼此看不見 → 同一支會被重複寄出。
+            # ✅09261759【丁案】同一訊號不論哪台機器掃到只寄一封：台股由「同班只跑一次」佔位保證只有一台掃；
+            #   美股等本來就每日一封（上方 _once_mkts）；即時路線另以 K 棒時間去重。故本處額度邏輯不改（主帥 16:41）。
             if _claim_notify_slot(key, today, notified, _mx):
                 filtered.append(s)
 
@@ -7139,6 +7268,7 @@ def main_task():
 
             # ✅08091324【🔴A 對稱處理】賣出訊號有完全相同的雲端並行重複風險，
             #   只修買進會留半套，故一併改用原子佔位。
+            # ✅09261759【丁案】同上（賣出對稱）
             if _claim_notify_slot(key, today, notified, _mx_s):
                 filtered.append(s)
 
@@ -7212,6 +7342,8 @@ if __name__ == "__main__":
     if TEST_MODE == 'condW':
         print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三11:30／週四15:05~週五11:30）")   # ✅09170232 清冊Ｋ１５：窗尾依 R-12 為 11:30
         _run_with_heartbeat(scan_condition_w, 'condW')
+        if _condw_current_window() is None and not globals().get('CONDW_FORCE_TEST', False):   # ✅09261759 時段外迴圈自動結束
+            _kj_stop_loop('條件W')
         time.sleep(3)
         exit()
 
@@ -7283,6 +7415,7 @@ if __name__ == "__main__":
         if not (in_futures or in_tw_extreme or _can_exit or _can_alert):
             print(f"[{test_now}] ❌ 非條件W時窗、亦非台股日盤，直接結束"
                   f"（條件W窗：週二15:05~週三11:30／週四15:05~週五11:30）")
+            _kj_stop_loop('期貨5分K')   # ✅09261759 時段外迴圈自動結束（主帥 17:12、17:29）
             time.sleep(5)
             exit()
 

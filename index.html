@@ -266,8 +266,9 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09251623</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09261759</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
+                <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -378,7 +379,7 @@
                     <div class="rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                         <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                         <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                            ✅ 台股：每天 <b>09:03</b>、<b>12:00</b>、<b>22:33</b> 全市場掃描，符合條件寄 Gmail<br>
+                            ✅ 台股：平日 <b>12:00</b> 全市場掃描，符合條件寄 Gmail<br>
                             ✅ 美股/外匯/黃金/虛擬幣：即時路線<b>每小時</b>掃描（每小時 04 分觸發），符合條件寄 Gmail<br>
                             ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                             <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
@@ -710,12 +711,12 @@
                 <div class="flex justify-center mt-3 mb-2">
                     <button onclick="startManualScan()" class="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all shadow-md">啟動 AI 診斷</button>
                 </div>
-                                <div class="text-[10px] text-center leading-relaxed mb-2" style="color:#94a3b8;">💡 「啟動AI診斷」結果僅顯示於螢幕，<b style="color:#e53935;">不會發送Gmail</b>。Gmail由雲端自動掃描發出（台股 09:03／12:00／22:33；美股、外匯、黃金、虛擬幣每小時）</div>
+                                <div class="text-[10px] text-center leading-relaxed mb-2" style="color:#94a3b8;">💡 「啟動AI診斷」結果僅顯示於螢幕，<b style="color:#e53935;">不會發送Gmail</b>。Gmail由雲端自動掃描發出（台股 12:00；美股、外匯、黃金、虛擬幣每小時）</div>
                 <!-- ✅ GitHub Actions 自動通知提醒卡 -->
                 <div class="mt-6 rounded-2xl p-3" style="background:#fffbe6; border:1.5px solid #f0c040;">
                     <div class="text-sm font-black mb-1" style="color:#7a4a00;">⚙️ GitHub Actions 雲端自動掃描（不需開瀏覽器）</div>
                     <div class="text-[12px] leading-relaxed" style="color:#5a3a00;">
-                        ✅ 台股：每天 <b>09:03</b>、<b>12:00</b>、<b>22:33</b> 全市場掃描，符合條件寄 Gmail<br>
+                        ✅ 台股：平日 <b>12:00</b> 全市場掃描，符合條件寄 Gmail<br>
                         ✅ 美股/外匯/黃金/虛擬幣：即時路線<b>每小時</b>掃描（每小時 04 分觸發），符合條件寄 Gmail<br>
                         ✅ 24小時無人值守，手機/電腦關機也會自動執行<br>
                         <span style="color:#8a4a00;">⚠️ 以下「自動掃描」按鈕需開著瀏覽器才有效，可補充排程外的即時掃描需求</span>
@@ -1381,11 +1382,15 @@
                 const md = s => s ? String(s).slice(5, 16).replace('-', '/') : '無';
                 const hrs = lastOk ? (Date.now() - toT(lastOk).getTime()) / 3600000 : NaN;
                 const days = (hb.ok_dates || []).map(d => String(d).slice(5).replace('-', '/')).join('、');
-                el.title = '最後成功：' + md(lastOk) + '\n最後執行：' + md(hb.last_run) + (err ? '\n錯誤：' + err : '')
+                el.title = '最後成功：' + md(lastOk) + '\n最後準時：' + md(hb.last_ontime_at) + '\n最後執行：' + md(hb.last_run) + (err ? '\n錯誤：' + err : '')
                          + (days ? '\n近 7 天成功：' + days : '') + (hb.ok_streak ? '\n連續成功：' + hb.ok_streak + ' 天' : '')
                          + (hb.version ? '\n雲端版本：' + hb.version : '');
                 if (isNaN(hrs) || hrs > 26) {
                     el.textContent = '⚠️ 雲端已 ' + (isNaN(hrs) ? '?' : Math.floor(hrs)) + ' 小時沒有成功執行（最後成功 ' + md(lastOk) + (err ? '；錯誤：' + String(err).slice(0, 40) : '') + '）';
+                    el.style.color = '#dc2626';
+                } else if (hb.last_ontime_at && (Date.now() - toT(hb.last_ontime_at).getTime()) / 3600000 > 26) {
+                    // ✅09261759 題2（主帥 09/26 16:15 採納；房租 09261526 ④）：深夜執行也算成功 → 另看「最後準時」（非睡眠時段成功）
+                    el.textContent = '⚠️ 雲端已 ' + Math.floor((Date.now() - toT(hb.last_ontime_at).getTime()) / 3600000) + ' 小時沒有準時（非睡眠時段）成功執行（最後準時 ' + md(hb.last_ontime_at) + '）｜急用時到 GitHub 按 Run workflow';
                     el.style.color = '#dc2626';
                 } else if (runOk === false) {
                     el.textContent = '🟡 雲端最近一次執行失敗（' + md(hb.last_run) + '），最後成功 ' + md(lastOk);
@@ -1399,9 +1404,46 @@
                 console.warn('[雲端心跳] 讀取失敗', e);
             }
         };
+
+        // ✅09261759【提醒功能甲案】主帥 09/26 16:55：平常只看網頁、出狀況才寄信；提醒「筆電工作排程器要開／可以關」
+        //   ★資料：雲端與筆電寫入 artifacts/{appId}/public/tw_scan_status（hist：date／slot／by／at）；只讀不寫，一律 textContent
+        window.loadTwScanStatus = async function () {
+            const el = document.getElementById('tw-scan-st');
+            if (!el) return;
+            try {
+                const snap = await getDoc(doc(window.db, 'artifacts', window.appId, 'public', 'tw_scan_status'));
+                if (!snap.exists()) { el.textContent = '📋 台股 12:00 掃描：尚無紀錄'; el.style.color = '#94a3b8'; return; }
+                let hist = [];
+                try { hist = JSON.parse((snap.data() || {}).hist || '[]'); } catch (e) { hist = []; }
+                const key = x => String(x.date || '') + String(x.at || '');
+                const main = hist.filter(x => x.slot === '1200').sort((a, b) => key(a).localeCompare(key(b)));
+                const cloud = hist.filter(x => (x.slot === '1200' && x.by === '雲端') || x.slot === '1200c').sort((a, b) => key(a).localeCompare(key(b)));
+                const last = main[main.length - 1];
+                if (!last) { el.textContent = '📋 台股 12:00 掃描：尚無紀錄'; el.style.color = '#94a3b8'; return; }
+                const md = String(last.date || '').slice(5).replace('-', '/');
+                const late = x => String(x.at || '99:99') > '12:30';
+                const recent = cloud.slice(-5);
+                const cloudOk5 = recent.length >= 5 && recent.every(x => !late(x));
+                let msg = '', color = '#16a34a';
+                if (last.by === '筆電') {
+                    msg = '✅ 台股 12:00 掃描：' + md + ' ' + last.at + ' 由筆電完成' + (cloudOk5 ? '｜雲端近 5 天皆準時，筆電排程可以關閉' : '｜筆電排程請保持開啟');
+                } else if (late(last)) {
+                    msg = '⚠️ 台股 12:00 掃描：' + md + ' 雲端延到 ' + last.at + ' 才完成｜建議開啟筆電工作排程器（3_stock_monitor.py 平日 11:55）';
+                    color = '#dc2626';
+                } else {
+                    msg = '✅ 台股 12:00 掃描：' + md + ' ' + last.at + ' 由雲端準時完成' + (cloudOk5 ? '｜筆電排程可以關閉' : '');
+                }
+                el.textContent = msg; el.style.color = color;
+                el.title = '近期紀錄：' + main.slice(-5).map(x => String(x.date || '').slice(5) + ' ' + x.at + ' ' + x.by).join('、');
+            } catch (e) {
+                el.textContent = '📋 台股 12:00 掃描：讀取失敗'; el.style.color = '#d97706';
+                console.warn('[台股掃描狀態] 讀取失敗', e);
+            }
+        };
         const completeLogin = async (email, method='OTP') => {
             currentUserEmail = email;
             setTimeout(() => { try { window.loadCloudHeartbeat && window.loadCloudHeartbeat(); } catch (e) {} }, 1500);   // ✅09240105 登入後讀取雲端心跳（不阻塞登入）
+            if (window.loadTwScanStatus) window.loadTwScanStatus();   // ✅09261759 提醒功能甲案
             // 自動登入記錄為「自動登入」，手動登入記錄實際方式（不再假裝是OTP）
             _writeLoginLog(email, true, '', method === '自動登入' ? '自動登入（沿用上次）' : method);
             // ✅ Bug3修正：登入成功後記錄到 localStorage，重新整理不需重新登入
