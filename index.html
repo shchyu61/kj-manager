@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09272008</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09280149</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1433,6 +1433,19 @@
                 } else {
                     msg = '✅ 台股 12:00 掃描：' + md + ' ' + last.at + ' 由雲端準時完成' + (cloudOk5 ? '｜筆電排程可以關閉' : '');
                 }
+                // ✅09280149 預篩清單天數與週六全量重建（乙的加強版，主帥 09/27 23:17）：逾 8 天紅字
+                try {
+                    const _ps = await getDoc(doc(window.db, 'artifacts', window.appId, 'public', 'tw_prescreened'));
+                    const _pd = _ps.exists() ? (_ps.data() || {}) : {};
+                    const _m = String(_pd.updated_at || '').match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+                    if (_m) {
+                        const _t0 = new Date(Number(_m[1]), Number(_m[2]) - 1, Number(_m[3])); const _t1 = new Date(); _t1.setHours(0, 0, 0, 0);
+                        const _days = Math.round((_t1 - _t0) / 86400000);
+                        msg += '｜預篩清單 ' + _days + ' 天前更新';
+                        if (_days > 8) { msg += '（⚠️ 逾 8 天，週六全量重建可能失敗）'; color = '#dc2626'; }
+                    }
+                    if (_pd.sat_rebuild_date) msg += '｜週六重建：' + String(_pd.sat_rebuild_date).slice(5) + ' ' + (_pd.sat_rebuild_by || '') + (_pd.sat_rebuild_end ? ' 完成' : ' 進行中或未完成');
+                } catch (e) { window._silentFail('預篩清單天數讀取', e); }
                 el.textContent = msg; el.style.color = color;
                 el.title = '近期紀錄：' + main.slice(-5).map(x => String(x.date || '').slice(5) + ' ' + x.at + ' ' + x.by).join('、');
             } catch (e) {
@@ -1471,9 +1484,9 @@
                 const _wd  = _now.getDay();
                 const _tv  = _now.getHours() * 60 + _now.getMinutes();
                 const _inFutures = (
-                    (_wd >= 1 && _wd <= 5 && _tv >= 9*60+5 && _tv <= 13*60+30) ||   // ✅09181404 日盤 09:05~13:30
-                    (_wd === 2 && (_tv < 1*60 || _tv >= 5*60)) ||           // 週二（排除凌晨01:00~05:00）
-                    (_wd === 3 && _tv <= 11*60+30)                          // 週三11:30前
+                    // ✅09280149 與期貨開關、期貨掃描同一時窗（R-12；策略說明第 10 行、否決 R-25）——09272008 批漏改此處，週一白天登入會誤開開關而跳提示
+                    (_wd === 2 && _tv >= 15*60+5) || (_wd === 3 && _tv <= 11*60+30) ||
+                    (_wd === 4 && _tv >= 15*60+5) || (_wd === 5 && _tv <= 11*60+30)
                 );
                 if (_inFutures && !_futuresActive) {
                     setTimeout(() => window.toggleFutures5mk(), 800);
@@ -1490,6 +1503,10 @@
             loadTwStockNames();
             // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
             if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
+            // ✅09280149 零股計算機競速修正（主帥 09/02 01:15「我同意」）：計算機設定、今日買進訊號、購買紀錄改在登入完成後讀取；
+            //   原於網頁載入 0.8 秒／2 秒後寫死讀取，登入未完成即被空 catch 吞掉，資金欄停在預設 10000
+            try { window.loadCalcSettings && window.loadCalcSettings(); } catch (e) { window._silentFail('零股計算機設定載入', e); }
+            try { window.loadBuySignals && window.loadBuySignals(); window.loadPurchaseRecords && window.loadPurchaseRecords(); } catch (e) { window._silentFail('今日買進訊號與購買紀錄載入', e); }
         };
 
         const showError = (msg) => {
@@ -3187,6 +3204,7 @@ ${window._strikeHint(_hit.px, _isCall)}
             } catch (e) { return null; }
         };
         window._setFutPos = async (patch) => {
+            if (!isAdminAuth()) { window.showAlert('⚠️ 期貨持倉僅限本人修改'); return; }   // ✅09280149 ＡＫ３ 函式層防呆（AK2-1 稽核 S3 查出：畫面層有擋、函式層沒擋）
             try {
                 await initFirebaseAuth();
                 await setDoc(doc(window.db, 'artifacts', window.appId, 'public', 'futures_status'), patch, { merge: true });
@@ -4517,7 +4535,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     set('calc-split-n', d.split_n);
                     if(d.ctrl_mode){ var cmEl=document.getElementById('calc-ctrl-mode'); if(cmEl){ cmEl.value=d.ctrl_mode; } }
                 }
-            } catch(e) {}
+            } catch(e) { window._silentFail('零股計算機設定載入', e); }   // ✅09280149 原為空 catch（ＡＭ１３）
             window.calcBudget();
         };
         var _purchaseCache={};
@@ -4580,10 +4598,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             if(el){el.textContent=avail.toFixed(0)+' 元';el.style.color=avail<0?'#dc2626':'#1d4ed8';}
             window.calcResult&&window.calcResult();
         };
-        setTimeout(function(){
-            window.loadCalcSettings&&window.loadCalcSettings();
-            setTimeout(function(){window.loadBuySignals&&window.loadBuySignals();window.loadPurchaseRecords&&window.loadPurchaseRecords();},1200);
-        },800);
+        // ✅09280149 原網頁載入後寫死 0.8 秒／2 秒讀計算機設定與買進訊號（競速），已改於 completeLogin 登入完成後讀取
     </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09272008'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09280149'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -3226,9 +3226,15 @@ def _fetch_option_chain():
                 pass
 
         # ── 正規化為舊有欄位名，並過濾掉無法解析／無成交價者 ──
-        _rows, _bad = [], 0
+        _rows, _bad, _stale = [], 0, 0
+        _nowm = _now_tw().hour * 60 + _now_tw().minute   # ✅09280149 報價時間逾 30 分鐘不採用（待辦 V⑤；全部過期即改用距離推估備援）
         for _q in _ql:
             if not isinstance(_q, dict):
+                continue
+            import re as _re5   # 本檔頂層未 import re（9_自檢 (180) 查出）
+            _ct = _re5.sub(r'\D', '', str(_q.get('CTime', '')))
+            if len(_ct) >= 4 and abs(_nowm - (int(_ct[:2]) * 60 + int(_ct[2:4]))) > 30:
+                _stale += 1
                 continue
             _sym = _q.get('SymbolID') or _q.get('Symbol') or _q.get('ProdID') or ''
             _strike, _cp = _mis_parse_symbol(_sym)
@@ -3254,6 +3260,9 @@ def _fetch_option_chain():
                           'contract_date': str(_q.get('DispCName', '')).strip()})
         _opt_chain_cache = {'ts': _t.time(), 'rows': _rows,
                             'logged_keys': True}
+        if not _rows and _stale:
+            print(f"  ⚠️ 期交所選擇權：{_stale} 檔報價時間逾 30 分鐘（非即時）→ 降級為距離推估")
+            return None
         if not _rows:
             print(f"  ⚠️ 期交所選擇權：取得 {len(_ql)} 檔但【0 檔可解析】→ 降級為距離推估。"
                   f"　★請把上面那行「MIS 原始欄位名」回報給AI，以校正代碼欄位。")
@@ -4625,6 +4634,111 @@ def write_tw_prescreened(codes_list, indicators_dict=None):
             print(f"  ✅ Firebase 預篩清單+指標已更新：{len(_merged)} 支，指標 {_ind_cnt} 支 ({_now})"); return True
         print(f"  ❌ 預篩寫入失敗：{_r.status_code}"); return False
     except Exception as e: print(f"  ⚠️ 預篩寫入異常：{e}"); return False
+
+
+def _fs_prescreen_url_token():
+    """✅09280149 取得 Firestore tw_prescreened 文件網址與存取權杖（與 write_tw_prescreen_status 同一取法）；失敗回 (None, None)。"""
+    try:
+        import json, os, requests as _rq
+        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        if not cred_json:
+            _cf = os.path.join(os.path.dirname(os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+            if os.path.exists(_cf):
+                with open(_cf, 'r', encoding='utf-8') as f: cred_json = f.read()
+        if not cred_json:
+            return None, None
+        import google.oauth2.service_account as _sa, google.auth.transport.requests as _gtr
+        _c = _sa.Credentials.from_service_account_info(json.loads(cred_json), scopes=['https://www.googleapis.com/auth/datastore'])
+        _c.refresh(_gtr.Request())
+        return (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/tw_prescreened"), _c.token
+    except Exception as _e:
+        print(f"  ⚠️ 預篩文件連線失敗：{str(_e)[:60]}")
+        return None, None
+
+
+def _sat_rebuild_claim():
+    """✅09280149 週六全量重建互斥（主帥 09/27 23:17：「我選乙的加強版。……筆電的工作排程器,週六的那個排程……要不要改成長期開啟。……改到讓他們不會互相干擾或影響,誰先執行,就自動取消或放棄第2次的執行或1800支資料。」）
+    ・筆電與雲端共用 Firestore tw_prescreened 的 sat_rebuild_date／by／start／end 四欄。
+    ・今天已完成，或另一方 3 小時內已開始 → 本次放棄；否則登記自己後 2 秒再讀，確認記錄的是自己才執行。
+    ・Firestore 讀不到時照常執行（寧可重跑，不可漏跑）。"""
+    import requests as _rq, time as _tm
+    _by = '雲端' if IS_GITHUB_ACTIONS else '筆電'
+    _now = _now_tw(); _today = _now.strftime('%Y/%m/%d'); _hm = _now.strftime('%H:%M')
+    _url, _tok = _fs_prescreen_url_token()
+    if not _url:
+        print('  ⚠️ 週六互斥：讀不到 Firestore，照常執行全量重建（寧可重跑，不可漏跑）'); return True
+    _hd = {"Authorization": f"Bearer {_tok}", "Content-Type": "application/json"}
+    def _get():
+        _r = _rq.get(_url, headers=_hd, timeout=10)
+        _f = (_r.json().get('fields', {}) if _r.status_code == 200 else {})
+        return {k: _f.get(k, {}).get('stringValue', '') for k in ('sat_rebuild_date', 'sat_rebuild_by', 'sat_rebuild_start', 'sat_rebuild_end')}
+    try:
+        _d = _get()
+        if _d['sat_rebuild_date'] == _today:
+            if _d['sat_rebuild_end']:
+                print(f"  ⏭️ 週六全量重建今日已由{_d['sat_rebuild_by']}於 {_d['sat_rebuild_end']} 完成，本次（{_by}）放棄"); return False
+            try:
+                _st = _now.replace(hour=int(_d['sat_rebuild_start'][:2]), minute=int(_d['sat_rebuild_start'][3:5]), second=0, microsecond=0)
+                _age = (_now - _st).total_seconds() / 60
+            except Exception:
+                _age = 0
+            if _age < 180 and _d['sat_rebuild_by'] != _by:
+                print(f"  ⏭️ 週六全量重建已由{_d['sat_rebuild_by']}於 {_d['sat_rebuild_start']} 開始（{_age:.0f} 分鐘前），本次（{_by}）放棄"); return False
+        _fields = {'sat_rebuild_date': {'stringValue': _today}, 'sat_rebuild_by': {'stringValue': _by},
+                   'sat_rebuild_start': {'stringValue': _hm}, 'sat_rebuild_end': {'stringValue': ''}}
+        _mask = '&'.join(f'updateMask.fieldPaths={k}' for k in _fields)
+        _rq.patch(f"{_url}?{_mask}", headers=_hd, timeout=15, json={'fields': _fields})
+        _tm.sleep(2)
+        _d2 = _get()
+        if _d2['sat_rebuild_by'] != _by or _d2['sat_rebuild_start'] != _hm:
+            print(f"  ⏭️ 週六全量重建：{_d2['sat_rebuild_by']}幾乎同時啟動並已登記，本次（{_by}）放棄"); return False
+        print(f"  📝 週六全量重建：由{_by}於 {_hm} 開始（已登記，另一方將自動放棄）"); return True
+    except Exception as _e:
+        print(f"  ⚠️ 週六互斥檢查異常（{str(_e)[:50]}），照常執行全量重建"); return True
+
+
+def _sat_rebuild_mark_end():
+    """✅09280149 週六全量重建完成，登記完成時間（供另一方判斷放棄）。"""
+    try:
+        import requests as _rq
+        _url, _tok = _fs_prescreen_url_token()
+        if not _url: return
+        _hm = _now_tw().strftime('%H:%M')
+        _rq.patch(f"{_url}?updateMask.fieldPaths=sat_rebuild_end", timeout=15,
+                  headers={"Authorization": f"Bearer {_tok}", "Content-Type": "application/json"},
+                  json={'fields': {'sat_rebuild_end': {'stringValue': _hm}}})
+        print(f"  📝 週六全量重建完成登記：{_hm}")
+    except Exception as _e:
+        print(f"  ⚠️ 週六全量重建完成登記失敗：{str(_e)[:50]}")
+
+
+def _prescreen_stale_days(updated_at):
+    """✅09280149 預篩清單距今天數；無法解析回 None。"""
+    import re   # 本檔頂層未 import re（9_自檢 (180) 查出）
+    m = re.search(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', str(updated_at or ''))
+    if not m: return None
+    try:
+        from datetime import date as _dt
+        return (_now_tw().date() - _dt(int(m.group(1)), int(m.group(2)), int(m.group(3)))).days
+    except Exception:
+        return None
+
+
+def _prescreen_stale_warn(updated_at):
+    """✅09280149 預篩清單逾 8 天未更新 → 寄提醒信（每天最多一封）；乙的加強版（主帥 09/27 23:17：「我選乙的加強版。……筆電的工作排程器,週六的那個排程……要不要改成長期開啟。……改到讓他們不會互相干擾或影響,誰先執行,就自動取消或放棄第2次的執行或1800支資料。」）"""
+    _days = _prescreen_stale_days(updated_at)
+    if _days is None or _days <= 8:
+        return
+    _today = _now_tw().strftime('%Y-%m-%d'); _key = f'預篩過期_{_today}'
+    notified.setdefault(_today, [])
+    print(f"  ⚠️ 台股預篩清單已 {_days} 天未更新（最後更新 {updated_at}），本次仍照用")
+    if _key in notified[_today]:
+        return
+    notified[_today].append(_key); save_notified(notified)
+    send_gmail(f"⚠️ 台股預篩清單已 {_days} 天未更新",
+               f"最後更新：{updated_at}\n代表週六全量重建可能失敗（筆電與雲端皆未完成）。\n本次平日掃描仍照用舊清單。\n請確認筆電週六 10:05 排程已開啟，或手動執行一次全量重建。",
+               kind='一般')
 
 
 def write_tw_prescreen_status(stage, pass_count=None):
@@ -6359,6 +6473,12 @@ def main_task():
         # ✅ v05201555：週六強制全量1827支重掃（定期更新預篩清單）
         _is_saturday_scan = (_now_tw().weekday() == 5) or (SCAN_TYPE == 'tw_full')   # ✅08060719 時區修正：原取UTC星期
         _fb_cache = read_tw_prescreened()
+        _sat_skip = False
+        if _is_saturday_scan and not _sat_rebuild_claim():   # ✅09280149 週六全量重建：筆電與雲端互斥，誰先執行另一方放棄
+            _sat_skip = True
+            tw_list = []
+        elif (not _is_saturday_scan) and _fb_cache:
+            _prescreen_stale_warn(_fb_cache.get('updated_at', ''))   # ✅09280149 預篩清單逾 8 天 → 提醒信（仍照用）
         if not _is_saturday_scan and _fb_cache and len(_fb_cache.get('codes', [])) > 0:
             _cached_codes = _fb_cache['codes']
             _cache_time   = _fb_cache.get('updated_at', '—')
@@ -6377,7 +6497,7 @@ def main_task():
         global _tw_prescreened
         _tw_prescreened = []
         _prescreened_ind = {}  # ✅ 05041037
-        write_tw_prescreen_status('start')   # ✅09251507 甲案②：記錄台股掃描開始（沒跑完時只會有開始、沒有結束）
+        if not _sat_skip: write_tw_prescreen_status('start')   # ✅09280149 放棄時不寫假紀錄｜✅09251507 甲案②：記錄台股掃描開始（沒跑完時只會有開始、沒有結束）
 
         prefetch_realtime_prices(tw_list, '台股')   # ✅08061155 批次預抓即時價
         for i, ticker in enumerate(tw_list):
@@ -6453,7 +6573,8 @@ def main_task():
                 write_tw_stock_names()
         else:
             print('\n🔍 本次預篩：無台股通過條件')
-        write_tw_prescreen_status('end', len(_tw_prescreened))   # ✅09251507 甲案②：清單為空也寫；★排在 write_tw_prescreened 之後
+        if _is_saturday_scan and not _sat_skip: _sat_rebuild_mark_end()   # ✅09280149 週六全量重建完成登記
+        if not _sat_skip: write_tw_prescreen_status('end', len(_tw_prescreened))   # ✅09251507 甲案②：清單為空也寫；★排在 write_tw_prescreened 之後
 
 # ── 美股掃描（加入道瓊週K過濾，對應截圖轉折邏輯） ──────────
     if TEST_MODE in ('5mk', 'futures'):
