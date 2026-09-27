@@ -1,8 +1,8 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09261759'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09272008'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
-# 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【本機版】
+# 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
 # ★本機版由雲端版直接產生，★★策略邏輯與雲端版 100% 相同，差別只在執行環境（ＡＭ２９ 四版一致）。
 #   ・GMAIL_PASSWORD　　→ 本機在下方常數區直接填入，或設環境變數
@@ -1410,7 +1410,7 @@ def check_tw_intraday_extreme():
         _arr = '↘' if _dir == 'DOWN' else '↗'
         _act = ('暴跌！考慮台指期做空或 buy put' if _dir == 'DOWN'
                 else '急漲！考慮台指期做多或 buy call')
-        _subject = (f"💻【本機】{_emoji}【盤中即時】台股極端異動！"
+        _subject = (f"☁️【雲端】{_emoji}【盤中即時】台股極端異動！"
                     f"{_arr}{int(abs(_pts))}點({_pct:+.1f}%)")
         _body = '\n'.join([
             f'⚠️ 台股大盤【盤中即時】極端異動（台灣時間 {_n.strftime("%H:%M")}）',
@@ -2313,7 +2313,7 @@ def _patch_ref_realtime(df, px):
         df.iloc[-1, df.columns.get_loc('Close')] = px
         c = df['Close']
         df['ma_c_20'] = c.rolling(20).mean()
-        _std20 = c.rolling(20).std()
+        _std20 = c.rolling(20).std(ddof=0)   # ✅09271746 同 calc_indicators（母體標準差）
         df['boll_mid20'] = df['ma_c_20']
         df['boll_top20'] = df['ma_c_20'] + 2 * _std20
         df['boll_bot20'] = df['ma_c_20'] - 2 * _std20
@@ -2428,12 +2428,12 @@ def calc_indicators(df):
         df['ma_v_5']  = v.rolling(5).mean()
 
         # 布林通道（週期20，標準差2）
-        std20            = c.rolling(20).std()
+        std20            = c.rolling(20).std(ddof=0)   # ✅09271746 母體標準差：以 eLeader 為準（主帥 09/27 15:57 B 甲、16:36；6_Eleader條件碼轉python版 第 579～581 行）
         df['boll_top20'] = df['ma_c_20'] + 2 * std20
         df['boll_bot20'] = df['ma_c_20'] - 2 * std20
 
         # 短期布林通道（週期2，標準差2）
-        std2             = c.rolling(2).std()
+        std2             = c.rolling(2).std(ddof=0)    # ✅09271746 同上
         df['boll_top2']  = df['ma_c_2'] + 2 * std2
         df['boll_bot2']  = df['ma_c_2'] - 2 * std2
 
@@ -2493,6 +2493,8 @@ def build_fund_proxy_df(df_spy, df_qqq, df_hyg):
 # ⚙️  可調參數請至【２-1章策略參數設定區】修改，勿直接改這裡
 # ============================================================
 def check_buy_precondition(df, is_weekly=False):
+    # ✅09271746【第一道改表二】4-1「【第一道】【第二道】【第三道】全部適用同一套」（主帥 09/19 09:43；09/27 17:46「分級照辦」）；舊式條件A／B／C 不再作為通過條件，以下舊碼保留存查不執行
+    return bool(stage_pass(df, True, entry=True)), False
     try:
         l   = df['Low']
         h   = df['High']
@@ -2821,6 +2823,8 @@ def check_cover_condD(df):
 # ============================================================
 def check_short_precondition(df, is_weekly=False):
     """做空第一道：週K位階高檔（買進策略完全鏡像）"""
+    # ✅09271746【第一道改表二】4-1「【第一道】【第二道】【第三道】全部適用同一套」（主帥 09/19 09:43；09/27 17:46「分級照辦」）；舊式條件A／B／C 不再作為通過條件，以下舊碼保留存查不執行
+    return bool(stage_pass(df, False, entry=True)), False
     try:
         l   = df['Low']
         h   = df['High']
@@ -3128,17 +3132,17 @@ def analyse_market_index(ticker, label):
         # 多頭A/B/C/E：月K或日K通過（非條件D）
         # ✅09141319 第一道已改為只認 A/B/C（不含 condD），★故此處不必再 `and not condD`。
         #   ★★保留原寫法不會出錯，★但語意上已重複，★★★改為直接使用 ok_*。
-        result['bull_abc'] = (ok_w or _e_bull_w or ok_d or _e_bull_d)
+        result['bull_abc'] = (ok_w or _ok_wk)   # ✅09271746 守門員只看月K OR 週K、不用條件E（主帥 09/27 17:27：守門員只負責入場審核）
         # 多頭條件D：月K或日K條件D通過
         result['bull_d']   = condD_bull_w or condD_bull_d
         # 空頭A/B/C/E：月K或日K空頭通過（非條件D）
-        result['bear_abc'] = (ok_ws or _e_bear_w or ok_ds or _e_bear_d)  # ✅09141319 同上
+        result['bear_abc'] = (ok_ws or _ok_wks)   # ✅09271746 同上  # ✅09141319 同上
         # 空頭條件D：月K或日K空頭條件D
         result['bear_d']   = condD_bear_w or condD_bear_d
         # 下彎警告：RSI↓ AND MACD柱↓（兩個都下彎才警告）
         rsi_down  = _safe_float(last_w['rsi14']) < float(prev_w['rsi14'])
         macd_down = float(last_w['macd_hist']) < float(prev_w['macd_hist'])
-        result['warn'] = rsi_down and macd_down and not ok_w and not ok_ws
+        result['warn'] = rsi_down and macd_down and not (ok_w or _ok_wk) and not (ok_ws or _ok_wks)   # ✅09271746 同上
 
         # 輸出診斷
         flags = []
@@ -3440,7 +3444,14 @@ def _full_third_gate(df, is_long):
       碰軌(近5) AND OSC 前置(前2→前1) AND 轉折(前1→當根，以最高／最低價) AND 前1根實體。
     ★★條件E／eLeader 不再單獨使第三道成立（原式讓它們可獨立通過，是 MMM 誤發的成因之一）。
     """
-    return stage_pass(df, is_long, entry=True)
+    # ✅09271746 第三道另加 RSI 門檻（主帥 09/27 17:26：「既然稱【第三道】,就是真正決定是否正式進出場的關鍵時刻……當然要保留啊!」）
+    if not stage_pass(df, is_long, entry=True):
+        return False
+    try:
+        _r = float(df['rsi14'].iloc[-1])
+    except Exception:
+        return False
+    return (_r > BUY_RSI_MIN) if is_long else (_r < SHORT_RSI_MAX)
 
 
 
@@ -3551,19 +3562,15 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 _is_long_ok, _condD_long   = check_buy_precondition(_df1st)
                 _is_short_ok, _condD_short = check_short_precondition(_df1st)
                 # ✅ 05100733：條件E OR 條件A（日K模式）
-                if not _is_long_ok  and check_condE_long(_df1st):
-                    _is_long_ok, _condD_long  = True, False
-                if not _is_short_ok and check_condE_short(_df1st):
-                    _is_short_ok, _condD_short = True, False
+                pass   # ✅09271746 條件E 不再單獨使第一道通過（4-1、第十三章）
+                pass   # ✅09271746 同上（空方）
             else:
                 # ✅ v06100610：月K模式第一道：用月K(df_w,1mo)，非週K！
                 _is_long_ok, _condD_long   = check_buy_precondition(df_w, is_weekly=True)
                 _is_short_ok, _condD_short = check_short_precondition(df_w, is_weekly=True)
                 # ✅ 05100733：條件E OR 條件A（週K模式）
-                if not _is_long_ok  and check_condE_long(df_w):
-                    _is_long_ok, _condD_long  = True, False
-                if not _is_short_ok and check_condE_short(df_w):
-                    _is_short_ok, _condD_short = True, False
+                pass   # ✅09271746 條件E 不再單獨使第一道通過（4-1、第十三章）
+                pass   # ✅09271746 同上（空方）
             # ✅ 診斷輸出：第一道結果（_mode_label由scan_stock_mixed傳入）
             _wk_label = _mode_label if _mode_label else ('月K' if SCAN_MODE != 'daily' else '週K')  # ✅ v05200928
             if _is_long_ok:
@@ -3598,24 +3605,22 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 
         if _is_long_ok:
             # ✅ v05191855：第二道 = 日K A/B/C/E（近5根同時滿足碰軌與轉折）OR 日K F(eLeader)
-            _2nd_abc = (stage_pass(_df_1d, True, entry=True) or
-                        (_df_1d is not None and check_condE_long(_df_1d))) if _df_1d is not None else False
+            _2nd_abc = stage_pass(_df_1d, True, entry=True) if _df_1d is not None else False   # ✅09271746 拿掉條件E 單獨通過
             _2nd_el  = False   # ✅09191108 eLeader 不再單獨使一道通過（併入 stage_pass） if _df_1d is not None else False
             is_eleader_ok = _2nd_abc or _2nd_el
             if _condD_long:
                 # ✅ v05192327：高位階第二道 = 日K 條件D OR F（可選，不強制）
                 _2nd_d_ok = check_buy_precondition(_df_1d)[1] if _df_1d is not None else False  # condD日K
-                is_eleader_ok = is_eleader_ok or _2nd_d_ok  # D OR F 任一通過
+                pass   # ✅09271746 條件D 不得補位第二道：做多第一、二道須碰下軌、做空須碰上軌（表三；主帥 09/27 17:27）
                 print(f'  {"✅" if is_eleader_ok else "⚠️"} {ticker} 第二道高位階(日K D or F) {"通過" if is_eleader_ok else "未通過（條件D補位，繼續）"}')
             else:
                 # A/B/C 觸發（低位階下軌/中軌）→ eLeader 為必要條件
-                print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道日K多頭(A/B/C/E OR eLeader) {"通過" if is_eleader_ok else "未通過，跳過"}')
+                print(f'  {"✅" if is_eleader_ok else "❌"} {ticker} 第二道日K多頭(表二) {"通過" if is_eleader_ok else "未通過，跳過"}')
                 if not is_eleader_ok:
                     return None
         else:
             # ✅ v05191855：做空第二道 = 日K A/B/C/E（近5根同時滿足碰軌與轉折）OR 日K F(做空eLeader)
-            _2nd_sabc = (stage_pass(_df_1d, False, entry=True) or
-                         (_df_1d is not None and check_condE_short(_df_1d))) if _df_1d is not None else False
+            _2nd_sabc = stage_pass(_df_1d, False, entry=True) if _df_1d is not None else False   # ✅09271746 拿掉條件E 單獨通過
             _2nd_sel  = False   # ✅09191108 eLeader 不再單獨使一道通過（併入 stage_pass） if _df_1d is not None else False
             is_eleader_short_ok = _2nd_sabc or _2nd_sel
             if _condD_short:
@@ -3623,7 +3628,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
                 print(f'  {"✅" if is_eleader_short_ok else "⚠️"} {ticker} 第二道eLeader空頭 {"通過" if is_eleader_short_ok else "未通過（條件D補位，繼續）"}')
             else:
                 # A/B/C 空頭（低位階）→ eLeader 為必要條件
-                print(f'  {"✅" if is_eleader_short_ok else "❌"} {ticker} 第二道日K空頭(A/B/C/E OR eLeader) {"通過" if is_eleader_short_ok else "未通過，跳過"}')
+                print(f'  {"✅" if is_eleader_short_ok else "❌"} {ticker} 第二道日K空頭(表二) {"通過" if is_eleader_short_ok else "未通過，跳過"}')
                 if not is_eleader_short_ok:
                     return None
 
@@ -3668,11 +3673,10 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             if LOAD_SENTINEL: _load_stats['fetch_total'] += 1
             df_5m = _normalize_df(yf.download(ticker, period='5d', interval='5m', progress=False))
             if LOAD_SENTINEL and (df_5m is None or getattr(df_5m, 'empty', True)): _load_stats['fetch_fail'] += 1
-            if df_5m is not None and not df_5m.empty and len(df_5m) >= 10:
-                df_5m['rsi14'] = ta.rsi(df_5m['Close'].squeeze(), length=14)
-                _macd_5m = ta.macd(df_5m['Close'].squeeze(), fast=12, slow=26, signal=9)
-                df_5m['macd_hist'] = _macd_5m.iloc[:, 1]
-                five_min_cache[cache_key] = {'df': df_5m, 'ts': now_ts}
+            if df_5m is not None and not df_5m.empty and len(df_5m) >= 26:   # ✅09271746 先修後報：改用 calc_indicators 算完整指標（原只算 RSI 與 MACD 柱、缺布林，表二碰軌永遠不成立）
+                df_5m = calc_indicators(df_5m)
+                if df_5m is not None:
+                    five_min_cache[cache_key] = {'df': df_5m, 'ts': now_ts}
 
         if df_5m is None or len(df_5m) < 2 or 'rsi14' not in df_5m.columns: return None
 
@@ -3696,11 +3700,10 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             df_15m = five_min_cache[_ck15]['df']
         else:
             df_15m = _normalize_df(yf.download(ticker, period='5d', interval='15m', progress=False))
-            if df_15m is not None and not getattr(df_15m, 'empty', True) and len(df_15m) >= 30:
-                df_15m['rsi14'] = ta.rsi(df_15m['Close'].squeeze(), length=14)
-                _macd_15m = ta.macd(df_15m['Close'].squeeze(), fast=12, slow=26, signal=9)
-                df_15m['macd_hist'] = _macd_15m.iloc[:, 1]
-                five_min_cache[_ck15] = {'df': df_15m, 'ts': _now_ts15}
+            if df_15m is not None and not getattr(df_15m, 'empty', True) and len(df_15m) >= 30:   # ✅09271746 同上
+                df_15m = calc_indicators(df_15m)
+                if df_15m is not None:
+                    five_min_cache[_ck15] = {'df': df_15m, 'ts': _now_ts15}
             else:
                 df_15m = None
         _g3_long  = bool(_full_third_gate(df_5m, True)  or _full_third_gate(df_15m, True))
@@ -3979,19 +3982,16 @@ def scan_limit_up():
                     _yf.download(_ticker, period='1y', interval='1d', progress=False))
 
                 _ok_mo = (_df_mo is not None and
-                    (stage_pass(_df_mo, True, entry=True) or
-                     check_condE_long(_df_mo) or check_buy_eleader(_df_mo) is not None))
+                    stage_pass(_df_mo, True, entry=True))   # ✅09271746 拿掉條件E／eLeader 單獨通過
                 _ok_wk = (_df_wk is not None and
-                    (stage_pass(_df_wk, True, entry=True) or
-                     check_condE_long(_df_wk) or check_buy_eleader(_df_wk) is not None))
+                    stage_pass(_df_wk, True, entry=True))   # ✅09271746 拿掉條件E／eLeader 單獨通過
 
                 if not (_ok_mo or _ok_wk):
                     continue  # 月K/週K都沒有買進訊號，跳過
 
                 # 日K第二道確認
                 _ok_dk = (_df_dk is not None and
-                    (stage_pass(_df_dk, True, entry=True) or
-                     check_condE_long(_df_dk)))
+                    stage_pass(_df_dk, True, entry=True))   # ✅09271746 同上
 
                 _period = '月K+週K' if (_ok_mo and _ok_wk) else ('月K' if _ok_mo else '週K')
                 _buy_candidates.append((_ticker, _chg_pct, _price, _period, _ok_dk))
@@ -4041,62 +4041,55 @@ def scan_limit_up():
 
 
 def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
+    """✅09271746【基金改三道＋第三道 RSI 門檻，不再用 eLeader】主帥 2026/09/27 17:27：「不要再用eleader去判斷了!!!……這3支（SPY、QQQ、HYG）,當然也要符合最新的第一道第二道第三道的規定啊!!!」
+    ・17:38「採用你的建議,我選甲案」：三支先合成一條基金代理線（SPY 50%／QQQ 30%／HYG 20%，build_fund_proxy_df 不變），再用這一條跑三道。
+    ・第一道 月K OR 週K、第二道 日K、第三道 5分K OR 15分K，皆用表二（stage_pass）；第三道另加 RSI>BUY_RSI_MIN（主帥 09/27 17:26 乙）。
+    ・基金只做多（買進），原設計即無做空。"""
     global buy_signals, sell_signals
     try:
         print(f"\n🚀 正在啟動合成追蹤：{fund_name}...")
-        # 1. 週K（第一道：位階門檻）
-        s_w = _normalize_df(yf.download("SPY", period='2y', interval='1wk', progress=False))
-        q_w = _normalize_df(yf.download("QQQ", period='2y', interval='1wk', progress=False))
-        h_w = _normalize_df(yf.download("HYG", period='2y', interval='1wk', progress=False))
-        df_w = calc_indicators(build_fund_proxy_df(s_w, q_w, h_w))
-        if df_w is None or not check_buy_precondition(df_w, is_weekly=True)[0]:
-            print(f"ℹ️ {fund_name}:週K位階尚未符合觸發買進條件")
+        def _px(period, interval):
+            _s = _normalize_df(yf.download("SPY", period=period, interval=interval, progress=False))
+            _q = _normalize_df(yf.download("QQQ", period=period, interval=interval, progress=False))
+            _h = _normalize_df(yf.download("HYG", period=period, interval=interval, progress=False))
+            _d = build_fund_proxy_df(_s, _q, _h)
+            return calc_indicators(_d) if _d is not None and len(_d) >= 26 else None
+        df_mo = _px('5y', '1mo'); df_w = _px('2y', '1wk')
+        _g1_mo = bool(df_mo is not None and stage_pass(df_mo, True, entry=True))
+        _g1_wk = bool(df_w is not None and stage_pass(df_w, True, entry=True))
+        if not (_g1_mo or _g1_wk):
+            print(f"ℹ️ {fund_name}：第一道（月K OR 週K）未通過")
             return
-
-        # 2. 日K（第二道：eLeader 25條件）
-        s_d = _normalize_df(yf.download("SPY", period='1y', interval='1d', progress=False))
-        q_d = _normalize_df(yf.download("QQQ", period='1y', interval='1d', progress=False))
-        h_d = _normalize_df(yf.download("HYG", period='1y', interval='1d', progress=False))
-        df_d = calc_indicators(build_fund_proxy_df(s_d, q_d, h_d))
-
-        # ❌ 基金不需要5分K（每日公布一次淨值，5分K無意義）
-        # ✅ 第三道改用日K RSI↑ AND MACD柱↑（方案Q）
-        result = check_buy_eleader(df_w, df_d, None, fund_name)  # df_5m=None → 跳過5分K
-        
-        if result and result[0] == 'BUY':
-            # --- [修正 BUG：補足 7 個變數並存入清單以對齊第 14 章節的 unpack 需求, 由第 14 章彙整發信] ---
-            # result 內容為 ('BUY', 當前價, prev_rsi, last_rsi)
-            c_price = result[1]
-            r_prev  = result[2]
-            r_now   = result[3]
-            l_val   = float(df_w['Low'].iloc[-1])       # 補上最低價（依SCAN_MODE）
-            bb_val  = float(df_w['boll_bot20'].iloc[-1])# 補上布林下緣
-            
-            # 精準存入 7 個變數：market, code, c, l, bb, r, rp
-            buy_signals.append(('基金', fund_name, c_price, l_val, bb_val, r_now, r_prev))
-            
-            # --- [修正 BUG：send_gmail 內文必須為格式化字串，不可傳入 Tuple] ---
-            # ✅ 修正重複通知Bug：基金當天同標的只發1次
-            _fund_key = f"基金_{fund_name}_BUY"
-            _today_f  = _now_tw().strftime("%Y-%m-%d")   # ✅08060719 時區修正（同漲停追蹤那型）
-            if _today_f not in notified: notified[_today_f] = []
-            if notified[_today_f].count(_fund_key) >= 2:
-                print(f"🔕 {fund_name} 今日買進訊號已通知過，跳過")
-            else:
-                notified[_today_f].append(_fund_key)
-                save_notified(notified)
-                msg_body = (
-                    f"⭐【基金買進訊號】⭐\n"
-                    f"市場：基金　代碼：{fund_name}\n"
-                    f"收盤價：{c_price:.2f}\n"
-                    f"RSI轉折：{r_prev:.1f} → {r_now:.1f}\n"
-                    f"⚠️ 嚴禁用於當沖或隔日沖\n"
-                )
-                send_gmail(f"☁️【雲端】🔔【{_get_period_label("月K")}】基金買進訊號：{fund_name}", msg_body)
-                print(f"✅ {fund_name} 已發送觸發買進訊號，已加入今日彙整清單！")
-        else:
-            print(f"ℹ️ {fund_name}：目前尚未共振達標。")
-
+        df_d = _px('1y', '1d')
+        if not (df_d is not None and stage_pass(df_d, True, entry=True)):
+            print(f"ℹ️ {fund_name}：第二道（日K）未通過")
+            return
+        _hit = None
+        for _iv in ('5m', '15m'):
+            _df3 = _px('5d', _iv)
+            if _df3 is not None and stage_pass(_df3, True, entry=True) and float(_df3['rsi14'].iloc[-1]) > BUY_RSI_MIN:
+                _hit = (_iv, _df3); break
+        if not _hit:
+            print(f"ℹ️ {fund_name}：第三道（5分K OR 15分K，含 RSI>{BUY_RSI_MIN}）未通過")
+            return
+        _iv, _df3 = _hit
+        c_price = float(_df3['Close'].iloc[-1]); r_prev = float(_df3['rsi14'].iloc[-2]); r_now = float(_df3['rsi14'].iloc[-1])
+        l_val = float(_df3['Low'].iloc[-1]); bb_val = float(_df3['boll_bot20'].iloc[-1])
+        buy_signals.append(('基金', fund_name, c_price, l_val, bb_val, r_now, r_prev))
+        _fund_key = f"基金_{fund_name}_BUY"
+        _today_f = _now_tw().strftime("%Y-%m-%d")
+        if _today_f not in notified: notified[_today_f] = []
+        if notified[_today_f].count(_fund_key) >= 2:
+            print(f"🔕 {fund_name} 今日買進訊號已通知過，跳過")
+            return
+        notified[_today_f].append(_fund_key)
+        save_notified(notified)
+        _per = '月K' if _g1_mo else '週K'
+        msg_body = (f"🔔 {fund_name}（SPY／QQQ／HYG 合成代理線）三道皆通過\n"
+                    f"第一道：{'月K ' if _g1_mo else ''}{'週K' if _g1_wk else ''}｜第二道：日K｜第三道：{_iv}\n"
+                    f"代理價：{c_price:.2f}　RSI：{r_prev:.1f} → {r_now:.1f}\n")
+        send_gmail(f"☁️【雲端】🔔【{_get_period_label(_per)}】基金買進訊號：{fund_name}", msg_body)
+        print(f"✅ {fund_name} 已發送觸發買進訊號，已加入今日彙整清單！")
     except Exception as e:
         print(f"❌ scan_synthetic_fund 異常：{e}")
 # ============================================================
@@ -6109,7 +6102,7 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 _x_lo = bool((_l.iloc[-TOUCH_LOOKBACK_BARS:] <= _gate_lower(_bt.iloc[-TOUCH_LOOKBACK_BARS:], _bb.iloc[-TOUCH_LOOKBACK_BARS:])).any())
                 _near_low  = (_l.iloc[-_n15:] <= _bb_gate).any()
                 _g1l, _g1s, _g2l, _g2s = (gates or {}).get(_tk, (False, False, False, False))   # ✅09170937
-                _buy  = (_g1l and _g2l and _near_low and _x_lo and _r_up and _m_up
+                _buy  = (_g1l and _g2l and stage_pass(_df, True, entry=True)   # ✅09271746 第三道改表二（主帥 09/27 16:36）
                          and _r_now > BUY_RSI_MIN)
                 #   ★★★【為什麼是 AND】主帥 09/18 02:34、09:37：早期第一道＝月K、第二道＝週K，由大至小，
                 #     ★那時寫 or 是對的（月K 或 週K 任一達標即可）；
@@ -6121,7 +6114,7 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 #     ★5分K路徑(第4875行)與日K路徑本來就有此門檻，★只有15分K漏掉 → ＡＫ１８。
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-023）
                 _near_high = (_h.iloc[-_n15:] >= _bt_gate).any()
-                _sell = (_g1s and _g2s and _near_high and _x_hi and _r_dn and _m_dn
+                _sell = (_g1s and _g2s and stage_pass(_df, False, entry=True)   # ✅09271746 同上
                          and _r_now < SHORT_RSI_MAX)
                 _sell = bool(_sell or (_g1s and _g2s and check_condD_short(_df)))   # ✅09180234 條件D 空方鏡像：第一道 AND 第二道   # ✅09170658 近 TOUCH_LOOKBACK_BARS 根碰上軌（原當根收盤價門檻），鏡像多方
 
@@ -6854,8 +6847,7 @@ def main_task():
                 #   ★★★若不顯式帶入，會出現「只有空方過第一道、多方卻發買進訊號」的錯誤。
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-028）
                 _fut_buy = (_1st_long and _buy_2nd
-                            and (_fut_cond_A or _fut_cond_B or
-                                 _fut_cond_E_long or _fut_cond_F_long)
+                            and stage_pass(df5, True, entry=True)   # ✅09271746 第三道改表二（主帥 09/27 16:36；原 A/B/E/F 見策略說明附錄 C10）
                             and rsi_now > BUY_RSI_MIN)
                 # ✅09181118 條件D 路徑：前提為【第一道 AND 第二道】，不套近5根碰軌（主帥 09/17 08:34 例外）
                 # ✅09180234【條件D 前提改為第一道 AND 第二道】主帥 09/18 02:05：「必須先達成第一道和第二道的條件，才會觸發條件D 的正式進場決策」
@@ -6897,8 +6889,7 @@ def main_task():
                 #   ★依 ＡＫ１８ 多空同步，★★補上 D_short/E_short/F_short 三個。
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-029）
                 _fut_short = (_short_1st and _short_2nd
-                              and (_fut_short_A or _fut_short_B or
-                                   _fut_cond_E_short or _fut_cond_F_short)
+                              and stage_pass(df5, False, entry=True)   # ✅09271746 同上（空方）
                               and rsi_now < (100 - BUY_RSI_MIN))
                 _fut_short_D = bool(_short_1st and _short_2nd and _fut_cond_D_short)   # ✅09180234 條件D 空方鏡像：同改為第一道 AND 第二道
 
