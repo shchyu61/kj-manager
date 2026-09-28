@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09281314</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09282005</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1123,7 +1123,7 @@
                 const _ref = doc(window.db,'artifacts',window.appId,'public','tw_stock_names');
                 const snap = await getDoc(_ref);
                 if (snap.exists() && snap.data().names) Object.assign(stockNameMap, JSON.parse(snap.data().names));
-            } catch(e) {}
+            } catch(e) { window._silentFail('台股名稱清單載入', e); }
         };
         const fetchStockName = async (code) => {
             if (stockNameMap[code]) return;
@@ -1136,7 +1136,7 @@
                 const data = await resp.json();
                 const meta = data?.chart?.result?.[0]?.meta;
                 if (meta?.longName || meta?.shortName) stockNameMap[code] = meta.longName || meta.shortName;
-            } catch(e) {}
+            } catch(e) { /* Yahoo 取名稱失敗即顯示代號（外部限流常見）（✅09282005 ＡＭ１３ 註明）*/ }
         };
 
         let stocks = [];
@@ -1447,7 +1447,7 @@
         };
         const completeLogin = async (email, method='OTP') => {
             currentUserEmail = email;
-            setTimeout(() => { try { window.loadCloudHeartbeat && window.loadCloudHeartbeat(); } catch (e) {} }, 1500);   // ✅09240105 登入後讀取雲端心跳（不阻塞登入）
+            setTimeout(() => { try { window.loadCloudHeartbeat && window.loadCloudHeartbeat(); } catch(e) { /* 心跳函式內部已自行顯示失敗（✅09282005 ＡＭ１３ 註明）*/ } }, 1500);   // ✅09240105 登入後讀取雲端心跳（不阻塞登入）
             if (window.loadTwScanStatus) window.loadTwScanStatus();   // ✅09261759 提醒功能甲案
             // 自動登入記錄為「自動登入」，手動登入記錄實際方式（不再假裝是OTP）
             _writeLoginLog(email, true, '', method === '自動登入' ? '自動登入（沿用上次）' : method);
@@ -1459,7 +1459,7 @@
                 [...stocks, ...watchlist].forEach(s => fetchStockName(s.code));
             }, 500);
             // ✅ 登入後背景預載全額交割清單
-            fetchCashDeliveryStocks().catch(() => {});
+            fetchCashDeliveryStocks().catch(e => window._silentFail('全額交割股清單', e));
             // 管理員專屬：顯示登入記錄
             const _logSec = document.getElementById('login-log-section');
             if (_logSec && currentUserEmail === 'shchyu61@gmail.com') {
@@ -1491,10 +1491,10 @@
             document.getElementById('settings-email').innerText = email;
             if (countdownTimer) clearInterval(countdownTimer);
             // ✅ 登入後讀取個人掃描模式設定（週K/日K）
-            _loadScanModePref(email).catch(()=>{});
+            _loadScanModePref(email).catch(() => { /* 內層已以 _silentFail 顯示（✅09282005 ＡＭ１３ 註明）*/ });
             loadTwStockNames();
             // ✅ 登入後讀取Firebase期貨持倉狀態（方案A）
-            if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(()=>{});
+            if (document.getElementById('btn-futures-holding')) _loadFuturesHolding().catch(() => { /* 內層已以 _silentFail 顯示（✅09282005 ＡＭ１３ 註明）*/ });
             // ✅09280149 零股計算機競速修正（主帥 09/02 01:15「我同意」）：計算機設定、今日買進訊號、購買紀錄改在登入完成後讀取；
             //   原於網頁載入 0.8 秒／2 秒後寫死讀取，登入未完成即被空 catch 吞掉，資金欄停在預設 10000
             try { window.loadCalcSettings && window.loadCalcSettings(); } catch (e) { window._silentFail('零股計算機設定載入', e); }
@@ -2636,7 +2636,7 @@
                     const d = snap.data();
                     // ✅ 05040000：同時讀取Python上傳的第二道指標
                     let _parsedInd = {};
-                    try { if (d.indicators) _parsedInd = JSON.parse(d.indicators); } catch(_) {}
+                    try { if (d.indicators) _parsedInd = JSON.parse(d.indicators); } catch(_) { /* 指標字串解析失敗即視為無指標（✅09282005 ＡＭ１３ 註明）*/ }
                     _twPrescreenedCache = {
                         codes:      (d.codes || []),
                         count:      parseInt(d.count || 0),
@@ -2662,7 +2662,7 @@
                     const _upDate = new Date(_upStr.replace(/\//g, '-').replace(' ', 'T') + '+08:00');
                     const _diffH = (Date.now() - _upDate.getTime()) / 3600000;
                     if (_diffH > 24) _staleTip = ` ⚠️ 已超過${Math.floor(_diffH)}小時未更新，建議執行本機版掃描`;
-                } catch(_) {}
+                } catch(_) { /* 更新時間格式不符即不顯示陳舊提示（✅09282005 ＡＭ１３ 註明）*/ }
                 info.innerHTML = `待深度分析：${_twPrescreenedCache.count} 支｜系統更新：${_twPrescreenedCache.updated_at}${_staleTip}`;
                 card.style.display = 'block';
             } else {
@@ -2687,7 +2687,7 @@
                     const _lbl = document.getElementById('scan-mode-label');
                     if (_lbl) _lbl.textContent = _mixedMode ? '混合模式' : (saved === 'daily' ? '中期投資' : '長期投資');
                 }
-            } catch(e) {}
+            } catch(e) { window._silentFail('掃描模式設定載入', e); }
         };
 
         // ── 方案B：手動持倉開關 ──────────────────────────────────
@@ -2768,7 +2768,7 @@
                 const _hPath = doc(window.db, 'artifacts', window.appId, 'public', 'futures_status');
                 const snap = await getDoc(_hPath);
                 if (snap.exists() && snap.data().is_futures_holding === true) return true;
-            } catch(e) {}
+            } catch(e) { window._silentFail('期貨持倉狀態讀取', e); }
             return false;
         };
 
@@ -3010,7 +3010,7 @@
             try {
                 console.error('[靜默失敗]', where, e && e.message ? e.message : e);
                 if (window.setCloudStatus) window.setCloudStatus('fail', where + '：' + ((e && e.message) || '未知'));
-            } catch (_) {}
+            } catch(_) { /* 錯誤顯示函式本身的保護，不可再呼叫自己（✅09282005 ＡＭ１３ 註明）*/ }
         };
         // ✅09271755 改接核心（與雲端 stage_pass 逐字一致）：MACD 看柱、近5根每一根比自己那根的軌道、門檻 1.02／0.98、出場另看 RSI 轉向（主帥 09/22 17:00）
         //   ★原網頁用 MACD 線、當根軌道、1.03／1.00、出場無 RSI 轉向（09/27 四方對照查出）
@@ -3180,7 +3180,7 @@ ${window._strikeHint(_hit.px, _isCall)}
                 out.short = !out.buy && !out.close && (shN || shD) && entryOk && !(isNight && holdS);
                 out.cover = !out.buy && !out.close && !out.short && holdS && S(df3, false, false) && out.e1S && out.e2S;
                 out.buyD = buyD && !buyN; out.shortD = shD && !shN;
-            } catch (e) {}
+            } catch(e) { console.warn('[判斷例外] 期貨三道判斷', e); }
             return out;
         };
         window._futAlign = (q) => {
@@ -3220,7 +3220,7 @@ ${window._strikeHint(_hit.px, _isCall)}
                 o.buy = o.g1L && o.g2L && o.g3L && !!mktOk;
                 o.short = !o.g1L && o.g1S && o.g2S && o.g3S;
                 o.exitLong = o.x1L && o.x2L && o.x3L; o.exitShort = o.x1S && o.x2S && o.x3S;
-            } catch (e) {}
+            } catch(e) { console.warn('[判斷例外] 個股三道判斷', e); }
             return o;
         };
 
@@ -3339,7 +3339,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↓）
                                 const _hl = document.getElementById('holding-label');
                                 if (_hb) { _hb.style.backgroundColor=''; _hk.style.transform='translateX(0px)'; _hl.textContent='OFF'; _hl.style.cssText='position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;'; _hb.setAttribute('aria-checked','false'); }
                                 _updateNightModeHint();
-                            } catch(e) {}
+                            } catch(e) { window._silentFail('期貨平倉清除持倉旗標', e); }
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else if (_dec.short) {
@@ -3390,7 +3390,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 const _sk=document.getElementById('short-knob');
                                 const _sl=document.getElementById('short-label');
                                 if (_sb) { _sb.style.backgroundColor=''; _sk.style.transform='translateX(0px)'; _sl.textContent='OFF'; _sl.style.cssText='position:absolute;right:6px;font-size:13px;font-weight:900;color:#94a3b8;'; _sb.setAttribute('aria-checked','false'); }
-                            } catch(e) {}
+                            } catch(e) { window._silentFail('期貨回補清除做空旗標', e); }
                         } catch(e) { window.showAlert(`❌ Gmail發送失敗：${e}`); }
 
                     } else {
@@ -3419,7 +3419,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 _r.bear_abc = S(dM, false) || S(dW, false);
                 const n = dM.Close.length;
                 _r.warn = dM.rsi14[n - 1] < dM.rsi14[n - 2] && dM.macd_hist[n - 1] < dM.macd_hist[n - 2] && !_r.bull_abc && !_r.bear_abc;
-            } catch (e) {}
+            } catch(e) { console.warn('[判斷例外] 守門員判斷', e); }
             return _r;
         };
         const _mktGate = async (sym, label) => {
@@ -3463,7 +3463,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             btn.disabled = true;
             txt.innerText = '準備中...';
             // 掃描前預載全額交割清單（台股才需要）
-            await fetchCashDeliveryStocks().catch(() => {});
+            await fetchCashDeliveryStocks().catch(e => window._silentFail('全額交割股清單', e));
             document.getElementById('watchlist-list').innerHTML =
                 watchlist.map(s => makeLoadingCard(s.code, false)).join('');
 
@@ -3571,7 +3571,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             if (resultList) { resultList.innerHTML = ''; resultList.classList.remove('hide'); }
 
             const buySignals = [], sellSignals = [];
-            await fetchCashDeliveryStocks().catch(() => {});
+            await fetchCashDeliveryStocks().catch(e => window._silentFail('全額交割股清單', e));
 
             // ✅ 05032124修正：改用 runWithPool 並行掃描（原為for逐一循環，45分鐘→預計8~10分鐘）
             _psStop = false;
@@ -3652,7 +3652,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                                 var _ds=_d.getFullYear().toString()+(('0'+(_d.getMonth()+1)).slice(-2))+(('0'+_d.getDate()).slice(-2));
                                 var _sr=doc(window.db,'artifacts',window.appId,'public','signals_'+_ds);
                                 var _sn=await getDoc(_sr);
-                                var _ex={}; try{if(_sn.exists()&&_sn.data().signals)_ex=JSON.parse(_sn.data().signals);}catch(e){}
+                                var _ex={}; try{if(_sn.exists()&&_sn.data().signals)_ex=JSON.parse(_sn.data().signals);}catch(e) { /* 訊號字串解析失敗即從空清單開始（✅09282005 ＡＭ１３ 註明）*/ }
                                 var _tk=_r.close<=10?0.01:_r.close<=50?0.05:_r.close<=100?0.1:_r.close<=500?0.5:_r.close<=1000?1:5;
                                 var _lm=Math.floor(_r.close*1.1/_tk)*_tk;
                                 _ex[_c]={ticker:_c,price:_r.close,limit_price:_lm,
@@ -3740,7 +3740,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
             ];
             if (all.length === 0) { window.showAlert('請先新增股票。'); return; }
             // 掃描前預載全額交割清單
-            await fetchCashDeliveryStocks().catch(() => {});
+            await fetchCashDeliveryStocks().catch(e => window._silentFail('全額交割股清單', e));
 
             const progress  = document.getElementById('scan-progress');
             const resultDiv = document.getElementById('scan-result-list');
@@ -3941,7 +3941,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 const pwPath = doc(window.db, 'artifacts', window.appId, 'users', getSafeDocId(email), 'data', 'settings');
                 const snap = await getDoc(pwPath);
                 if (snap.exists() && snap.data().emailVerified === true) return true;
-            } catch(e) {}
+            } catch(e) { window._silentFail('信箱驗證狀態讀取', e); }
             return false;
         };
 
@@ -4329,7 +4329,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
 
         document.getElementById('btn-logout').addEventListener('click', () => {
             // ✅ 08182248：舊版只清 localStorage，Firebase 身分仍留著；此處一併登出
-            try { signOut(window.auth); } catch(e) {}
+            try { signOut(window.auth); } catch(e) { /* 登出失敗不影響後續流程（✅09282005 ＡＭ１３ 註明）*/ }
             localStorage.removeItem('kj_email');
             location.reload();
         });
@@ -4344,8 +4344,8 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 if (u && u.email) {
                     const em = u.email.toLowerCase();
                     if (BLOCKED_EMAILS.includes(em)) {
-                        try { await _writeLoginLog(em, false, '黑名單封鎖'); } catch(e) {}
-                        try { await signOut(window.auth); } catch(e) {}
+                        try { await _writeLoginLog(em, false, '黑名單封鎖'); } catch(e) { window._silentFail('黑名單登入紀錄寫入', e); }
+                        try { await signOut(window.auth); } catch(e) { /* 登出失敗不影響後續流程（✅09282005 ＡＭ１３ 註明）*/ }
                         return;
                     }
                     if (currentUserEmail === em) return;
@@ -4548,17 +4548,18 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 sl.innerHTML=html;if(btnC)btnC.classList.remove('hide');
             }catch(e){sl.textContent='載入失敗';}
         };
+        // ✅09282005 購買紀錄路徑由 users/本人/purchases_日期（5 段，Firestore 文件路徑須偶數段，05/03 建立起讀寫皆失敗）改為 users/本人/purchases/日期（6 段）；主帥 09/28 19:21 截圖 09281918 顯示錯誤
         window.confirmPurchases=async function(){
             var chks=document.querySelectorAll('.signal-chk:checked');
             if(!chks||!chks.length){window.showAlert('請先勾選要確認購買的股票');return;}
             try{
                 await initFirebaseAuth();
                 var _td=_todayStr(0);
-                var snap=await getDoc(doc(window.db,'artifacts',window.appId,'users',getSafeDocId(requireAuthEmail()),'purchases_'+_td));
-                var existing={};try{if(snap.exists()&&snap.data().purchases)existing=JSON.parse(snap.data().purchases);}catch(e){}
+                var snap=await getDoc(doc(window.db,'artifacts',window.appId,'users',getSafeDocId(requireAuthEmail()),'purchases',_td));
+                var existing={};try{if(snap.exists()&&snap.data().purchases)existing=JSON.parse(snap.data().purchases);}catch(e) { /* 購買字串解析失敗即從空清單開始（✅09282005 ＡＭ１３ 註明）*/ }
                 var now=new Date().toLocaleString('zh-TW');
                 chks.forEach(function(c){existing[c.dataset.ticker]={ticker:c.dataset.ticker,amount:parseFloat(c.dataset.amt),shares:parseInt(c.dataset.sh),limit:parseFloat(c.dataset.lim),condition:c.dataset.cond,timestamp:now,date:_td};});
-                await setDoc(doc(window.db,'artifacts',window.appId,'users',getSafeDocId(requireAuthEmail()),'purchases_'+_td),{purchases:JSON.stringify(existing),updated:now});
+                await setDoc(doc(window.db,'artifacts',window.appId,'users',getSafeDocId(requireAuthEmail()),'purchases',_td),{purchases:JSON.stringify(existing),updated:now});
                 window.showAlert('✅ 已記錄'+chks.length+'筆購買到今日T+2');window.loadPurchaseRecords();
             }catch(e){window.showAlert('❌ '+e.message);}
         };
@@ -4568,7 +4569,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 var labels=['t2-day0-records','t2-day1-records','t2-day2-records'];
                 for(var i=0;i<3;i++){
                     var dStr=_todayStr(-i);
-                    var snap=await getDoc(doc(window.db,'artifacts',window.appId,'users',getSafeDocId(requireAuthEmail()),'purchases_'+dStr));
+                    var snap=await getDoc(doc(window.db,'artifacts',window.appId,'users',getSafeDocId(requireAuthEmail()),'purchases',dStr));
                     var el=document.getElementById(labels[i]);
                     if(!snap.exists()||!snap.data().purchases){if(el)el.textContent='';_purchaseCache[dStr]=0;continue;}
                     var recs=JSON.parse(snap.data().purchases),total=0,html='';
