@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09281149</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09281314</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1202,15 +1202,7 @@
             return raw.includes('@') ? raw : raw + '@gmail.com';
         };
 
-        const generateDailyKey = (email) => {
-            const accountName = email.split('@')[0];
-            const now = new Date();
-            const fmt = new Intl.DateTimeFormat('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit' });
-            const parts = fmt.formatToParts(now);
-            const mm = parts.find(p => p.type === 'month').value;
-            const dd = parts.find(p => p.type === 'day').value;
-            return `601${mm}${dd}${accountName}`.toLowerCase();
-        };
+        // ✅09281314 已刪除廢棄函式 generateDailyKey（舊版每日密碼公式，W-1 缺陷②；08182248 起 Firebase 帳密登入後全檔零呼叫；AK2-2 稽核，主帥 09/28 13:14）
 
         const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
