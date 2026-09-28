@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09280149</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09281149</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1311,7 +1311,7 @@
                 }
                 window.renderStocks();
                 window.renderWatchlist();
-                loadTwPrescreened().catch(()=>{}); // 非同步載入AI預篩清單
+                loadTwPrescreened().catch(e => window._silentFail('AI預篩清單載入', e));   // ✅09281149 同上（原吞掉錯誤） // 非同步載入AI預篩清單
                 window._isAdmin = (currentUserEmail === 'shchyu61@gmail.com');
             // ✅ v05191209：帳號權限tab只對管理員顯示
             const _settingsTab = document.getElementById('tab-settings');
@@ -1383,7 +1383,7 @@
                 const hrs = lastOk ? (Date.now() - toT(lastOk).getTime()) / 3600000 : NaN;
                 const days = (hb.ok_dates || []).map(d => String(d).slice(5).replace('-', '/')).join('、');
                 el.title = '最後成功：' + md(lastOk) + '\n最後準時：' + md(hb.last_ontime_at) + '\n最後執行：' + md(hb.last_run) + (err ? '\n錯誤：' + err : '')
-                         + (days ? '\n近 7 天成功：' + days : '') + (hb.ok_streak ? '\n連續成功：' + hb.ok_streak + ' 天' : '')
+                         + (days ? '\n近 7 天成功：' + days : '') + (hb.ok_streak ? '\n連續成功：' + hb.ok_streak + ' 天（三個排程合計，只算排程班、不含手動）' : '')   /* ✅09281149 主帥 09/28 11:49 質問天數後註明範圍 */
                          + (hb.version ? '\n雲端版本：' + hb.version : '');
                 if (isNaN(hrs) || hrs > 26) {
                     el.textContent = '⚠️ 雲端已 ' + (isNaN(hrs) ? '?' : Math.floor(hrs)) + ' 小時沒有成功執行（最後成功 ' + md(lastOk) + (err ? '；錯誤：' + String(err).slice(0, 40) : '') + '）';
@@ -2752,7 +2752,7 @@
                         btn.setAttribute('aria-checked','true');
                     }
                 }
-            } catch(e) {}
+            } catch(e) { window._silentFail('期貨持倉狀態載入', e); }   // ✅09281149 同上
             _updateNightModeHint();
         };
 
@@ -4585,7 +4585,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     if(el)el.innerHTML=html;_purchaseCache[dStr]=total;
                 }
                 window.calcBudget();
-            }catch(e){}
+            }catch(e){ window._silentFail('購買紀錄載入', e); }   // ✅09281149 房租 09281031 三之二① 同型自查（原空 catch）
         };
         var _origBudget=window.calcBudget;
         window.calcBudget=function(){

@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09280149'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09281149'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -624,10 +624,14 @@ def _bar_too_old(df, label):
         return False
     if _age > FUT_BAR_MAX_AGE_MIN:
         _feat('stale', f'{label} 被擋（陳舊 {_age:.0f} 分）')
-        print(f'  ⛔ {label}：最後一根5分K已陳舊 {_age:.0f} 分鐘'
+        print(f'  ⛔ {label}：最後一根5分K已陳舊 {_age:.1f} 分鐘'   # ✅09281149 顯示到小數一位（原 .0f 把 15.3 顯示成 15，看似「等於上限也擋」；判斷式不變）
               f'（上限 {FUT_BAR_MAX_AGE_MIN} 分）→ 不進場')
-        print('     原因：^TWII 加權指數僅 09:00~13:30 有資料，夜盤無報價；'
-              '此時判斷會用到白天的舊K棒。')
+        import re
+        if re.search(r'TWII|台指|TXF|期貨', str(label)):   # ✅09281149 原因文字依標的區分（原一律寫 ^TWII，外匯、黃金、台股個股張冠李戴；09280209 紀錄 79 次）
+            print('     原因：^TWII 加權指數僅 09:00~13:30 有資料，夜盤無報價；'
+                  '此時判斷會用到白天的舊K棒。')
+        else:
+            print('     原因：此商品目前非交易時段或報價延遲，判斷會用到舊K棒。')
         return True
     return False
 
@@ -2078,7 +2082,8 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         _last_ok, _streak, _total = _sv('last_ok'), _iv('ok_streak'), _iv('sent_total')
         # ✅09251623【⑦ 心跳只算準時】房租 09251438 ⑦（主帥 09/25 08:57 回報：延到 01:25 執行、寄出 0 封，仍顯示「連續 3 天正常」）：
         #   ★連續天數與近 7 天日期只記【非睡眠時段】成功執行的日子；★舊紀錄算法不同，首次換算時不沿用（比照房租版）。
-        _ontime = bool(ok) and not _in_quiet_hours(_dt)
+        _trig = os.environ.get('GITHUB_EVENT_NAME', '')   # ✅09281149 房租 09281031 三之二③ N-11：手動執行（workflow_dispatch）不計入連續準時天數
+        _ontime = bool(ok) and not _in_quiet_hours(_dt) and _trig != 'workflow_dispatch'
         if _sv('streak_rule') != 'ontime':
             _dates, _streak = [], 0
         if ok:
@@ -2092,6 +2097,7 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
             _total += int(sent)
         payload = {'fields': {
             'streak_rule': {'stringValue': 'ontime'},
+            'last_trigger': {'stringValue': _trig or '本機或未知'},   # ✅09281149 觸發來源（schedule＝排程班；workflow_dispatch＝手動）
             'last_run_ontime': {'booleanValue': _ontime},
             'last_ontime_at': {'stringValue': _now if _ontime else _sv('last_ontime_at')},   # ✅09261759 題2：最後準時時間（非睡眠時段成功）；網頁紅字改看此欄（ＡＭ１⑧；房租 09261526 ④）
             'last_run': {'stringValue': _now},
@@ -2110,7 +2116,7 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         if r.status_code not in (200, 201):
             print(f'  ❌ 心跳寫入失敗：HTTP {r.status_code}')
             return False
-        print(f'  💓 雲端心跳已寫入：{_now}｜成功={ok}｜最後成功 {_last_ok or "無"}｜最後準時 {(_now if _ontime else _sv("last_ontime_at")) or "無"}｜連續 {_streak} 天｜版本 {SCRIPT_VERSION}')
+        print(f'  💓 雲端心跳已寫入：{_now}｜成功={ok}｜最後成功 {_last_ok or "無"}｜最後準時 {(_now if _ontime else _sv("last_ontime_at")) or "無"}｜連續 {_streak} 天｜觸發 {_trig or "本機或未知"}｜版本 {SCRIPT_VERSION}')
         return True
     except Exception as _e:
         print(f'  ❌ 心跳寫入例外：{str(_e)[:80]}')
