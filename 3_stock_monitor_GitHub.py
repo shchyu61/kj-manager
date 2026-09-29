@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09291221'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09291837'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -2067,7 +2067,7 @@ def write_cloud_heartbeat(ok=True, sent=0, err=''):
         from datetime import timedelta   # ✅09240157 連續天數計算用（模組層未匯入；(180) 抓到）
         cred_json = os.environ.get(FIREBASE_CRED_ENV)
         if not cred_json:
-            print('  ⚠️ 心跳未寫入：無 Firebase 憑證')
+            print('  ℹ️ 本機執行不寫雲端心跳（心跳只記 GitHub 雲端排程，設計如此）' if not IS_GITHUB_ACTIONS else '  ⚠️ 心跳未寫入：無 Firebase 憑證')   # ✅09291837 原訊息使主帥誤以為本機異常
             return False
         token = _firestore_token()
         if not token:
@@ -2184,6 +2184,19 @@ def save_notified_firebase(data):
     except Exception as e:
         print(f"  ⚠️ Firebase notified 寫入失敗：{e}")
 
+def _fb_cred_json():
+    """✅09291837 Firebase 憑證：環境變數優先，沒有則讀與程式同資料夾的金鑰檔（比照 _firestore_token；主帥 09/29 18:37：「難道不能偵測或得知win11的工作排程器在平日11:55是否已經完工?若已完工就不該再寄這封通知信!」）。
+    ★筆電無環境變數、有 firebase_service_key.json；原 _claim_alert_firebase 只讀環境變數 → 筆電佔位永遠失敗，雲端備援遲到即誤寄「筆電沒有執行」。"""
+    import os as _os
+    _c = _os.environ.get(FIREBASE_CRED_ENV)
+    if not _c:
+        _cf = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), FIREBASE_CRED_FILE)
+        if _os.path.exists(_cf):
+            with open(_cf, 'r', encoding='utf-8') as _f:
+                _c = _f.read()
+    return _c
+
+
 def _claim_alert_firebase(alert_key, today_str):
     """✅ v06131103：Firebase原子佔位（樂觀並行控制 updateTime precondition）。
     跨多台機器(本機A/B/... + GitHub Actions)防重複通知，與機器數量無關。
@@ -2192,7 +2205,7 @@ def _claim_alert_firebase(alert_key, today_str):
     try:
         import json, os
         import requests as _req
-        cred_json = os.environ.get(FIREBASE_CRED_ENV)
+        cred_json = _fb_cred_json()   # ✅09291837 原只讀環境變數（筆電讀不到金鑰檔）
         if not cred_json:
             return None
         cred = json.loads(cred_json)
@@ -6405,6 +6418,8 @@ def main_task():
     if _slot14:
         _t14 = _now_tw(); _d14 = _t14.strftime('%Y-%m-%d'); _hm14 = _t14.strftime('%H:%M')
         _cl14 = _claim_alert_firebase(f'twscan_{_slot14}', _d14)
+        if _cl14 is None and not IS_GITHUB_ACTIONS:   # ✅09291837 筆電登記失敗須醒目告知（主帥 09/29 18:37）
+            print('  ⚠️⚠️ 筆電無法在雲端登記「今日 %s 班已掃」（缺 Firebase 金鑰檔或連線失敗）→ 雲端備援仍會重掃並寄提醒信' % _slot14)
         if _cl14 is False:
             if 'TW' in active_markets:
                 active_markets.remove('TW')
@@ -6422,7 +6437,8 @@ def main_task():
                 send_gmail(f'⏰【提醒】今天 12:00 台股掃描延到 {_hm14} 才由雲端執行',
                            f'今天（{_d14}）12:00 的台股掃描，筆電工作排程器沒有執行，改由雲端備援在 {_hm14} 才完成（GitHub 排程延後）。\n\n'
                            '★建議開啟筆電工作排程器：只開 3_stock_monitor.py，平日 11:55 啟動（主帥 09/26 16:41 定案）。\n'
-                           '★本信每天最多一封，只在筆電沒跑、雲端又遲到時才寄；筆電正常執行的日子不會收到。\n'
+                           '★本信每天最多一封，只在雲端看不到筆電當天的登記、雲端又遲到時才寄。\n'
+                           '★若筆電當天確實有執行卻收到本信，代表筆電無法在雲端登記（請檢查筆電程式資料夾是否有 firebase_service_key.json）。\n'
                            '★網頁心跳列有「台股 12:00 掃描」近況，可判斷排程要不要開或可以關。')
 
     # (以下請確保第 13, 14 章的掃描與發信代碼, 全部都要縮排在 def main_task 之下)
