@@ -266,9 +266,9 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09301136</span>
-                <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
-                <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v09301335</span>
+                <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
+                <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
             </div>
         </div>
@@ -1376,6 +1376,7 @@
                 const days = (hb.ok_dates || []).map(d => String(d).slice(5).replace('-', '/')).join('、');
                 el.title = '最後成功：' + md(lastOk) + '\n最後準時：' + md(hb.last_ontime_at) + '\n最後執行：' + md(hb.last_run) + (err ? '\n錯誤：' + err : '')
                          + (days ? '\n近 7 天成功：' + days : '') + (hb.ok_streak ? '\n連續成功：' + hb.ok_streak + ' 天（三個排程合計，只算排程班、不含手動）' : '')   /* ✅09281149 主帥 09/28 11:49 質問天數後註明範圍 */
+                         + '\n該次寄出：最近一次執行寄出的封數' + (hb.sent_total !== undefined ? '\n雲端累計寄出（09/24 起）：' + hb.sent_total + ' 封' : '')   /* ✅09301314 主帥 09/30 13:12 問「為什麼是0封信?」：註明「寄出」只算最近一次 */
                          + (hb.version ? '\n雲端版本：' + hb.version : '');
                 if (isNaN(hrs) || hrs > 26) {
                     el.textContent = '⚠️ 雲端已 ' + (isNaN(hrs) ? '?' : Math.floor(hrs)) + ' 小時沒有成功執行（最後成功 ' + md(lastOk) + (err ? '；錯誤：' + String(err).slice(0, 40) : '') + '）';
@@ -1388,7 +1389,7 @@
                     el.textContent = '🟡 雲端最近一次執行失敗（' + md(hb.last_run) + '），最後成功 ' + md(lastOk);
                     el.style.color = '#b45309';
                 } else {
-                    el.textContent = '☁️ 雲端最後成功 ' + md(lastOk) + (hb.ok_streak ? '｜連續 ' + hb.ok_streak + ' 天' : '') + '（寄出 ' + (hb.sent || 0) + ' 封）';
+                    el.textContent = '☁️ 雲端最後成功 ' + md(lastOk) + '（該次寄出 ' + (hb.sent || 0) + ' 封）' + (hb.ok_streak ? '｜排程準時連續 ' + hb.ok_streak + ' 天' : '');   // ✅09301314 主帥 09/30 13:12：原寫法讓「連續 N 天（寄出 0 封）」讀成 N 天共 0 封；Ｃ-79 延伸
                     el.style.color = '#16a34a';
                 }
             } catch (e) {
