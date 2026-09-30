@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09291837'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '09301529'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -252,6 +252,7 @@ SCAN_TYPE = _os.environ.get('SCAN_TYPE', 'tw')  # 'tw'=台股, 'futures'=期貨
 GMAIL_ACCOUNT  = _os.environ.get("GMAIL_ACCOUNT",  "shchyu61@gmail.com") # 您Gmail（寄件人）
 GMAIL_PASSWORD = _os.environ.get("GMAIL_PASSWORD", "")  # ☁️【雲端】從Secrets讀取；或💻【本機】填入密碼格式："xxxx xxxx xxxx xxxx"（密碼可刪。實戰要補上。）。
 NOTIFY_EMAIL   = "shchyu61@gmail.com"       # 收通知的信箱（可與寄件人同一個）
+PENDING_GMAIL_MAX_PER_RUN = 5   # ✅09301529 等待-29 甲案（主帥 2026/09/30 15:29「好,採用你們2個專案版的共識和建議,我選甲案。」；Ｃ-108）：網頁 Gmail 待寄信每輪最多寄 5 封；白名單＝寄件人與收件信箱，家人信箱另存 Firebase public/gmail_whitelist（emails 陣列，只有主帥能寫；不寫進公開倉庫）
 
 # 台股持有股票，要去此章節最下面的第51行自己輸入。
 
@@ -4479,6 +4480,34 @@ def apply_tdcc_bonus_score(buy_signals):
     return [s for _,s in scored]
 
 
+def _pg_whitelist(_req, _tok, _base):
+    """✅09301529 等待-29 甲案（Ｃ-108）：網頁 Gmail 待寄信白名單＝寄件人與收件信箱＋Firebase public/gmail_whitelist 之 emails（讀不到只用預設）。"""
+    _wl = {str(GMAIL_ACCOUNT).strip().lower(), str(NOTIFY_EMAIL).strip().lower()}
+    try:
+        _r = _req.get(f"{_base}/gmail_whitelist", headers={"Authorization": f"Bearer {_tok}"}, timeout=10)
+        if _r.status_code == 200:
+            for _v in ((((_r.json() or {}).get('fields', {}) or {}).get('emails', {}) or {}).get('arrayValue', {}) or {}).get('values', []) or []:
+                if _v.get('stringValue'): _wl.add(_v['stringValue'].strip().lower())
+    except Exception:
+        pass
+    return _wl
+
+
+def _pending_gmail_filter(_docs, _wl, _cap):
+    """✅09301529 等待-29 甲案（Ｃ-108）：回傳（本輪寄送, 丟棄）。已寄者略過；寄件人欄不在白名單者丟棄（刪除不寄）；白名單內超過每輪上限者留待下輪。"""
+    _send, _drop = [], []
+    for _d in _docs:
+        _f = _d.get('fields', {}) or {}
+        if (_f.get('sent', {}) or {}).get('booleanValue', False):
+            continue
+        _u = str((_f.get('user', {}) or {}).get('stringValue', '')).strip().lower()
+        if _u not in _wl:
+            _drop.append(_d)
+        elif len(_send) < _cap:
+            _send.append(_d)
+    return _send, _drop
+
+
 def process_pending_gmail_requests(now_str):
     """✅ v05172348：處理網頁版發起的Gmail通知請求（pending_gmail_*）
     網頁版用戶開啟Gmail通知後，掃到訊號會寫入Firebase
@@ -4505,8 +4534,14 @@ def process_pending_gmail_requests(now_str):
         _docs = _list_r.json().get('documents', [])
         _pending = [d for d in _docs if '/pending_gmail_' in d.get('name','')]
         if not _pending: return
-        print(f"  📧 發現{len(_pending)}個網頁版Gmail通知請求，處理中...")
-        for doc in _pending:
+        _send, _drop = _pending_gmail_filter(_pending, _pg_whitelist(_req, _c.token, _base), PENDING_GMAIL_MAX_PER_RUN)   # ✅09301529 等待-29 甲案（Ｃ-108）
+        print(f"  📧 發現{len(_pending)}個網頁版Gmail通知請求：白名單內本輪寄送 {len(_send)}、非白名單丟棄 {len(_drop)}、超過每輪上限留待下輪 {len(_pending) - len(_send) - len(_drop)}")
+        for doc in _drop:
+            try:
+                _req.delete(f"https://firestore.googleapis.com/v1/{doc['name']}", headers={"Authorization": f"Bearer {_c.token}"}, timeout=10)
+            except Exception:
+                pass
+        for doc in _send:
             try:
                 fields = doc.get('fields', {})
                 ticker    = fields.get('ticker',    {}).get('stringValue','')
