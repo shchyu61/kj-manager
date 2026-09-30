@@ -27,7 +27,7 @@
 　　・依據＝舊資料無此欄時程式以 'long' 為預設；★推定為假的後果：舊標的一律視為做多，需主帥手動切換
 ══════════════════════════════════════════════════════════════
 -->
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09282005</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest select-none">v09301136</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide select-none" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -617,11 +617,11 @@
                             </button>
                         </div>
 
-                    <!-- 期貨5分K模式：僅 shchyu61@gmail.com 可見 -->
+                    <!-- 期貨／週選擇權監控（期貨5分K、15分K、條件W）：僅 shchyu61@gmail.com 可見；✅09301136 主帥 09/30 11:36 授權 AI 決定名稱（原名「期貨5分K」） -->
                     <div id="futures-5mk-wrap" style="display:none" class="flex flex-col items-center gap-1.5">
                         <!-- 開關式 Toggle -->
                         <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-black text-slate-500">期貨5分K</span>
+                            <span class="text-[12px] font-black text-slate-500">期貨／週選擇權</span>
                             <button id="btn-futures-5mk" onclick="toggleFutures5mk()"
                                 role="switch" aria-checked="false"
                                 class="relative inline-flex items-center w-14 h-7 rounded-full transition-colors duration-200 focus:outline-none shadow-inner bg-slate-300"
@@ -2817,7 +2817,7 @@
 
         window.toggleFutures5mk = () => {
             if (currentUserEmail !== 'shchyu61@gmail.com') {
-                window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
+                window.showAlert('⚠️ 期貨／週選擇權監控僅限本人使用');
                 return;
             }
             // 時段檢查
@@ -2850,7 +2850,7 @@
                 label.style.left             = '6px';
                 label.style.right            = 'auto';
                 btn.setAttribute('aria-checked', 'true');
-                window.showAlert('🔥 期貨5分K監控已開啟！每5分鐘自動掃描');
+                window.showAlert('🔥 期貨／週選擇權監控已開啟！每5分鐘自動掃描（期貨5分K、15分K、條件W）');
                 window.startFutures5mk();  // 立刻掃一次
             } else {
                 btn.style.backgroundColor   = '';
@@ -2861,7 +2861,7 @@
                 label.style.left             = 'auto';
                 label.style.right            = '6px';
                 btn.setAttribute('aria-checked', 'false');
-                window.showAlert('⏹ 期貨5分K監控已關閉');
+                window.showAlert('⏹ 期貨／週選擇權監控已關閉');
             }
         };
 
@@ -2880,7 +2880,7 @@
         // ✅09271755【網頁四版一致核心】依策略說明表二（第 57～68 行）與雲端 stage_pass（第 5546～5576 行）逐字移植；指標算法照 pandas_ta 0.4.71b0 原始碼
         //   ・主帥 09/27 15:57「A和C同意」：網頁全面對齊策略說明（四版一致，Ｃ-04；主帥 04/09 14:17、07/03、09/02 21:20）
         //   ・MACD 看「柱」（OSC＝MACD 線 − 訊號線），不是 MACD 線；近 N 根＝5（策略說明第 156 行）
-        //   ・布林標準差：暫依本機、雲端現況（樣本，除以 n−1），待主帥 eLeader 截圖確認後統一（KJ_BOLL_DDOF）
+        //   ・布林標準差：母體（除以 n），以 eLeader 為準（主帥 09/27 15:57 B 甲、16:36；Ｃ-57）；原註解「暫依樣本、待確認後統一」為定案前寫法（09301136 更正）
         (function (root) {
           const KJ_TOUCH_N = 5;            // 策略說明第 156 行：「近N根」全系統只有一個數字：5
           const KJ_BOLL_DDOF = 0;          // 0＝母體標準差，以 eLeader 為準（主帥 09/27 15:57 B 甲、16:36；對照檔第 579～581 行）；本機、雲端同步改 ddof=0
@@ -3226,7 +3226,7 @@ ${window._strikeHint(_hit.px, _isCall)}
 
         window.startFutures5mk = async () => {
             if (currentUserEmail !== 'shchyu61@gmail.com') {
-                window.showAlert('⚠️ 期貨5分K模式僅限本人使用');
+                window.showAlert('⚠️ 期貨／週選擇權監控僅限本人使用');
                 return;
             }
 
