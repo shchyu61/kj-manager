@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '09301529'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '10051453'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -752,7 +752,7 @@ def _taifex_hint_text():
 # 持有股：❌❌終極警報 / 未持有股：⚠️勿碰預警（可提醒親友）
 # ------------------------------------------------------------
 # ✅09170232 P0⑦【本模組暫停使用，程式碼保留】（主帥 2026/09/16 17:22 選甲案）
-#   ・暫停範圍：本檔第 750～839 行（get_delisting_risk 函式本體），以及第 3052 行呼叫點。
+#   ・暫停範圍：本檔第 763～860 行（get_delisting_risk 函式本體），以及第 3524 行呼叫點。   # ✅10051453 甲-2：行號依本檔實測更正（本機、雲端各自計）
 #   ・功能：向 Yahoo Finance 查 delistingDate，持有股發「終極警報」、未持有股發「勿碰預警」。
 #   ・暫停理由：①主帥 09/14 13:33「我們後來就不採用下市警報了」；
 #     ②台灣證交所沒有免費的全額交割／注意股 JSON API（2026/03/22 查證）；
@@ -1013,8 +1013,9 @@ def _tw_market_closed_today():
                 _d5 = _normalize_df(yf.download('^TWII', period='1d', interval='5m', progress=False))
                 if _d5 is not None and len(_d5) > 0 and _last_day(_d5) == _d:
                     _closed = False
-            except Exception:
-                pass
+            except Exception as _e5:   # ✅10051453 丙-1：5分K 保險抓取例外時視為開市（本函式 docstring「任何例外→視為開市」；主帥 09/25 15:07 甲①；稽核報告 10051453）
+                _closed = False
+                print(f'  ⚠️ 休市判斷：5分K 保險抓取失敗（{str(_e5)[:40]}）→ 視為開市')
         _TW_CLOSED_CACHE.update({'date': _d, 'closed': _closed})
         if _closed:
             print(f'  \U0001F3D6️ 台股休市判斷：^TWII 日K 最後一根為 {_ld}，今天 {_d} 無交易 → 視為休市，台股相關掃描跳過')
@@ -1550,8 +1551,8 @@ def _wl_mark(code):
         _cands = {_c, _c.split('.')[0], _c.replace('-USD', ''), _c.replace('=X', '')}
         if _cands & _set:
             return '⭐【你的觀察清單】\n'
-    except Exception:
-        pass
+    except Exception as _e_wl:   # ✅10051453 丙-4
+        print(f'  ⚠️ 觀察清單標示失敗：{str(_e_wl)[:40]}')
     return ''
 
 
@@ -4005,8 +4006,8 @@ def scan_limit_up():
                     if _chg >= 0.0995:  # 漲停 ≈ +10%
                         _limit_up.append((_ticker, _chg * 100, _last))
                         print(f"  🔥 漲停：{_ticker} +{_chg*100:.1f}%")
-            except:
-                pass
+            except Exception as _e_lu:   # ✅10051453 丙-4
+                print(f'  ⚠️ 漲停追蹤單檔失敗：{str(_e_lu)[:40]}')
 
         if not _limit_up:
             print("  ℹ️ 今日無漲停股票（預篩清單內）")
@@ -5091,8 +5092,8 @@ def _persist_or_alert(is_long, is_short, note=''):
                     f"建議：檢查 Firebase 憑證（{FIREBASE_CRED_ENV}）是否設定、額度是否用盡。")
             try:
                 send_gmail("☁️【雲端】⚠️持倉狀態寫入失敗（可能漏發平倉）", _msg, urgent=True)
-            except Exception:
-                pass
+            except Exception as _e_pa:   # ✅10051453 丙-4
+                print(f'  ❌ 持倉寫入失敗之告警信亦寄送失敗：{str(_e_pa)[:60]}')
         print(f"  ❌ 持倉寫入失敗：{note} → 已寄急迫告警（本次執行只寄一次）")
     return _ok
 
@@ -5211,6 +5212,9 @@ def _condw_gate3(df, nbars, label):
             'rsi_prev': rsi_prev, 'rsi_now': rsi_now}
 
 
+_CONDW_LOCAL_CLAIMS = set()   # ✅10051453 甲-4：條件W 配額本地後援（Firebase 不可用時用；同程序內有效）
+
+
 def scan_condition_w():
     # ✅08250451【修正·與 08102047 同型】★台指期K棒累積移到【所有關卡之前】無條件執行。
     #     ★當時的結論是「累積快照是記錄行情，不該受任何策略關卡影響」，
@@ -5323,8 +5327,14 @@ def scan_condition_w():
             #   （沿革見檔尾【附錄．程式註解沿革存查】H-021）
             _sent_slot = None
             for _slot in range(1, _max_slot + 1):
-                _claim = _claim_alert_firebase(f'condW_{wid}_{_sess}#{_slot}', _today)
-                if _claim is True or _claim is None:
+                _k_cw = f'condW_{wid}_{_sess}#{_slot}'
+                _claim = _claim_alert_firebase(_k_cw, _today)
+                if _claim is None:   # ✅10051453 甲-4：Firebase 不可用（None）時改走本地計數後援（同 _claim_notify_slot 第 2266 行），避免條件W 每 5 分鐘重寄
+                    _lk_cw = f'{_today}|{_k_cw}'
+                    if _lk_cw in _CONDW_LOCAL_CLAIMS:
+                        continue
+                    _CONDW_LOCAL_CLAIMS.add(_lk_cw); _claim = True
+                if _claim is True:
                     _sent_slot = _slot; break
             if _sent_slot is None:
                 print(f'  ⚠️ 條件W：本{_sess}時段已達{_max_slot}次上限（★多空共用配額），靜音'); continue
@@ -5858,7 +5868,7 @@ def _intraday_gates(df_d, df_30):
         except Exception: e = False
         try: f = fn_el(df) is not None
         except Exception: f = False
-        return bool(a or e or f)
+        return bool(a)   # ✅10051453 甲-5：只認 stage_pass（舊「OR 條件E OR eLeader」09/19 已廢止）；本函式現無呼叫端，整潔批刪除（稽核報告 10051453 丙-11）
     return (_g(check_buy_precondition, check_condE_long, check_buy_eleader, df_d, True),
             _g(check_short_precondition, check_condE_short, check_short_eleader, df_d, True),
             _g(check_buy_precondition, check_condE_long, check_buy_eleader, df_30, False),
@@ -8005,3 +8015,6 @@ if __name__ == "__main__":
 # EWT跌幅 > 2.2%（≈台指1000點）→ 立即發Gmail警報
 # ・回看根數【等比換算】(K棒等比換算原則)：5分K 54根 ＝ 4.5小時
 # → 15分K 為 54÷3 ＝【18根】，涵蓋相同時間長度，不可直接沿用54。
+# ── 第五批：10051453 稽核修復（主帥 10/05 14:53 選甲；股票PRO_程式稽核報告(10051453)）──
+#   甲-2 暫停範圍註解行號更正；甲-4 條件W 配額 Firebase 不可用時本地後援；丙-1 休市判斷 5分K 例外視為開市；
+#   丙-4 三處靜默吞錯補紀錄；甲-5 _intraday_gates 死碼對齊 stage_pass（整潔批刪除）。策略判斷式、凍結常數未動。
