@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v10122359</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v10161937</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1419,7 +1419,7 @@
                 const cloudOk5 = recent.length >= 5 && recent.every(x => !late(x));
                 let msg = '', color = '#16a34a';
                 if (last.by === '筆電') {
-                    msg = '✅ 台股 12:00 掃描：' + md + ' ' + last.at + ' 由筆電完成' + (cloudOk5 ? '｜雲端近 5 天皆準時，筆電排程可以關閉' : '｜筆電排程請保持開啟');
+                    msg = '✅ 台股 12:00 掃描：' + md + ' ' + last.at + ' 由筆電開始' + (cloudOk5 ? '｜雲端近 5 天皆準時，筆電排程可以關閉' : '｜筆電排程請保持開啟');
                 } else if (late(last)) {
                     msg = '⚠️ 台股 12:00 掃描：' + md + ' 雲端延到 ' + last.at + ' 才完成｜建議開啟筆電工作排程器（3_stock_monitor.py 平日 11:55）';
                     color = '#dc2626';
@@ -3147,6 +3147,8 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
                 const _isCall = _hit.g.long;
                 if (!window._tfOnce('CONDW', _isCall ? 'call' : 'put')) return;   // ✅09200000 跨週期去重（5分K 與 15分K 共用一把鍵）
                 const _body = `${_isCall ? '⭐【條件W 週選擇權：buy CALL】⭐' : '🔻【條件W 週選擇權：buy PUT】🔻'}
+⏱⚠️【條件W 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒
+💡【反向建議】原本要做 ${_isCall ? 'buy CALL' : 'buy PUT'}，建議改做 ${_isCall ? 'buy PUT' : 'buy CALL'}（主帥 10/16 指示）
 時窗：${_win === 'W2' ? '週二15:05→週三11:30' : '週四15:05→週五11:30'}
 週期：${_hit.iv === '5m' ? '5分K' : '15分K'}（條件W 只跑第三道，不看前兩道）
 方向：${_isCall ? '做多（V轉）' : '做空（A轉）'}
@@ -3154,6 +3156,8 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
 台指現價：${_hit.px.toFixed(0)}
 建議標的（價外，以小博大）：
 ${window._strikeHint(_hit.px, _isCall)}
+— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參考 —
+${window._strikeHint(_hit.px, !_isCall)}
 ⚠️【未取得即時權利金報價】以上為【距離推估】，尚【未驗證】是否 ≤16 元，下單前請自行確認市價。
 時間：${_now}`;
                 if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
@@ -3282,8 +3286,9 @@ ${window._strikeHint(_hit.px, _isCall)}
                     const _q5 = window._futAlign(yResult.indicators.quote[0]);
                     if (_q5.Close.length < 32) { window.showAlert(`⚠️ ${ticker} 5分K資料不足（需>=32根）`); continue; }
                     const df5 = K.kjIndicators(_q5);
-                    const _f1 = [await window._futDF(ticker, '1d', '60d', 26), await window._futDF(ticker, '60m', '3mo', 30), await window._futDF('EWT', '60m', '3mo', 30)];
-                    const _f2 = [await window._futDF(ticker, '30m', '5d', 20), await window._futDF('EWT', '30m', '5d', 20)];
+                    const _tw30 = await window._futDF(ticker, '30m', '5d', 20), _ew30 = await window._futDF('EWT', '30m', '5d', 20), _tw15 = await window._futDF(ticker, '15m', '5d', 32);   // ✅10161937 主帥 10/16 14:01 第 5、6 點
+                    const _f1 = [await window._futDF(ticker, '1d', '60d', 26), await window._futDF(ticker, '60m', '3mo', 30), await window._futDF('EWT', '60m', '3mo', 30), _tw30, _ew30];   // ✅10161937 第一道加 ^TWII 30分K OR EWT 30分K
+                    const _f2 = [_tw30, _ew30, _tw15];   // ✅10161937 第二道加 ^TWII 15分K；平倉 e1／e2 同用 f1／f2（進出場同一套，主帥 09/22 19:12）
                     const _holdL = _futuresHoldingManual || await _hasFuturesHolding(), _holdS = _futuresShortManual;
                     const _dec = window._futDecide(df5, _f1, _f2, _holdL, _holdS, inFutures, _isNightHours);
                     window._futGates = Object.assign({ t: Date.now() }, _dec);   // 供 15分K 共用前兩道（同雲端 _fut_gates）

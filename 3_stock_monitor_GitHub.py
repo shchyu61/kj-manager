@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '10102146'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '10161937'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -5298,6 +5298,25 @@ def _condw_gate3(df, nbars, label):
 _CONDW_LOCAL_CLAIMS = set()   # ✅10051453 甲-4：條件W 配額本地後援（Firebase 不可用時用；同程序內有效）
 
 
+CONDW_DELAY_NOTE_ENABLED = True   # ✅10161937 條件W 信件延遲提醒與反向建議（主帥 10/16 14:01 第 7 點）；改 False 即回到原信件內容（回滾開關）
+
+
+def _condw_delay_note(close, d):
+    """✅10161937【條件W 延遲提醒與反向建議】主帥 2026/10/16 14:01 第 7 點：「請AI在gmail通知信提醒我,條件W已延遲大約15~25分鐘,建議原本要做多buy call請改做buy put(原本要做空buy put請改做buy call)」
+    ★只改信件內文：判斷、方向、配額、去重一律不變；另附反方向履約價參考（get_weekly_option_hint 反方向）。回傳 (信首, 信尾)。"""
+    if not CONDW_DELAY_NOTE_ENABLED:
+        return '', ''
+    _o, _r = ('buy CALL', 'buy PUT') if d == 'buy' else ('buy PUT', 'buy CALL')
+    try:
+        _h = get_weekly_option_hint(close, 'sell' if d == 'buy' else 'buy')
+    except Exception:
+        _h = ''
+    _head = (f"⏱⚠️【條件W 已延遲大約 15～25 分鐘】Yahoo 台股 5分K／15分K 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒\n"
+             f"💡【反向建議】原本要做 {_o}，建議改做 {_r}（主帥 10/16 指示）\n\n")
+    _tail = (f"\n\n— 反向（{_r}）履約價參考 —{_h}" if _h else '')
+    return _head, _tail
+
+
 def scan_condition_w():
     # ✅08250451【修正·與 08102047 同型】★台指期K棒累積移到【所有關卡之前】無條件執行。
     #     ★當時的結論是「累積快照是記錄行情，不該受任何策略關卡影響」，
@@ -5433,6 +5452,8 @@ def scan_condition_w():
                    f"進場窗：{wid}\n"
                    f"時間：{now_str_f}"
                    + _opt_hint)
+            _dn_h, _dn_t = _condw_delay_note(r['close'], _dir)   # ✅10161937 主帥 10/16 14:01 第 7 點
+            msg = _dn_h + msg + _dn_t
             _ok = send_gmail(f"☁️【雲端】⭐條件W週選{'買進' if _dir=='buy' else '做空'} "
                              f"{CONDW_TARGET} - {now_str_f}", msg, urgent=True)
             print(f"  {'✅' if _ok else '❌'} 條件W {_title}／{r['label']}"
@@ -5889,16 +5910,39 @@ def _twii30_df():
     return _TW30_CACHE['df']
 
 
+_TW15_CACHE = {'t': 0.0, 'df': None}
+
+
+def _twii15_df():
+    """✅10161937 期貨第二道之三：^TWII 15分K（主帥 2026/10/16 14:01 第 6 點：「我還是認為第二道除了原本的30分K,也要加入15分K,不然這60天內只有2筆buy call,太少了!」）。同輪 5 分鐘內共用快取（比照 _twii30_df）；進場與平倉共用。"""
+    import time as _tm
+    if _TW15_CACHE['df'] is not None and _tm.time() - _TW15_CACHE['t'] < 300:
+        return _TW15_CACHE['df']
+    try:
+        _d = yf.download('^TWII', period='5d', interval='15m', progress=False)
+        _TW15_CACHE['df'] = calc_indicators(_normalize_df(_d)) if (_d is not None and len(_d) >= 32) else None
+    except Exception as _e:
+        print(f'  ⚠️ ^TWII 15分K 取得失敗：{_e}')
+        _TW15_CACHE['df'] = None
+    _TW15_CACHE['t'] = _tm.time()
+    return _TW15_CACHE['df']
+
+
 def _fut_exit_ok(is_long, first_list, second_df, label=''):
     """✅09221651【期貨出場三道 AND】第一道（日K OR ^TWII 60分K OR EWT 60分K，三擇一）AND 第二道（^TWII 30分K OR EWT 30分K；✅09221700 補 ^TWII）；
+    ✅10161937 第一道加 ^TWII 30分K OR EWT 30分K（五擇一）、第二道加 ^TWII 15分K（主帥 2026/10/16 14:01 第 5、6 點）；平倉與進場同一套（主帥 09/22 19:12）；
     ★含週三、週五的週選擇權（主帥 09/22 17:00）；各道當根 RSI 與 MACD柱 皆須轉向（多方出場 A轉、空方出場 V轉）；
     第三道由呼叫端以 stage_pass(5分K／15分K, entry=False) 判定。各道一律出場四項、不看實體（表二④）。
     主帥 09/19 10:47 b「第一道 and 第二道 and 第三道（不是 or）」；09/22 06:40 裁示甲。取代 09190152「第一道只看碰軌」。"""
-    g1 = any(stage_pass(d, is_long, entry=False) for d in first_list if d is not None)
-    # ✅09221700 第二道＝^TWII 30分K OR EWT 30分K（主帥 09/22 17:00）
-    g2 = any(stage_pass(d, is_long, entry=False) for d in (_twii30_df(), second_df) if d is not None)
+    # ✅10161937 第一道加 ^TWII 30分K OR EWT 30分K、第二道加 ^TWII 15分K；平倉與進場同一套（主帥 09/22 19:12：「進場的期貨第二道和平倉的第二道一樣要看」；09/19 10:47 b 進場與出場都一樣）
+    #   主帥 2026/10/16 14:01 第 5 點：「【第一道（日K／^TWII 60分K／EWT 60分K 任一）】請改成【第一道（日K／^TWII 60分K／EWT 60分K／^TWII 30分K／EWT 30分K 任一）】」
+    #   主帥 2026/10/16 14:01 第 6 點：「我還是認為第二道除了原本的30分K,也要加入15分K,不然這60天內只有2筆buy call,太少了!」
+    _tw30x = _twii30_df()
+    g1 = any(stage_pass(d, is_long, entry=False) for d in (*first_list, _tw30x, second_df) if d is not None)
+    # ✅09221700 第二道＝^TWII 30分K OR EWT 30分K（主帥 09/22 17:00）；✅10161937 加 ^TWII 15分K
+    g2 = any(stage_pass(d, is_long, entry=False) for d in (_tw30x, second_df, _twii15_df()) if d is not None)
     if not (g1 and g2):
-        print(f"  🔕 期貨{label}{'平倉' if is_long else '回補'}：出場三道未齊（第一道={g1}、第二道 ^TWII／EWT 30分K={g2}）→ 不發")
+        print(f"  🔕 期貨{label}{'平倉' if is_long else '回補'}：出場三道未齊（第一道 日K／^TWII 60分K／EWT 60分K／^TWII 30分K／EWT 30分K={g1}、第二道 ^TWII 30分K／EWT 30分K／^TWII 15分K={g2}）→ 不發")
     return bool(g1 and g2)
 
 
@@ -6397,16 +6441,18 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 # ✅09170255 15分K 補平倉與回補：規則與 5分K 完全相同（不一國兩制）
                 #   主帥 09/17 02:55：「5分K和15分K都要改看【近5根有沒有碰到上下軌?】+【前1根和當根比較,macd和rsi有沒有V轉或A轉?】」
                 # ✅09190152 取第一道（^TWII 60分K，取不到再退 EWT 60分K）供出場前提判斷
-                _df1st_15 = None
+                # ✅10161937 先修後報：原「^TWII 60分K，取不到再退 EWT 60分K」只取其一，與 5分K 出場、策略說明 9-6 及出場定案表（主帥 09/22 17:00「期貨(週三、週五的週選擇權) 15分K：第一道（日K OR ^TWII 60分K OR EWT 60分K）」）不符 → 兩個都取
+                _df1st_15s = []
                 for _sym in (_tk, 'EWT'):
                     try:
                         _d1 = yf.download(_sym, period='3mo', interval='60m', progress=False)
                         if _d1 is not None and len(_d1) >= 30:
-                            _df1st_15 = calc_indicators(_normalize_df(_d1))
-                            if _df1st_15 is not None:
-                                break
+                            _x1 = calc_indicators(_normalize_df(_d1))
+                            if _x1 is not None:
+                                _df1st_15s.append(_x1)
                     except Exception:
                         continue
+                _df1st_15 = _df1st_15s[0] if _df1st_15s else None
                 # ✅09221651 出場三道 AND：補抓第一道日K 與第二道 EWT 30分K；★回補由舊式 RSI↑ MACD柱↑ 改為與平倉鏡像
                 _df0_15 = _df2nd_15 = None
                 try:
@@ -6417,9 +6463,9 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 except Exception as _e15:
                     print(f'  ⚠️ 15分K 出場第一／二道資料取得失敗：{_e15}')
                 _close_long  = bool(_futures_is_holding and stage_pass(_df, True, entry=False)
-                                    and _fut_exit_ok(True, (_df0_15, _df1st_15), _df2nd_15, '15分K'))
+                                    and _fut_exit_ok(True, (_df0_15, *_df1st_15s), _df2nd_15, '15分K'))
                 _cover_short = bool(_futures_is_short and stage_pass(_df, False, entry=False)
-                                    and _fut_exit_ok(False, (_df0_15, _df1st_15), _df2nd_15, '15分K'))
+                                    and _fut_exit_ok(False, (_df0_15, *_df1st_15s), _df2nd_15, '15分K'))
 
                 if not (_buy or _sell or _close_long or _cover_short):
                     print(f"  ℹ️ {_tk} 15分K：RSI={_r_now:.1f}({'↑' if _r_up else '↓'})  "
@@ -7034,17 +7080,21 @@ def main_task():
                 # ✅09221912【期貨進場第二道】主帥 09/22 19:12：「進場的期貨第二道和平倉的第二道一樣要看『第二道（^TWII 30分K OR EWT 30分K）』」
                 #   ★判斷改為表二三道共用的 stage_pass（原為舊式「條件A/B/C OR 條件E OR eLeader」，09/19 已廢止）
                 _tw30_in = _twii30_df()
-                _ewt_long  = bool((stage_pass(df5_d, True, entry=True) if df5_d is not None else False) or
-                                  (stage_pass(_tw30_in, True, entry=True) if _tw30_in is not None else False))
-                _ewt_short = bool((stage_pass(df5_d, False, entry=True) if df5_d is not None else False) or
-                                  (stage_pass(_tw30_in, False, entry=True) if _tw30_in is not None else False))
+                _tw15_in = _twii15_df()   # ✅10161937 第二道加 ^TWII 15分K（主帥 2026/10/16 14:01 第 6 點：「我還是認為第二道除了原本的30分K,也要加入15分K,不然這60天內只有2筆buy call,太少了!」）
+                _sp2g = lambda _d, _L: bool(stage_pass(_d, _L, entry=True)) if _d is not None else False
+                _ewt30_long, _ewt30_short = _sp2g(df5_d, True), _sp2g(df5_d, False)
+                _tw30_long, _tw30_short = _sp2g(_tw30_in, True), _sp2g(_tw30_in, False)
+                _tw15_long, _tw15_short = _sp2g(_tw15_in, True), _sp2g(_tw15_in, False)
+                _ewt_long  = bool(_ewt30_long or _tw30_long or _tw15_long)
+                _ewt_short = bool(_ewt30_short or _tw30_short or _tw15_short)
                 # ✅09170846【三道丙案．先大後小】第一道＝日K；第二道＝EWT 30分K；第三道＝5分K＋15分K（主帥 09/17 08:34、08:46）
                 #   主帥 09/17 08:34：「所有策略設計理念就是『先大後小』。第一道和第二道週期太長，絕對不能用在期貨。」
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-025）
-                _1st_long  = bool(_1st_daily_long or _1st_60_long or _1st_ewt60_long)     # ✅09171354 日K OR 60分K；✅09172131 二丙加 EWT 60分K
-                _1st_short = bool(_1st_daily_short or _1st_60_short or _1st_ewt60_short)
+                # ✅10161937 第一道加 ^TWII 30分K OR EWT 30分K（主帥 2026/10/16 14:01 第 5 點：「【第一道（日K／^TWII 60分K／EWT 60分K 任一）】請改成【第一道（日K／^TWII 60分K／EWT 60分K／^TWII 30分K／EWT 30分K 任一）】」）
+                _1st_long  = bool(_1st_daily_long or _1st_60_long or _1st_ewt60_long or _tw30_long or _ewt30_long)     # ✅09171354 日K OR 60分K；✅09172131 二丙加 EWT 60分K；✅10161937 加 ^TWII／EWT 30分K
+                _1st_short = bool(_1st_daily_short or _1st_60_short or _1st_ewt60_short or _tw30_short or _ewt30_short)
                 # ✅09181118 不在此 continue：條件D 前提為【第一道 AND 第二道】，且有持倉時必須照常檢查平倉回補
-                print(f'  {"✅" if (_1st_long or _1st_short) else "❌"} {ticker} 第一道(日K OR ^TWII 60分K OR EWT 60分K)（多:{_1st_long} 空:{_1st_short}｜日K 多:{_1st_daily_long} ^TWII 60分K 多:{_1st_60_long} EWT 60分K 多:{_1st_ewt60_long}）')
+                print(f'  {"✅" if (_1st_long or _1st_short) else "❌"} {ticker} 第一道(日K OR ^TWII 60分K OR EWT 60分K OR ^TWII 30分K OR EWT 30分K)（多:{_1st_long} 空:{_1st_short}｜日K 多:{_1st_daily_long} ^TWII 60分K 多:{_1st_60_long} EWT 60分K 多:{_1st_ewt60_long} ^TWII 30分K 多:{_tw30_long} EWT 30分K 多:{_ewt30_long}）')
 
                 # ── 第二道：EWT 30分K（美股時段交易，涵蓋台灣夜盤）──────────   # ✅09181106 標題更正：實作本來就是 EWT 30分K，不是日K eLeader
                 #     → ★★這是【做多】的 eLeader，★但 continue 會跳過【整支標的】。
@@ -7060,7 +7110,7 @@ def main_task():
                 _buy_2nd   = bool(_ewt_long)
                 _short_2nd = bool(_ewt_short)
                 _fut_gates[ticker] = (_1st_long, _1st_short, _buy_2nd, _short_2nd)   # ✅09170937 供 15分K 共用
-                print(f'  {"✅" if (_buy_2nd or _short_2nd) else "❌"} {ticker} 第二道(^TWII 30分K OR EWT 30分K)（多:{_buy_2nd} 空:{_short_2nd}）')
+                print(f'  {"✅" if (_buy_2nd or _short_2nd) else "❌"} {ticker} 第二道(^TWII 30分K OR EWT 30分K OR ^TWII 15分K)（多:{_buy_2nd} 空:{_short_2nd}｜^TWII 15分K 多:{_tw15_long} 空:{_tw15_short}）')
                 if not (_1st_long or _1st_short or _buy_2nd or _short_2nd) and not (_futures_is_holding or _futures_is_short):
                     print(f'  ❌ {ticker} 第一道、第二道皆未通過且無持倉，跳過'); continue
                 # ✅09170937 原式第一道或第二道未過即 continue，連平倉回補都不檢查 → 有持倉時可能收不到平倉信（已修正）
