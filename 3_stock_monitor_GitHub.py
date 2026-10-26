@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '10161937'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '10261423'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -1975,7 +1975,7 @@ def _is_delayed_digest_run():
 def _kj_stop_loop(_why):
     """✅09261759【時段外迴圈自動結束】雲端 yml 的 bash 迴圈看到 /tmp/kj_stop_loop 即停止，不再空轉到 340 分鐘。
     ★依據：主帥 09/26 17:12「是誰授權你將程式碼設計成【每天接力】或【全天接力】!?」、17:29「Q1、Q2、Q4照建議」——
-      期貨／條件W 只在週二、週四 15:05 起到週三、週五的時窗內跑；GitHub 使用條款禁止負擔與效益不成比例的長時間佔用。本機版不寫。"""
+      期貨／條件W 只在週二、週四 09:05～11:30（✅10261313 Ｃ-196）與週二、週四 15:05 起到週三、週五的時窗內跑；GitHub 使用條款禁止負擔與效益不成比例的長時間佔用。本機版不寫。"""
     if not IS_GITHUB_ACTIONS:
         return
     try:
@@ -5041,13 +5041,18 @@ def scan_stock_mixed(ticker, is_holding=False):
 
 def _condw_current_window():
     """條件W時間窗判定：回傳當前所屬窗ID；不在窗內回None。✅ 07011049 純新增。
-    窗一：週二15:05 ~ 週三11:30；窗二：週四15:05 ~ 週五11:30（跨夜，含夜盤）。"""
+    窗一：週二15:05 ~ 週三11:30；窗二：週四15:05 ~ 週五11:30（跨夜，含夜盤）。
+    另：週二、週四日盤 09:05～11:30（窗 ID W2D／W4D；✅10261313 Ｃ-196）。"""
     from datetime import timedelta as _td
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
     wd = now.weekday()               # 0=週一 … 4=週五
     tv = now.hour * 60 + now.minute
     d  = now.strftime('%Y%m%d')
+    # ✅10261313 週二、週四日盤 09:05～11:30（Ｃ-196；主帥 2026/10/22 19:25「一甲、二B」、10/26 13:2x 確認甲；前案 09/26 17:12「別加入週二的日盤…別加入週四的日盤…」（Ｃ-45、R-25）由主帥改定；起始 09:05 依 R-02）
+    #   ★窗 ID 另立 W2D／W4D：同向配額與 W2／W4（週二、週四夜盤＋週三、週五）分開計，不佔結算日配額
+    if wd in (1, 3) and (9*60+5) <= tv <= 11*60+30:
+        return f"{d}_W{2 if wd == 1 else 4}D"
     # 窗一：週二(1)15:05起
     if wd == 1 and tv >= 15*60+5:
         return f'{d}_W2'
@@ -5227,6 +5232,17 @@ def _futures_close_alert(now_tw):
     print(f"  {'✅' if _ok else '❌'} 期貨未平倉提醒信{'已發送' if _ok else '發送失敗'}")
 
 
+def _cw_bar_ts(df):
+    """✅10261313【Ｃ-193】判斷用K棒時間（台灣時間 MM/DD HH:MM；K棒起點）；取不到回空字串、不阻擋（主帥 10/22 07:1x Q3「甲：加一行」）"""
+    try:
+        _t = df.index[-1]
+        if getattr(_t, 'tzinfo', None) is not None:
+            _t = _t.tz_convert('Asia/Taipei')
+        return _t.strftime('%m/%d %H:%M')
+    except Exception:
+        return ''
+
+
 def _condw_gate3(df, nbars, label):
     """✅09021330【條件W 第三道關卡】★只跑這一道，★不看第一道、不看第二道。
     ★抽出為共用函式，★★供 5分K 與 15分K 共用（ＡＫ１８：同型邏輯單一實作，
@@ -5290,7 +5306,7 @@ def _condw_gate3(df, nbars, label):
           f"RSI={rsi_prev:.1f}→{rsi_now:.1f}({'\u2191' if rsi_up else '\u2193'})  "
           f"MACD柱={'\u2191' if mac_up else '\u2193'}  "
           f"多方={'\u2713' if _buy else '\u2717'}  空方={'\u2713' if _short else '\u2717'}")
-    return {'buy': _buy, 'short': _short, 'close': close, 'label': label,
+    return {'bar_ts': _cw_bar_ts(df), 'buy': _buy, 'short': _short, 'close': close, 'label': label,
             'boll_bot': boll_bot, 'boll_top': boll_top,
             'rsi_prev': rsi_prev, 'rsi_now': rsi_now}
 
@@ -5450,7 +5466,8 @@ def scan_condition_w():
                    f"收盤：{r['close']:.2f}　{_band}\n"
                    f"RSI：{r['rsi_prev']:.1f} → {r['rsi_now']:.1f}（{_arrow}）　MACD柱：{_arrow}\n"
                    f"進場窗：{wid}\n"
-                   f"時間：{now_str_f}"
+                   f"時間：{now_str_f}\n"
+                   f"判斷用K棒時間：{r.get('bar_ts') or '未取得'}（{r['label']} 最後一根的起點；Yahoo 約延遲 15～25 分；✅10261313 Ｃ-193）"
                    + _opt_hint)
             _dn_h, _dn_t = _condw_delay_note(r['close'], _dir)   # ✅10161937 主帥 10/16 14:01 第 7 點
             msg = _dn_h + msg + _dn_t
@@ -7673,7 +7690,7 @@ if __name__ == "__main__":
         if _hn_cw:
             print(f'📅 今日台股／期貨休市（{_hn_cw}，官方休市日表）→ 條件W 本班略過，不是程式異常')
             exit()
-        print(f"🚀 條件W 週選擇權做多模式啟動（週二15:05~週三11:30／週四15:05~週五11:30）")   # ✅09170232 清冊Ｋ１５：窗尾依 R-12 為 11:30
+        print(f"🚀 條件W 週選擇權做多模式啟動（週二、週四 09:05~11:30；週二15:05~週三11:30／週四15:05~週五11:30）")   # ✅09170232 清冊Ｋ１５：窗尾依 R-12 為 11:30
         _run_with_heartbeat(scan_condition_w, 'condW')
         if _condw_current_window() is None and not globals().get('CONDW_FORCE_TEST', False):   # ✅09261759 時段外迴圈自動結束
             _kj_stop_loop('條件W')
@@ -7712,6 +7729,7 @@ if __name__ == "__main__":
         #
         #   ★★【重要副作用，已對主帥完整揭露】週一全天、週二/週四日盤、
         #     週三/週五 11:30 之後，期貨5分K與15分K【不再掃描】。★這是主帥的明確指令。
+        #   ✅10261313 週二、週四日盤 09:05～11:30 恢復掃描（Ｃ-196，主帥 10/22 19:25 改定），其餘不變。
         #   （沿革見檔尾【附錄．程式註解沿革存查】H-033）
         _condw_win = _condw_current_window()
         in_futures = _condw_win is not None

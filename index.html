@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v10161937</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v10261423</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1479,7 +1479,8 @@
                 const _inFutures = (
                     // ✅09280149 與期貨開關、期貨掃描同一時窗（R-12；策略說明第 10 行、否決 R-25）——09272008 批漏改此處，週一白天登入會誤開開關而跳提示
                     (_wd === 2 && _tv >= 15*60+5) || (_wd === 3 && _tv <= 11*60+30) ||
-                    (_wd === 4 && _tv >= 15*60+5) || (_wd === 5 && _tv <= 11*60+30)
+                    (_wd === 4 && _tv >= 15*60+5) || (_wd === 5 && _tv <= 11*60+30) ||
+                    ((_wd === 2 || _wd === 4) && _tv >= 9*60+5 && _tv <= 11*60+30)   // ✅10261313 Ｃ-196 週二、週四日盤 09:05～11:30
                 );
                 if (_inFutures && !_futuresActive) {
                     setTimeout(() => window.toggleFutures5mk(), 800);
@@ -2830,12 +2831,13 @@
             // ✅09181404 時窗更新為現行定義（R-12）：週二15:05→週三11:30、週四15:05→週五11:30，
             //   另加平日日盤 09:05~13:30；原本寫「週一12:50後」已作廢。
             const inFutures = (
-                // ✅09271800 只在週二、週四 15:05 起到週三、週五 11:30（R-12）；週一與週二、週四日盤不跑（策略說明第 10 行、否決 R-25；主帥 09/26 17:12）
+                // ✅09271800 只在週二、週四 15:05 起到週三、週五 11:30（R-12）；週一不跑；週二、週四日盤只跑 09:05～11:30，有持倉平倉監控到 13:30（✅10261313 Ｃ-196 主帥 10/22 19:25 改定；前案 09/26 17:12、R-25）
                 (wd === 2 && tv >= 15*60+5) || (wd === 3 && tv <= 11*60+30) ||
-                (wd === 4 && tv >= 15*60+5) || (wd === 5 && tv <= 11*60+30)
+                (wd === 4 && tv >= 15*60+5) || (wd === 5 && tv <= 11*60+30) ||
+                ((wd === 2 || wd === 4) && tv >= 9*60+5 && tv <= 11*60+30)   // ✅10261313 Ｃ-196 週二、週四日盤 09:05～11:30
             );
 
-            if (!_futuresActive && !inFutures && !((wd === 3 || wd === 5) && tv > 11*60+30 && tv <= 13*60+30)) {   // ✅09271800 週三、週五 11:30～13:30 放行（有持倉只看平倉，R-21）
+            if (!_futuresActive && !inFutures && !((wd >= 2 && wd <= 5) && tv > 11*60+30 && tv <= 13*60+30)) {   // ✅09271800 週三、週五 11:30～13:30 放行（有持倉只看平倉，R-21）
                 window.showAlert('❌ 非期貨時段（週選擇權時窗：週二15:05~週三11:30、週四15:05~週五11:30；週三、週五 11:30~13:30 有持倉時只監控平倉）');
                 return;
             }
@@ -3063,14 +3065,15 @@
             // ✅09271755 整根一起過濾：開高低收任一缺值即整根略過（原各自過濾，缺一項即錯位，與雲端逐列取值不一致）
             const _ok = v => v != null && !isNaN(v), _ix = [];
             for (let i = 0; i < (_q.close || []).length; i++) { if ([_q.open, _q.high, _q.low, _q.close].every(a => a && _ok(a[i]))) _ix.push(i); }
-            return { c: _ix.map(i => _q.close[i]), hi: _ix.map(i => _q.high[i]), lo: _ix.map(i => _q.low[i]), op: _ix.map(i => _q.open[i]),
+            return { ts: _ix.map(i => (_d.timestamp || [])[i]), c: _ix.map(i => _q.close[i]), hi: _ix.map(i => _q.high[i]), lo: _ix.map(i => _q.low[i]), op: _ix.map(i => _q.open[i]),
                      vo: _ix.map(i => (_q.volume && _ok(_q.volume[i])) ? _q.volume[i] : 0) };
         };
 
-        // 條件W 時窗：週二15:05→週三11:30、週四15:05→週五11:30（與 Python _condw_current_window 同義）
+        // 條件W 時窗：週二15:05→週三11:30、週四15:05→週五11:30；另週二、週四 09:05～11:30（W2D／W4D，✅10261313 Ｃ-196）（與 Python _condw_current_window 同義）
         window._condwWindow = () => {
             const _t = new Date(new Date().toLocaleString('en-US', { timeZone:'Asia/Taipei' }));
             const _wd = _t.getDay(), _tv = _t.getHours() * 60 + _t.getMinutes();
+            if ((_wd === 2 || _wd === 4) && _tv >= 9*60+5 && _tv <= 11*60+30) return _wd === 2 ? 'W2D' : 'W4D';   // ✅10261313 Ｃ-196
             if (_wd === 2 && _tv >= 15*60+5)  return 'W2';
             if (_wd === 3 && _tv <= 11*60+30) return 'W2';
             if (_wd === 4 && _tv >= 15*60+5)  return 'W4';
@@ -3141,7 +3144,7 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
                 for (const _iv of ['5m', '15m']) {
                     const _d = await window._fetchTW(_iv);
                     const _g = window._gate3(_d.op, _d.hi, _d.lo, _d.c, _d.vo, 5);
-                    if (_g.long || _g.short) { _hit = { g:_g, iv:_iv, px:_d.c[_d.c.length - 1] }; break; }
+                    if (_g.long || _g.short) { const _tt = (_d.ts || _d.t || []); _hit = { g:_g, iv:_iv, px:_d.c[_d.c.length - 1], bt:_tt[_tt.length - 1] }; break; }   // ✅10261313 Ｃ-193 bt＝判斷用K棒時間
                 }
                 if (!_hit) return;
                 const _isCall = _hit.g.long;
@@ -3149,11 +3152,12 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
                 const _body = `${_isCall ? '⭐【條件W 週選擇權：buy CALL】⭐' : '🔻【條件W 週選擇權：buy PUT】🔻'}
 ⏱⚠️【條件W 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒
 💡【反向建議】原本要做 ${_isCall ? 'buy CALL' : 'buy PUT'}，建議改做 ${_isCall ? 'buy PUT' : 'buy CALL'}（主帥 10/16 指示）
-時窗：${_win === 'W2' ? '週二15:05→週三11:30' : '週四15:05→週五11:30'}
+時窗：${({W2:'週二15:05→週三11:30', W4:'週四15:05→週五11:30', W2D:'週二 09:05→11:30', W4D:'週四 09:05→11:30'})[_win] || _win}
 週期：${_hit.iv === '5m' ? '5分K' : '15分K'}（條件W 只跑第三道，不看前兩道）
 方向：${_isCall ? '做多（V轉）' : '做空（A轉）'}
 碰軌：近 5 根中第 ${_isCall ? _hit.g.touchLong : _hit.g.touchShort} 根碰${_isCall ? '下軌' : '上軌'}
 台指現價：${_hit.px.toFixed(0)}
+判斷用K棒時間：${(() => { const x = _hit.bt; if (x === undefined || x === null || x === '') return '未取得'; const d = new Date(typeof x === 'number' ? (x < 1e12 ? x * 1000 : x) : x); return isNaN(d) ? String(x) : d.toLocaleString('zh-TW', { timeZone:'Asia/Taipei', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }); })()}（K棒起點；Yahoo 約延遲 15～25 分；Ｃ-193）
 建議標的（價外，以小博大）：
 ${window._strikeHint(_hit.px, _isCall)}
 — 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參考 —
@@ -3244,13 +3248,14 @@ ${window._strikeHint(_hit.px, !_isCall)}
             // ✅09181404 時窗更新為現行定義（R-12）：週二15:05→週三11:30、週四15:05→週五11:30，
             //   另加平日日盤 09:05~13:30；原本寫「週一12:50後」已作廢。
             const inFutures = (
-                // ✅09271800 只在週二、週四 15:05 起到週三、週五 11:30（R-12）；週一與週二、週四日盤不跑（策略說明第 10 行、否決 R-25；主帥 09/26 17:12）
+                // ✅09271800 只在週二、週四 15:05 起到週三、週五 11:30（R-12）；週一不跑；週二、週四日盤只跑 09:05～11:30，有持倉平倉監控到 13:30（✅10261313 Ｃ-196 主帥 10/22 19:25 改定；前案 09/26 17:12、R-25）
                 (wd === 2 && tv >= 15*60+5) || (wd === 3 && tv <= 11*60+30) ||
-                (wd === 4 && tv >= 15*60+5) || (wd === 5 && tv <= 11*60+30)
+                (wd === 4 && tv >= 15*60+5) || (wd === 5 && tv <= 11*60+30) ||
+                ((wd === 2 || wd === 4) && tv >= 9*60+5 && tv <= 11*60+30)   // ✅10261313 Ｃ-196 週二、週四日盤 09:05～11:30
             );
             // ✅ 深夜01:00~05:00：若有持倉（方案A Firebase OR 方案B手動）→ 只掃平倉，不掃買進
             const _isNightHours = (tv >= 1*60 && tv < 5*60);   // ✅09271800 同雲端 _is_night_now（01:00～05:00 有持倉不再進場）
-            const _exitWin = ((wd === 3 || wd === 5) && tv > 11*60+30 && tv <= 13*60+30);   // 有持倉時平倉監控到 13:30（R-21）
+            const _exitWin = ((wd >= 2 && wd <= 5) && tv > 11*60+30 && tv <= 13*60+30);   // 有持倉時平倉監控到 13:30（R-21）
             const _nightHolding = _exitWin ? await _hasFuturesHolding() : false;
 
             if (!inFutures && !_nightHolding) {
