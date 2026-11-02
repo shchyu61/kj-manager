@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v10261423</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11021823</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -3136,6 +3136,7 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
                         signal_count: '期貨15分K 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('期貨15分K 1') + '（' + String(_now) + '）', message: String(_body), });
                 }
             } catch (e) { console.log('期貨15分K：', e); }
+            try { await window._condgRun(_now); } catch (e) { console.log('條件G：', e); }   // ✅11021823 條件G（Ｃ-213）：不受條件W 時窗限制
             // ② 條件W（只跑第三道，5分K OR 15分K）
             const _win = window._condwWindow();
             if (!_win) return;
@@ -3168,6 +3169,100 @@ ${window._strikeHint(_hit.px, !_isCall)}
                     to_email: currentUserEmail, scan_time: _now,
                     signal_count: '條件W 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('條件W 1') + '（' + String(_now) + '）', message: String(_body), });
             } catch (e) { console.log('條件W：', e); }
+        };
+
+        // ✅11021443【條件G：夜盤大跌（大漲）延續】與 Python scan_condition_g／_condg_eval 同義（主帥 2026/11/02 14:20 第 3、4 點；14:43 選案；16:51 第 2、3 點；Ｃ-213）
+        //   紅框 A：^TWII 5分K／15分K 今日第 1 根為當根看近 5 根；紅框 B：EWT 5分K／15分K 台灣 03:30～05:00 任一根為當根看近 5 根
+        //   大跌：近 5 根任一最高≥中軌且當根收≤下軌，或近 5 根任一最高≥上軌且當根收≤中軌；大漲鏡像
+        //   黃框：週二～週五 09:05～11:30 判斷當下，^TWII 今日最近 1～2 根已收完 5分K 或 15分K 任一收黑（大漲收紅）
+        //   進場：紅框 AND 黃框；夜盤警示：週二～週五 03:30～05:10 紅框 B 成立（只警示）；每日每方向 1 封
+        window.CONDG_ENABLE = true;
+        window._condgTP = (t) => { const d = new Date((t + 8 * 3600) * 1000); return { ymd: d.toISOString().slice(0, 10), tv: d.getUTCHours() * 60 + d.getUTCMinutes(), wd: d.getUTCDay() }; };
+        window._condgWindow = (nowSec) => {
+            if (!window.CONDG_ENABLE) return null;
+            const p = window._condgTP(nowSec || Math.floor(Date.now() / 1000));
+            if (p.wd < 2 || p.wd > 5) return null;
+            if (p.tv >= 9 * 60 + 5 && p.tv <= 11 * 60 + 30) return 'day';
+            if (p.tv >= 3 * 60 + 30 && p.tv <= 5 * 60 + 10) return 'night';
+            return null;
+        };
+        window._condgRedAt = (df, i, n) => {
+            n = n || 5; const at = (a, k) => (a && a[k] != null && !isNaN(a[k])) ? a[k] : null;
+            const c = at(df.Close, i), top = at(df.boll_top20, i), bot = at(df.boll_bot20, i), mid = at(df.ma_c_20, i);
+            if ([c, top, bot, mid].some(v => v === null)) return { dn: false, up: false };
+            let hMid = false, hTop = false, lMid = false, lBot = false;
+            for (let k = Math.max(0, i - n + 1); k <= i; k++) {
+                const h = at(df.High, k), l = at(df.Low, k), m = at(df.ma_c_20, k), tp = at(df.boll_top20, k), bt = at(df.boll_bot20, k);
+                if (h !== null && m !== null && h >= m) hMid = true;
+                if (h !== null && tp !== null && h >= tp) hTop = true;
+                if (l !== null && m !== null && l <= m) lMid = true;
+                if (l !== null && bt !== null && l <= bt) lBot = true;
+            }
+            return { dn: (hMid && c <= bot) || (hTop && c <= mid), up: (lMid && c >= top) || (lBot && c >= mid) };
+        };
+        window._condgEval = (srcs, nowSec) => {   // srcs：[{mins, src:'A'|'B', df(含 ts 秒)}]；純函式，不連網，便於與 Python 對照實測
+            const now = nowSec || Math.floor(Date.now() / 1000), today = window._condgTP(now).ymd;
+            const out = { sell: { red: [], yellow: [] }, buy: { red: [], yellow: [] }, close: null, ewtLast: null };
+            for (const s of srcs) {
+                const df = s.df; if (!df || !df.ts) continue;
+                const done = df.ts.map((t, i) => i).filter(i => df.ts[i] + s.mins * 60 <= now);
+                if (done.length < 25) continue;
+                const lab = `${s.src === 'A' ? '^TWII' : 'EWT'} ${s.mins}分K`;
+                if (s.src === 'A') {
+                    if (s.mins === 5) out.close = df.Close[done[done.length - 1]];
+                    const todays = done.filter(i => window._condgTP(df.ts[i]).ymd === today);
+                    if (!todays.length) continue;
+                    const r = window._condgRedAt(df, todays[0]);
+                    if (r.dn) out.sell.red.push(`紅框A ${lab} 今日第1根`);
+                    if (r.up) out.buy.red.push(`紅框A ${lab} 今日第1根`);
+                    for (const k of todays.slice(-2)) {
+                        if (df.Close[k] < df.Open[k]) out.sell.yellow.push(`黃框 ${lab} 收黑`);
+                        if (df.Close[k] > df.Open[k]) out.buy.yellow.push(`黃框 ${lab} 收紅`);
+                    }
+                } else {
+                    if (s.mins === 5) out.ewtLast = df.ts[done[done.length - 1]];
+                    let dnHit = false, upHit = false;
+                    for (const i of done) {
+                        const p = window._condgTP(df.ts[i]);
+                        if (p.ymd !== today || p.tv < 3 * 60 + 30 || p.tv >= 5 * 60) continue;
+                        const r = window._condgRedAt(df, i);
+                        if (r.dn && !dnHit) { dnHit = true; out.sell.red.push(`紅框B ${lab}`); }
+                        if (r.up && !upHit) { upHit = true; out.buy.red.push(`紅框B ${lab}`); }
+                    }
+                }
+            }
+            for (const d of ['sell', 'buy']) {
+                const x = out[d]; x.red_ok = x.red.length > 0; x.yellow_ok = x.yellow.length > 0;
+                x.red_b = x.red.filter(v => v.startsWith('紅框B')); x.go = x.red_ok && x.yellow_ok; x.warn = x.red_b.length > 0;
+            }
+            return out;
+        };
+        window._condgDF = async (sym, iv) => {
+            try {
+                const _d = await fetchWithFallback(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=${iv}&range=5d`);
+                const q = _d.indicators.quote[0], ts = _d.timestamp || [], ok = v => v != null && !isNaN(v), ix = [];
+                for (let i = 0; i < (q.close || []).length; i++) { if ([q.open, q.high, q.low, q.close].every(a => a && ok(a[i]))) ix.push(i); }
+                const df = window.kjCore.kjIndicators({ Open: ix.map(i => q.open[i]), High: ix.map(i => q.high[i]), Low: ix.map(i => q.low[i]), Close: ix.map(i => q.close[i]) });
+                df.ts = ix.map(i => ts[i]); return df;
+            } catch (e) { return null; }
+        };
+        window._condgRun = async (_now) => {
+            const win = window._condgWindow(); if (!win) return;
+            const srcs = [];
+            for (const [sym, iv, mins, src] of [['^TWII', '5m', 5, 'A'], ['^TWII', '15m', 15, 'A'], ['EWT', '5m', 5, 'B'], ['EWT', '15m', 15, 'B']]) srcs.push({ mins, src, df: await window._condgDF(sym, iv) });
+            const r = window._condgEval(srcs);
+            for (const d of ['sell', 'buy']) {
+                const x = r[d], put = d === 'sell', nm = put ? '大跌' : '大漲', op = put ? 'buy PUT' : 'buy CALL';
+                if (win === 'night' ? !x.warn : !x.go) continue;
+                if (win === 'night' && (r.ewtLast == null || Math.floor(Date.now() / 1000) - r.ewtLast - 300 > 2700)) continue;   // (176) EWT 非即時不發夜盤警示
+                if (!window._tfOnce(win === 'night' ? 'CONDGWARN' : 'CONDG', put ? 'put' : 'call')) continue;   // 每日每方向 1 封
+                const _body = win === 'night'
+                    ? `🌙【條件G 夜盤${nm}徵兆警示】★只警示、不進場\n紅框：${x.red_b.join('；')}\n★今日 09:05～11:30 最近 1～2 根 5分K 或 15分K 出現${put ? '收黑' : '收紅'}，才發 ${op} 進場信\n時間：${_now}`
+                    : `⭐【條件G 週選擇權${nm}延續 → ${op}】⭐\n紅框：${x.red.join('；')}\n黃框：${x.yellow.join('；')}\n台指現價：${r.close != null ? Number(r.close).toFixed(0) : '未取得'}\n出場：同條件W\n⏱ Yahoo 報價約延遲 15～25 分\n建議標的（價外）：\n${r.close != null ? window._strikeHint(r.close, !put) : ''}\n時間：${_now}`;
+                if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
+                    to_email: currentUserEmail, scan_time: _now,
+                    signal_count: '條件G 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('條件G 1') + '（' + String(_now) + '）', message: String(_body), });
+            }
         };
 
         // ✅09271800【期貨三道判斷．與雲端 main_task 期貨5分K 逐式對應】第一道 日K OR ^TWII 60分K OR EWT 60分K、第二道 ^TWII 30分K OR EWT 30分K、第三道表二＋RSI 門檻；條件D 路徑；平倉／回補＝持倉中 AND 三道出場版
