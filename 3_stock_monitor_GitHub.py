@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '11021823'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '11032159'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -2851,7 +2851,7 @@ def check_sell_condD(df):
     """條件D多頭專屬出場：
     出場A（主要）：當根 OSC < 前1根 AND 當根 DIF < MACD（兩個同時反轉）
     出場B（防線）：近N根任一最低價 ≤ 布林中軌（結構破壞）
-    前提：近N根最低價仍在中軌以上（確認是條件D部位）
+    前提：持股有條件D 進場紀錄（condd_entries；✅11032159 起不再要求近N根仍在中軌以上，否則出場B 永不成立）
     """
     try:
         l  = df['Low']
@@ -2862,9 +2862,7 @@ def check_sell_condD(df):
         n  = BUY_LOOKBACK_BARS
 
         # 前提：近N根最低價仍在中軌以上（確認是條件D部位）
-        _still_above_mid = (l.iloc[-n:] > bm.iloc[-n:]).all()
-        if not _still_above_mid:
-            return False, ''
+        # ✅11032159 拿掉「近N根最低價仍在中軌以上才看出場」前提：此前提使出場B（近N根最低價≤中軌）永遠不成立（Ｃ-220 同型自查；策略說明 6-7 主帥 09/14「出場B：最低價跌破中軌」；部位資格已由 condd_entries 紀錄判定，09171113）
 
         # 出場A：OSC反轉 AND DIF跌破MACD（兩個同時）
         _osc_drop  = float(mh.iloc[-1]) < float(mh.iloc[-2])
@@ -2905,7 +2903,7 @@ def check_cover_condD(df):
     """條件D空頭專屬回補（鏡像）：
     出場A：當根 OSC > 前1根 AND 當根 DIF > MACD
     出場B：近N根任一最高價 ≥ 布林中軌
-    前提：近N根最高價仍在中軌以下
+    前提：持股有條件D 進場紀錄（condd_entries；✅11032159 起不再要求近N根仍在中軌以下，否則出場B 永不成立）
     """
     try:
         h  = df['High']
@@ -2915,9 +2913,7 @@ def check_cover_condD(df):
         ms = df['macd_signal']
         n  = BUY_LOOKBACK_BARS
 
-        _still_below_mid = (h.iloc[-n:] < bm.iloc[-n:]).all()
-        if not _still_below_mid:
-            return False, ''
+        # ✅11032159 拿掉「近N根最高價仍在中軌以下才看出場」前提：此前提使出場B（近N根最高價≥中軌）永遠不成立（做空鏡像；Ｃ-220 同型自查）
 
         _osc_rise  = float(mh.iloc[-1]) > float(mh.iloc[-2])
         _dif_above = float(ml.iloc[-1]) > float(ms.iloc[-1])
@@ -6068,7 +6064,7 @@ def _touch_ok(df, is_long, n=None):
 def stage_pass(df, is_long, entry=True):
     """✅09191108【三道統一判斷】主帥 2026/09/19 09:43「乙的加強版」、10:15～11:08 逐項定義。
     ★進場（entry=True）：碰軌(近5) AND OSC 前置 AND 轉折 AND 前1根實體。
-    ★★出場（entry=False）：碰軌(近5，方向相反) AND OSC 前置(方向相反) AND 轉折(方向相反)；★不看實體。
+    ★★出場（entry=False）：碰軌(近5，方向相反) AND 當根 RSI 轉向 AND 當根 MACD柱 轉向；★不看 OSC 前置、當根最低價與實體（✅11032159 改，Ｃ-220）。
     ★★★第一道／第二道／第三道【都用本函式】，三道之間為 AND（主帥 09/19 10:47 b、c）。
     ・本函式取代舊的「條件A/B/C＋近5根同時滿足碰軌與轉折」通道：★舊制允許 3 根前的舊訊號仍算數，
       導致美股 MMM 在月K 前1根轉黑、週K OSC 轉降時仍發出買進（主帥 09/19 09:23 三張截圖）。
@@ -6080,6 +6076,11 @@ def stage_pass(df, is_long, entry=True):
         _dir = is_long if entry else (not is_long)      # 出場時碰軌與轉折方向相反
         if not _touch_ok(df, _dir):
             return False
+        if not entry:   # ✅11032159【出場三項】近5根碰軌 AND 當根 RSI 轉向 AND 當根 MACD柱 轉向（主帥 2026/11/03 19:59 第 2 點 d；最早定案 03/16「週K 最高價≥上軌 AND RSI↓ AND MACD柱↓」、09/16 版第十章；Ｃ-220）
+            #   ★不看 OSC 前置（前2→前1）與當根最低價（09/22 06:40 起 AI 以進場鏡像套入出場，致三道同時成立仍不寄；主帥 11/03 19:59：「…這就是我現行程式碼的規則,不是嗎?」）
+            _r1 = float(df['rsi14'].iloc[-2]); _r0 = float(df['rsi14'].iloc[-1])
+            _m1 = float(df['macd_hist'].iloc[-2]); _m0 = float(df['macd_hist'].iloc[-1])
+            return bool((_r0 < _r1 and _m0 < _m1) if is_long else (_r0 > _r1 and _m0 > _m1))
         if not _osc_pre_ok(df['macd_hist'], _dir):
             return False
         if not _turn_ok(df, _dir):
@@ -6115,7 +6116,7 @@ def _exit_gates(dm, dw, dd, is_long):
     ・★★為何是 AND（主帥 09/18 02:34 d、e 要求在旁備註）：早期第一道＝月K、第二道＝週K，寫 or；
       現在第一道本身已是【月K or 週K】（短線為【日K or 60分K】），★二擇一已在第一道內部完成，
       ★★★所以第一道與第二道之間必須是 AND。
-    ・各道一律 stage_pass(entry=False)：近5根碰上軌＋OSC 前置上升＋當根以最低價判 A轉；★不看實體（表二④）。
+    ・各道一律 stage_pass(entry=False)：近5根碰上軌 AND 當根 RSI↓ AND 當根 MACD柱↓（✅11032159 改，Ｃ-220；主帥 2026/11/03 19:59 第 2 點 d）。
     回傳 (第一道成立, 第二道成立, 路線名稱)"""
     m = stage_pass(dm, is_long, entry=False) if dm is not None else False
     w = stage_pass(dw, is_long, entry=False) if dw is not None else False
