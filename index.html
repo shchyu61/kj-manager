@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11041640</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11042320</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1048,6 +1048,7 @@
 
         // EmailJS 初始化
         emailjs.init('5dk4HoCBYIS7ypwiw');
+        window._kjLog0 = window._kjLog0 || console.log; try { console.log = function(){}; } catch (e) {}   // ✅11042320 機密：非管理員不印主控台（登入判定為管理員才恢復；主帥 2026/11/04 22:52 第 2 點、22:59；Ｃ-228）
         const EMAILJS_SERVICE  = 'service_q711s3u';  // ✅ v06090756：新Service ID（舊service_knhvcfj OAuth失效）
         const EMAILJS_TEMPLATE        = 'template_oqm4kw9';   // OTP用
         const EMAILJS_NOTIFY_TEMPLATE = 'template_notify_buy';
@@ -1301,10 +1302,11 @@
                 } else {
                     stocks = []; watchlist = [];
                 }
+                window._isAdmin = (currentUserEmail === 'shchyu61@gmail.com');   // ✅11042320 機密：先判定管理員再畫面（原在 renderStocks 之後，管理員首屏被遮；主帥 2026/11/04 22:52 第 2 點、22:59；Ｃ-228）
+                try { console.log = window._isAdmin ? (window._kjLog0 || console.log) : function(){}; } catch (e) {}
                 window.renderStocks();
                 window.renderWatchlist();
                 loadTwPrescreened().catch(e => window._silentFail('AI預篩清單載入', e));   // ✅09281149 同上（原吞掉錯誤） // 非同步載入AI預篩清單
-                window._isAdmin = (currentUserEmail === 'shchyu61@gmail.com');
             // ✅ v05191209：帳號權限tab只對管理員顯示
             const _settingsTab = document.getElementById('tab-settings');
             if (_settingsTab) _settingsTab.style.display = window._isAdmin ? '' : 'none';
@@ -1690,7 +1692,7 @@
             list.innerHTML = filtered_st.map(s => {
                 const name = stockNameMap[s.code] || '未定義資產';
                 const cached = getCached(s.code);
-                const rsiHtml = cached ? (() => {
+                const rsiHtml = (cached && window._isAdmin) ? (() => {   // ✅11042320 機密：RSI、布林只管理員（主帥 2026/11/04 22:52 第 2 點、22:59；Ｃ-228）
                     const arrow  = cached.rsi_trend === 'rising' ? '↑' : '↓';
                     const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
                     const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
@@ -1699,7 +1701,7 @@
                         <span class="${rsiClr}">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'}">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
-                })() : `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點智能診斷查看</div>`;
+                })() : (window._isAdmin ? `<div class="flex-1 text-center text-[11px] text-slate-300 font-black">點智能診斷查看</div>` : '');
                 const _dir = s.direction || 'long';
                 return `
                 <div class="p-3 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
@@ -1900,6 +1902,7 @@
         async function enrichGuardian(code, el){
             el = el || document.getElementById('gtf-' + code);
             if(!el) return;
+            if(!window._isAdmin){ el.innerHTML = ''; return; }   // ✅11042320 機密：月/週/日K 守門員只管理員（主帥 2026/11/04 22:52 第 2 點、22:59；Ｃ-228）
             try{
                 const tfs = [['月K','1mo','5y'], ['週K','1wk','2y'], ['日K','1d','1y']];
                 const bMap = { near_upper:'近上軌', mid_zone:'中軌', near_lower:'近下軌' };
@@ -1942,7 +1945,7 @@
             const bollClr  = { near_upper: bgDark ? 'text-amber-400' : 'text-amber-600',
                                mid_zone:   bgDark ? 'text-slate-300' : 'text-slate-500',
                                near_lower: bgDark ? 'text-emerald-400' : 'text-emerald-600' };
-            const condText = hasBuy && result.conditions && result.conditions.length
+            const condText = window._isAdmin && hasBuy && result.conditions && result.conditions.length
                              ? '觸發：' + result.conditions.join('、') : '';
             // 四色訊號判斷（依持倉方向）
             const _stockDir = (() => { const _s = stocks.find(x=>x.code===code); return _s ? (_s.direction||'long') : 'long'; })();
@@ -1985,13 +1988,13 @@
                             _sigType==='bear_exit'  ? `▲ ${_hzLabel(result)}做空出場` : noSignalText}</div>
                     </div>
                 </div>
-                <!-- 第二行：RSI + 布林（獨立一行，完整顯示不截斷）-->
-                <div class="flex gap-4 mt-2 px-1">
+                <!-- 第二行：RSI ＋ 布林（✅11042320 機密：只管理員看得到；Ｃ-228）-->
+                ${window._isAdmin ? `<div class="flex gap-4 mt-2 px-1">
                     <span class="diag-rsi ${rsiClr} text-[12px] font-black">RSI ${result.rsi} ${arrow}</span>
                     <span class="${bollClr[result.boll_position] || textSub} text-[12px] font-black">${bollMap[result.boll_position] || result.boll_position}</span>
-                </div>
+                </div>` : ''}
                 <!-- 網頁守門員：月/週/日K RSI+MACD+布林（07021138 新增，由 sweepGuardians 補值） -->
-                <div class="guardian-tf mt-2 px-1" data-code="${code}" id="gtf-${code}"><span class="text-[11px] text-slate-400 font-black">🛡️ 月/週/日K 守門員：載入中…</span></div>
+                ${window._isAdmin ? `<div class="guardian-tf mt-2 px-1" data-code="${code}" id="gtf-${code}"><span class="text-[11px] text-slate-400 font-black">🛡️ 月/週/日K 守門員：載入中…</span></div>` : ''}
                 ${condText ? `<div class="mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[12px] font-black text-center">${condText}</div>` : ''}
                 ${(window._isAdmin && result.debug_info) ? `<div class="mt-1 px-2 py-1 rounded-xl text-[11px] font-black" style="background:#1e293b;color:#94a3b8">
                     <div>${result.debug_info.week_k||''}</div>
@@ -2439,7 +2442,7 @@
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
                 const _mT = _currentScanMode === 'daily' ? '中期投資' : '長期投資';
-                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}\n投資模式：${_mT}\n⚠️ 嚴禁用於當沖或隔日沖`;
+                return `⭐【買進訊號】⭐\n代碼：${s.code}　${name}\n價格：${s.price}${window._isAdmin ? `　RSI：${s.rsi} ↑\n布林位置：${s.boll}\n觸發條件：${s.conditions}` : ''}\n投資模式：${_mT}\n⚠️ 嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -2469,7 +2472,7 @@
             const body = newSignals.map(s => {
                 const name = stockNameMap[s.code] || s.code;
                 const _mT2 = _currentScanMode === 'daily' ? '中期投資' : '長期投資';
-                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}　RSI：${s.rsi} ↓\n布林位置：${s.boll}\n建議：考慮獲利了結或停利\n投資模式：${_mT2}\n⚠️ 嚴禁用於當沖或隔日沖`;
+                return `🔔【賣出訊號】🔔\n代碼：${s.code}　${name}\n價格：${s.price}${window._isAdmin ? `　RSI：${s.rsi} ↓\n布林位置：${s.boll}` : ''}\n建議：考慮獲利了結或停利\n投資模式：${_mT2}\n⚠️ 嚴禁用於當沖或隔日沖`;
             }).join('\n\n' + '─'.repeat(20) + '\n\n');
 
             try {
@@ -3272,6 +3275,7 @@ ${window._strikeHint(_hit.px, !_isCall)}
             } catch (e) { return null; }
         };
         window._condgRun = async (_now) => {
+            if (!window._isAdmin) return;   // ✅11042320 機密：期貨只限管理員（Ｃ-228）
             const win = window._condgWindow(); if (!win) return;
             const srcs = [];
             for (const [sym, iv, mins, src] of [['^TWII', '5m', 5, 'A'], ['^TWII', '15m', 15, 'A'], ['EWT', '5m', 5, 'B'], ['EWT', '15m', 15, 'B']]) srcs.push({ mins, src, df: await window._condgDF(sym, iv) });
@@ -3356,6 +3360,7 @@ ${window._strikeHint(_hit.px, !_isCall)}
         };
 
         window.startFutures5mk = async () => {
+            if (!window._isAdmin) return;   // ✅11042320 機密：期貨只限管理員（Ｃ-228）
             if (currentUserEmail !== 'shchyu61@gmail.com') {
                 window.showAlert('⚠️ 期貨／週選擇權監控僅限本人使用');
                 return;
@@ -4097,7 +4102,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 const cached = getCached(s.code);
                 const catLabel = { tw:'台股', us:'美股', fund:'基金', crypto:'虛擬幣', fx:'外匯' }[s.cat||'tw'] || '';
                 // RSI 資訊（有快取才顯示，無快取顯示灰色提示）
-                const rsiRow = cached ? (() => {
+                const rsiRow = (cached && window._isAdmin) ? (() => {   // ✅11042320 機密：RSI、布林只管理員（主帥 2026/11/04 22:52 第 2 點、22:59；Ｃ-228）
                     const arrow  = cached.rsi_trend === 'rising' ? '↑' : '↓';
                     const rsiClr = cached.rsi_trend === 'rising' ? 'text-emerald-600' : 'text-rose-500';
                     const bollMap = { near_upper:'近上軌 ⚠️', mid_zone:'中軌區間', near_lower:'近下軌 ✅' };
@@ -4106,7 +4111,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         <span class="${rsiClr} text-[12px] font-black">RSI ${cached.rsi} ${arrow}</span>
                         <span class="${bollClr[cached.boll_position] || 'text-slate-400'} text-[12px] font-black">${bollMap[cached.boll_position] || ''}</span>
                     </div>`;
-                })() : `<div class="mt-1 text-[11px] text-slate-300 font-black">點「全部診斷」查看 RSI 狀態</div>`;
+                })() : (window._isAdmin ? `<div class="mt-1 text-[11px] text-slate-300 font-black">點「全部診斷」查看 RSI 狀態</div>` : '');
                 return `<div class="p-4 bg-white border border-amber-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all">
                     <div class="flex items-center gap-3">
                         <div class="w-11 h-11 rounded-2xl bg-amber-50 flex items-center justify-center font-black text-amber-500 shadow-inner shrink-0">${s.code[0]}</div>
