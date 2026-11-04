@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '11032159'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '11041640'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -423,7 +423,7 @@ SCAN_MODE = 'mixed'   # 切換：'weekly' / 'daily' / 'mixed'
 _tw_prescreened = []   # 模組層級全域預篩清單（scan_stock 用 global 存取）
 _prescreened_ind = {}  # ✅ 05041037新增：第一+第二道指標快取（供Firebase上傳）
 _wk_passed_1st = False  # 週K第一道是否通過（供scan_stock_mixed判斷標籤用）
-BUY_RSI_MIN          = 35     # 買進RSI最低門檻（條件A，RSI需 > 此值才視為上升有效）
+BUY_RSI_MIN          = 35     # （✅11041640 停用：進出場一律看 RSI(5)、RSI(10) 箭頭；主帥 2026/11/04 16:40；Ｃ-227）買進RSI最低門檻（條件A，RSI需 > 此值才視為上升有效）
 BUY_BOLL_TOLERANCE   = 1.02   # 布林下緣容忍度（1.02=允許價格在下緣上方2%內仍觸發）
 
 # ── 【２-2】買進策略：eLeader 25個複合條件 ────────────────────────
@@ -2825,7 +2825,7 @@ def check_condD_long(df):
         _osc_3drop = any(_osc[j] > _osc[j+1] > _osc[j+2] for j in range(len(_osc) - 2))
         _osc_prev_rise = float(mh.iloc[-2]) > float(mh.iloc[-3])
         _osc_now_rise = float(mh.iloc[-1]) > float(mh.iloc[-2])
-        _rsi_rise = float(rsi.iloc[-1]) > float(rsi.iloc[-2])
+        _rsi_rise = _rsi_dir_ok(df, True)   # ✅11041640 RSI(5)、RSI(10) 箭頭（Ｃ-227）
         return bool(_all_above_mid and _osc_3drop and _osc_prev_rise and _osc_now_rise and _rsi_rise)
     except Exception:
         return False
@@ -2842,16 +2842,130 @@ def check_condD_short(df):
         _osc_3rise = any(_osc[j] < _osc[j+1] < _osc[j+2] for j in range(len(_osc) - 2))
         _osc_prev_drop = float(mh.iloc[-2]) < float(mh.iloc[-3])
         _osc_now_drop = float(mh.iloc[-1]) < float(mh.iloc[-2])
-        _rsi_fall = float(rsi.iloc[-1]) < float(rsi.iloc[-2])
+        _rsi_fall = _rsi_dir_ok(df, False)   # ✅11041640（Ｃ-227）
         return bool(_all_below_mid and _osc_3rise and _osc_prev_drop and _osc_now_drop and _rsi_fall)
     except Exception:
         return False
+
+YF_AUTO_ADJUST = False   # ✅11041640 先修後報：yfinance 一律取未還原K線，與主帥 eLeader「日／週／月」未還原圖一致（新版 yfinance download 預設 auto_adjust=True＝還原價，本機與雲端 yfinance 版本不同時兩版數值不同）；回滾改 True（主帥 2026/11/04 15:32 第 4 點；Ｃ-223）
+try:
+    _YF_DL0 = yf.download
+    if not getattr(_YF_DL0, '_kj_raw', False):
+        def _yf_dl_raw(*_a, **_k):
+            _k.setdefault('auto_adjust', YF_AUTO_ADJUST)
+            return _YF_DL0(*_a, **_k)
+        _yf_dl_raw._kj_raw = True
+        yf.download = _yf_dl_raw
+except Exception:
+    pass
+
+# ══ ✅11041640 條件H、中文股名、出場信第一道明細（Ｃ-223、Ｃ-224）══
+CONDH_ENABLE = True   # ✅11041640 條件H 總開關（False＝回滾；策略說明 第八章之二）
+
+
+def _rsi_n(c, n):
+    """✅11041640 RSI(n)，與 pandas_ta.rsi 同算法（RMA＝ewm(alpha=1/n, min_periods=n)）；網頁 kjRsi 逐行移植"""
+    d = c.diff(); up = d.clip(lower=0); dn = (-d).clip(lower=0)
+    au = up.ewm(alpha=1.0 / n, min_periods=n).mean(); ad = dn.ewm(alpha=1.0 / n, min_periods=n).mean()
+    return 100.0 * au / (au + ad)
+
+def _rsi_dir_ok(df, up):
+    """✅11041640 進出場 RSI＝RSI(5) 與 RSI(10) 兩條箭頭同方向（主帥 2026/11/04 16:40：「確認。RSI依照截圖,要以RSI(5)、RSI(10) 箭頭為主。」「…【RSI(5)、RSI(10) 箭頭為主】已可以完全取代35的絕對值了。不需要再設立35造成策略在【某個週期】無法觸發!」；Ｃ-227）"""
+    try:
+        c = df['Close']; r5 = _rsi_n(c, 5); r10 = _rsi_n(c, 10)
+        a5, b5, a10, b10 = float(r5.iloc[-1]), float(r5.iloc[-2]), float(r10.iloc[-1]), float(r10.iloc[-2])
+        if any(x != x for x in (a5, b5, a10, b10)):
+            return False
+        return bool((a5 > b5 and a10 > b10) if up else (a5 < b5 and a10 < b10))
+    except Exception:
+        return False
+
+
+def _rsi_txt(df):
+    """✅11041640 通知信 RSI 顯示 RSI(5)、RSI(10) 前→當與箭頭（與主帥 eLeader 同）"""
+    try:
+        c = df['Close']; r5 = _rsi_n(c, 5); r10 = _rsi_n(c, 10)
+        f_ = lambda a, b: '%.1f→%.1f%s' % (b, a, '↑' if a > b else ('↓' if a < b else '→'))
+        return 'RSI(5) %s、RSI(10) %s' % (f_(float(r5.iloc[-1]), float(r5.iloc[-2])), f_(float(r10.iloc[-1]), float(r10.iloc[-2])))
+    except Exception:
+        return 'RSI 取得失敗'
+
+
+def check_condH(df, is_long):
+    """✅11041640 條件H（主帥 2026/11/04 15:32 第 2 點；15:38 補充：「我要的是【已經寫入】主程式【本機版】【網頁版】【雲端版】的程式碼，那這樣寫入eleader才有回測意義。」；Ｃ-224）
+    做多：①近5根至少1根最低價碰下軌（通道制，同表二①）②當根 OSC＞前1根 ③當根 RSI(5)＞前1根 且 RSI(10)＞前1根
+          ④前1根 RSI(5)≤RSI(10) 且 當根 RSI(5)＞RSI(10)（黃金交叉）⑤前1根實體同表二④；RSI 一律看 RSI(5)、RSI(10) 箭頭（Ｃ-227）。做空鏡像（死亡交叉）。
+    只用於第三道進場，與「表二＋RSI 門檻」為 OR；第一道、第二道與時窗照舊。"""
+    try:
+        if not CONDH_ENABLE or df is None or len(df) < 30:
+            return False
+        c = df['Close']; r5 = _rsi_n(c, 5); r10 = _rsi_n(c, 10)
+        a5, b5, a10, b10 = float(r5.iloc[-1]), float(r5.iloc[-2]), float(r10.iloc[-1]), float(r10.iloc[-2])
+        m0, m1 = float(df['macd_hist'].iloc[-1]), float(df['macd_hist'].iloc[-2])
+        if any(x != x for x in (a5, b5, a10, b10, m0, m1)):
+            return False
+        K = TOUCH_LOOKBACK_BARS; bt = df['boll_top20'].iloc[-K:]; bb = df['boll_bot20'].iloc[-K:]
+        if not _body_ok(df, is_long):   # ✅11041640 前1根實體同表二④（主帥 2026/11/04 16:16 第 3 點：「我並沒有授權同意你【前一根收紅收黑不管】」；Ｃ-224）
+            return False
+        if is_long:
+            t = bool((df['Low'].iloc[-K:] <= _gate_lower(bt, bb)).any())
+            return bool(t and m0 > m1 and a5 > b5 and a10 > b10 and b5 <= b10 and a5 > a10)
+        t = bool((df['High'].iloc[-K:] >= _gate_upper(bt, bb)).any())
+        return bool(t and m0 < m1 and a5 < b5 and a10 < b10 and b5 >= b10 and a5 < a10)
+    except Exception:
+        return False
+
+
+_CN_NAME_CACHE = {}
+_CN_NAME_FALLBACK = {'2330': '台積電', '3037': '欣興', '3147': '大綜', '6188': '廣明'}
+
+
+def _cn_name(tk):
+    """✅11041640 通知信主旨與內文加中文股名（主帥 2026/11/04 15:32 第 3 點：「為什麼gmail通知信的主旨和內文,都沒有看到3147的中文股名【大綜】?」；Ｃ-223）"""
+    try:
+        code = str(tk).split('.')[0]
+        if not code.isdigit():
+            return ''
+        if code not in _CN_NAME_CACHE:
+            nm = ''
+            try:
+                import twstock as _tws
+                nm = getattr(_tws.codes.get(code), 'name', '') or ''
+            except Exception:
+                nm = ''
+            _CN_NAME_CACHE[code] = nm or _CN_NAME_FALLBACK.get(code, '')
+        return _CN_NAME_CACHE[code]
+    except Exception:
+        return ''
+
+
+def _gate_evid(df, lbl, long_pos):
+    """✅11041640 出場信列第一道明細（主帥 2026/11/04 15:32 第 4 點：「明明近5根K棒沒有碰過上軌,充其量頂多只能說是【接近上軌】而已!」；Ｃ-223）"""
+    try:
+        if df is None or len(df) < 25:
+            return '%s 無資料' % lbl
+        K = TOUCH_LOOKBACK_BARS; bt = df['boll_top20'].iloc[-K:]; bb = df['boll_bot20'].iloc[-K:]
+        if long_pos:
+            g = _gate_upper(bt, bb); px = df['High'].iloc[-K:]; hit = px >= g; side = '上軌'
+        else:
+            g = _gate_lower(bt, bb); px = df['Low'].iloc[-K:]; hit = px <= g; side = '下軌'
+        if bool(hit.any()):
+            i = [j for j in range(K) if bool(hit.iloc[j])][-1]
+            tch = '碰%s：%s %s %.2f／門檻 %.2f（上軌 %.2f）' % (side, df.index[-K + i].strftime('%m/%d'), '最高' if long_pos else '最低', float(px.iloc[i]), float(g.iloc[i]), float(bt.iloc[i]))
+        else:
+            tch = '近%d根未碰%s（最%s %.2f／門檻 %.2f）' % (K, side, '高' if long_pos else '低', float(px.max() if long_pos else px.min()), float(g.iloc[-1]))
+        r = df['rsi14']; m = df['macd_hist']
+        return '%s %s｜%s｜MACD柱 %.3f→%.3f' % (lbl, tch, _rsi_txt(df), float(m.iloc[-2]), float(m.iloc[-1]))
+    except Exception:
+        return '%s 明細取得失敗' % lbl
+
+
 
 def check_sell_condD(df):
     """條件D多頭專屬出場：
     出場A（主要）：當根 OSC < 前1根 AND 當根 DIF < MACD（兩個同時反轉）
     出場B（防線）：近N根任一最低價 ≤ 布林中軌（結構破壞）
-    前提：持股有條件D 進場紀錄（condd_entries；✅11032159 起不再要求近N根仍在中軌以上，否則出場B 永不成立）
+    前提：持股有條件D 進場紀錄（condd_entries；✅11041640 起不再要求近N根仍在中軌以上，否則出場B 永不成立）
     """
     try:
         l  = df['Low']
@@ -2862,7 +2976,7 @@ def check_sell_condD(df):
         n  = BUY_LOOKBACK_BARS
 
         # 前提：近N根最低價仍在中軌以上（確認是條件D部位）
-        # ✅11032159 拿掉「近N根最低價仍在中軌以上才看出場」前提：此前提使出場B（近N根最低價≤中軌）永遠不成立（Ｃ-220 同型自查；策略說明 6-7 主帥 09/14「出場B：最低價跌破中軌」；部位資格已由 condd_entries 紀錄判定，09171113）
+        # ✅11041640 拿掉「近N根最低價仍在中軌以上才看出場」前提：此前提使出場B（近N根最低價≤中軌）永遠不成立（Ｃ-220 同型自查；策略說明 6-7 主帥 09/14「出場B：最低價跌破中軌」；部位資格已由 condd_entries 紀錄判定，09171113）
 
         # 出場A：OSC反轉 AND DIF跌破MACD（兩個同時）
         _osc_drop  = float(mh.iloc[-1]) < float(mh.iloc[-2])
@@ -2903,7 +3017,7 @@ def check_cover_condD(df):
     """條件D空頭專屬回補（鏡像）：
     出場A：當根 OSC > 前1根 AND 當根 DIF > MACD
     出場B：近N根任一最高價 ≥ 布林中軌
-    前提：持股有條件D 進場紀錄（condd_entries；✅11032159 起不再要求近N根仍在中軌以下，否則出場B 永不成立）
+    前提：持股有條件D 進場紀錄（condd_entries；✅11041640 起不再要求近N根仍在中軌以下，否則出場B 永不成立）
     """
     try:
         h  = df['High']
@@ -2913,7 +3027,7 @@ def check_cover_condD(df):
         ms = df['macd_signal']
         n  = BUY_LOOKBACK_BARS
 
-        # ✅11032159 拿掉「近N根最高價仍在中軌以下才看出場」前提：此前提使出場B（近N根最高價≥中軌）永遠不成立（做空鏡像；Ｃ-220 同型自查）
+        # ✅11041640 拿掉「近N根最高價仍在中軌以下才看出場」前提：此前提使出場B（近N根最高價≥中軌）永遠不成立（做空鏡像；Ｃ-220 同型自查）
 
         _osc_rise  = float(mh.iloc[-1]) > float(mh.iloc[-2])
         _dif_above = float(ml.iloc[-1]) > float(ms.iloc[-1])
@@ -3570,12 +3684,14 @@ def _full_third_gate(df, is_long):
     """
     # ✅09271746 第三道另加 RSI 門檻（主帥 09/27 17:26：「既然稱【第三道】,就是真正決定是否正式進出場的關鍵時刻……當然要保留啊!」）
     if not stage_pass(df, is_long, entry=True):
-        return False
+        return check_condH(df, is_long)   # ✅11041640 條件H（Ｃ-224）
     try:
         _r = float(df['rsi14'].iloc[-1])
     except Exception:
-        return False
-    return (_r > BUY_RSI_MIN) if is_long else (_r < SHORT_RSI_MAX)
+        return check_condH(df, is_long)
+    if check_condH(df, is_long):   # ✅11041640 條件H
+        return True
+    return _rsi_dir_ok(df, is_long)   # ✅11041640 RSI(5)、RSI(10) 箭頭取代 35／65（主帥 2026/11/04 16:40；Ｃ-227）
 
 
 
@@ -3813,7 +3929,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
         except:
             macd_5m_ok = False
 
-        rsi_5m_ok = (last_rsi > prev_rsi and last_rsi > BUY_RSI_MIN)
+        rsi_5m_ok = _rsi_dir_ok(df_5m, True)   # ✅11041640 RSI(5)、RSI(10) 箭頭（Ｃ-227）
 
         # ── 第三道：5分K OR 15分K（✅09180937 主帥 09/18 00:00 定案）────────
         #   ★★主帥 09/18 00:00：「我怎麼可能同意只有5分K，而讓家人親友房客沒有15分K判斷是否A轉或V轉可以逃命呢！」
@@ -4167,7 +4283,7 @@ def scan_limit_up():
 def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
     """✅09271746【基金改三道＋第三道 RSI 門檻，不再用 eLeader】主帥 2026/09/27 17:27：「不要再用eleader去判斷了!!!……這3支（SPY、QQQ、HYG）,當然也要符合最新的第一道第二道第三道的規定啊!!!」
     ・17:38「採用你的建議,我選甲案」：三支先合成一條基金代理線（SPY 50%／QQQ 30%／HYG 20%，build_fund_proxy_df 不變），再用這一條跑三道。
-    ・第一道 月K OR 週K、第二道 日K、第三道 5分K OR 15分K，皆用表二（stage_pass）；第三道另加 RSI>BUY_RSI_MIN（主帥 09/27 17:26 乙）。
+    ・第一道 月K OR 週K、第二道 日K、第三道 5分K OR 15分K，皆用表二（stage_pass）；RSI 看 RSI(5)、RSI(10) 箭頭（✅11041640；主帥 2026/11/04 16:40；Ｃ-227；09/27 乙案停用）。
     ・基金只做多（買進），原設計即無做空。"""
     global buy_signals, sell_signals
     try:
@@ -4191,10 +4307,10 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
         _hit = None
         for _iv in ('5m', '15m'):
             _df3 = _px('5d', _iv)
-            if _df3 is not None and stage_pass(_df3, True, entry=True) and float(_df3['rsi14'].iloc[-1]) > BUY_RSI_MIN:
+            if _df3 is not None and (stage_pass(_df3, True, entry=True) or check_condH(_df3, True)):   # ✅11041640 條件H
                 _hit = (_iv, _df3); break
         if not _hit:
-            print(f"ℹ️ {fund_name}：第三道（5分K OR 15分K，含 RSI>{BUY_RSI_MIN}）未通過")
+            print(f"ℹ️ {fund_name}：第三道（5分K OR 15分K，含 RSI(5)、RSI(10) 箭頭）未通過")
             return
         _iv, _df3 = _hit
         c_price = float(_df3['Close'].iloc[-1]); r_prev = float(_df3['rsi14'].iloc[-2]); r_now = float(_df3['rsi14'].iloc[-1])
@@ -5280,7 +5396,7 @@ def _condw_gate3(df, nbars, label):
     #   ★★★改用 stage_pass()：碰軌(近5) AND OSC 前置 AND 轉折(以最高／最低價) AND 前1根實體。
     #   ・條件W 仍【只跑第三道】，不看第一道、第二道（主帥 09/02 定案，本輪未變）。
     #   ・5分K 與 15分K 各自呼叫本函式、各自判斷（主帥 09/19 23:32：兩個週期都重要）。
-    _buy = bool(stage_pass(df, True, entry=True) and rsi_now > BUY_RSI_MIN)
+    _buy = bool(stage_pass(df, True, entry=True) or check_condH(df, True))   # ✅11041640 條件H
 
     # ── 空方鏡像：Λ轉觸頂翻落（★R-08 已於 08/19 撤銷，★★做空為主帥要求）──
     _short = False
@@ -5296,7 +5412,7 @@ def _condw_gate3(df, nbars, label):
             _sE = False
         # ✅09170658 更正 09170232 P0③：改為近 TOUCH_LOOKBACK_BARS 根碰上軌，鏡像多方
         _touch_hi = bool((hi.iloc[-TOUCH_LOOKBACK_BARS:] >= _gate_upper(bt.iloc[-TOUCH_LOOKBACK_BARS:], bb.iloc[-TOUCH_LOOKBACK_BARS:])).any())
-        _short = bool(stage_pass(df, False, entry=True) and rsi_now < SHORT_RSI_MAX)   # ✅09192332 空方鏡像
+        _short = bool(stage_pass(df, False, entry=True) or check_condH(df, False))   # ✅09192332 空方鏡像
 
     print(f"  \u2139\ufe0f 條件W {label}（{n}根）："
           f"RSI={rsi_prev:.1f}→{rsi_now:.1f}({'\u2191' if rsi_up else '\u2193'})  "
@@ -5983,13 +6099,13 @@ def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
         #   ★一般進場：第一道 AND 第二道 AND 第三道(stage_pass)；★★條件E／eLeader 不再單獨使第三道成立。
         _s3_long  = stage_pass(df, True,  entry=True)
         _s3_short = stage_pass(df, False, entry=True)
-        buy_n = bool(g1l and g2l and _s3_long and r_now > BUY_RSI_MIN)
+        buy_n = bool(g1l and g2l and (_s3_long or check_condH(df, True)))   # ✅11041640 條件H
         #   ★★★【為什麼是 AND】主帥 09/18 02:34、09:37：早期第一道＝月K、第二道＝週K，由大至小，
         #     ★那時寫 or 是對的（月K 或 週K 任一達標即可）；
         #     ★★現在第一道本身已經是【月K OR 週K】（短線是【日K OR ^TWII 60分K OR EWT 60分K】），
         #     ★★★『二擇一』已經在第一道內部完成，所以第一道與第二道之間必須是 AND，條件D 才有前兩道保護。
         buy_d = bool(g1l and g2l and check_condD_long(df))        # ✅09180234 條件D：第一道 AND 第二道
-        sell_n = bool(g1s and g2s and _s3_short and r_now < SHORT_RSI_MAX)
+        sell_n = bool(g1s and g2s and (_s3_short or check_condH(df, False)))   # ✅11041640 條件H
         sell_d = bool(g1s and g2s and check_condD_short(df))      # ✅09180234 條件D 空方鏡像
         buy, sell = (buy_n or buy_d), (sell_n or sell_d)
         if buy and sell:   # ✅09191108 主帥 09/19 10:15：多空同時成立【兩邊都不發】，寧可空等
@@ -6064,7 +6180,7 @@ def _touch_ok(df, is_long, n=None):
 def stage_pass(df, is_long, entry=True):
     """✅09191108【三道統一判斷】主帥 2026/09/19 09:43「乙的加強版」、10:15～11:08 逐項定義。
     ★進場（entry=True）：碰軌(近5) AND OSC 前置 AND 轉折 AND 前1根實體。
-    ★★出場（entry=False）：碰軌(近5，方向相反) AND 當根 RSI 轉向 AND 當根 MACD柱 轉向；★不看 OSC 前置、當根最低價與實體（✅11032159 改，Ｃ-220）。
+    ★★出場（entry=False）：碰軌(近5，方向相反) AND 當根 RSI 轉向 AND 當根 MACD柱 轉向；★不看 OSC 前置、當根最低價與實體（✅11041640 改，Ｃ-220）。
     ★★★第一道／第二道／第三道【都用本函式】，三道之間為 AND（主帥 09/19 10:47 b、c）。
     ・本函式取代舊的「條件A/B/C＋近5根同時滿足碰軌與轉折」通道：★舊制允許 3 根前的舊訊號仍算數，
       導致美股 MMM 在月K 前1根轉黑、週K OSC 轉降時仍發出買進（主帥 09/19 09:23 三張截圖）。
@@ -6076,11 +6192,11 @@ def stage_pass(df, is_long, entry=True):
         _dir = is_long if entry else (not is_long)      # 出場時碰軌與轉折方向相反
         if not _touch_ok(df, _dir):
             return False
-        if not entry:   # ✅11032159【出場三項】近5根碰軌 AND 當根 RSI 轉向 AND 當根 MACD柱 轉向（主帥 2026/11/03 19:59 第 2 點 d；最早定案 03/16「週K 最高價≥上軌 AND RSI↓ AND MACD柱↓」、09/16 版第十章；Ｃ-220）
+        if not entry:   # ✅11041640【出場三項】近5根碰軌 AND 當根 RSI 轉向 AND 當根 MACD柱 轉向（主帥 2026/11/03 19:59 第 2 點 d；最早定案 03/16「週K 最高價≥上軌 AND RSI↓ AND MACD柱↓」、09/16 版第十章；Ｃ-220）
             #   ★不看 OSC 前置（前2→前1）與當根最低價（09/22 06:40 起 AI 以進場鏡像套入出場，致三道同時成立仍不寄；主帥 11/03 19:59：「…這就是我現行程式碼的規則,不是嗎?」）
             _r1 = float(df['rsi14'].iloc[-2]); _r0 = float(df['rsi14'].iloc[-1])
             _m1 = float(df['macd_hist'].iloc[-2]); _m0 = float(df['macd_hist'].iloc[-1])
-            return bool((_r0 < _r1 and _m0 < _m1) if is_long else (_r0 > _r1 and _m0 > _m1))
+            return bool((_rsi_dir_ok(df, False) and _m0 < _m1) if is_long else (_rsi_dir_ok(df, True) and _m0 > _m1))   # ✅11041640 RSI(5)、RSI(10) 箭頭（Ｃ-227）
         if not _osc_pre_ok(df['macd_hist'], _dir):
             return False
         if not _turn_ok(df, _dir):
@@ -6093,6 +6209,8 @@ def stage_pass(df, is_long, entry=True):
             if (_r0 >= _r1) if not _dir else (_r0 <= _r1):
                 return False
         if entry and not _body_ok(df, is_long):
+            return False
+        if entry and not _rsi_dir_ok(df, is_long):   # ✅11041640 ⑤ RSI(5)、RSI(10) 箭頭（主帥 2026/11/04 16:40；Ｃ-227）
             return False
         return True
     except Exception:
@@ -6116,7 +6234,7 @@ def _exit_gates(dm, dw, dd, is_long):
     ・★★為何是 AND（主帥 09/18 02:34 d、e 要求在旁備註）：早期第一道＝月K、第二道＝週K，寫 or；
       現在第一道本身已是【月K or 週K】（短線為【日K or 60分K】），★二擇一已在第一道內部完成，
       ★★★所以第一道與第二道之間必須是 AND。
-    ・各道一律 stage_pass(entry=False)：近5根碰上軌 AND 當根 RSI↓ AND 當根 MACD柱↓（✅11032159 改，Ｃ-220；主帥 2026/11/03 19:59 第 2 點 d）。
+    ・各道一律 stage_pass(entry=False)：近5根碰上軌 AND 當根 RSI↓ AND 當根 MACD柱↓（✅11041640 改，Ｃ-220；主帥 2026/11/03 19:59 第 2 點 d）。
     回傳 (第一道成立, 第二道成立, 路線名稱)"""
     m = stage_pass(dm, is_long, entry=False) if dm is not None else False
     w = stage_pass(dw, is_long, entry=False) if dw is not None else False
@@ -6322,9 +6440,9 @@ def _touch_detail(df, is_long, n=None):
         _r0 = float(df['rsi14'].iloc[-2]); _r1 = float(df['rsi14'].iloc[-1])
         _m0 = float(df['macd_hist'].iloc[-2]); _m1 = float(df['macd_hist'].iloc[-1])
         if is_long:
-            _turn = 'V轉成立（RSI↑ 且 MACD柱↑）' if (_r1 > _r0 and _m1 > _m0) else 'V轉未成立'
+            _turn = 'V轉成立（RSI(5)、RSI(10)↑ 且 MACD柱↑）' if (_rsi_dir_ok(df, True) and _m1 > _m0) else 'V轉未成立'
         else:
-            _turn = 'A轉成立（RSI↓ 且 MACD柱↓）' if (_r1 < _r0 and _m1 < _m0) else 'A轉未成立'
+            _turn = 'A轉成立（RSI(5)、RSI(10)↓ 且 MACD柱↓）' if (_rsi_dir_ok(df, False) and _m1 < _m0) else 'A轉未成立'
         _band = '下軌' if is_long else '上軌'
         return (_band, _hit, _turn)
     except Exception:
@@ -6361,7 +6479,7 @@ def _intraday_body(tk, label, sig, name, df, gates, routes, is_long_sig, now_str
     # ✅09190211【方向】是【部位方向】（平倉＝做多部位出場、回補＝做空部位回補），
     #   ★與【看哪一條軌】是兩件事：★★做多平倉看上軌(A轉)、★★★做空回補看下軌(V轉)（主帥 09/19 02:11）。
     _dir = '做多' if (pos_long if pos_long is not None else is_long_sig) else '做空'
-    return (f"【{name}】{label}　{tk}\n"
+    return (f"【{name}】{label}　{tk}{('　' + _cn_name(tk)) if _cn_name(tk) else ''}\n"
             f"・方向：{_dir}\n"
             f"・碰軌（訊號週期 {label}）：{_touch}\n"
             + (f"・出場前提（第一道 {stage1_txt}\n" if stage1_txt else "")
@@ -6375,12 +6493,14 @@ def _intraday_body(tk, label, sig, name, df, gates, routes, is_long_sig, now_str
                 f"　空方 第一道{_gate_mark(gates['L'][1])} 第二道{_gate_mark(gates['L'][3])}\n")
             + f"・短線（日K OR 60分K → 30分K）：{'未啟用（STOCK_SHORT_ROUTE_ENABLED=False）' if not STOCK_SHORT_ROUTE_ENABLED else ('多方 第一道' + _gate_mark(gates['S'][0]) + ' 第二道' + _gate_mark(gates['S'][2]) + '　空方 第一道' + _gate_mark(gates['S'][1]) + ' 第二道' + _gate_mark(gates['S'][3]))}\n"
             f"・觸發路線：{'、'.join(routes) if routes else '長中期'}\n"   # ✅09220443 主帥 09/22 04:43 c、d：改為長期／中期進場或出場，★移除「不看前兩道」
-            f"・收盤 {_px:.4f}｜布林上軌 {_bt:.4f}｜下軌 {_bb:.4f}｜RSI {_r0:.1f}→{_r1:.1f}"
+            f"・收盤 {_px:.4f}｜布林上軌 {_bt:.4f}｜下軌 {_bb:.4f}｜{_rsi_txt(df)}"
             f"｜MACD柱 {float(df['macd_hist'].iloc[-2]):.4f}→{float(df['macd_hist'].iloc[-1]):.4f}"
             f"（{'↑' if float(df['macd_hist'].iloc[-1]) > float(df['macd_hist'].iloc[-2]) else '↓'}）\n"
             f"・位置（{label}）：{_band_pos(df)}\n"   # ✅09220443 主帥 09/22 04:43 e
             + (f"・位置（月K）：{_band_pos(pos_frames[0])}｜位置（週K）：{_band_pos(pos_frames[1])}\n"
                if pos_frames else "")   # ✅09220443 主帥 09/22 04:43 g：月K／週K 當根靠近上軌還是下軌
+            + (f"・第一道明細（出場；資料＝程式實算，可與 eLeader 對照）：{_gate_evid(pos_frames[0], '月K', sig == 'close')}｜{_gate_evid(pos_frames[1], '週K', sig == 'close')}\n"
+               if (pos_frames and sig in ('close', 'cover')) else "")   # ✅11041640 主帥 2026/11/04 15:32 第 4 點（Ｃ-223）
             + f"・時間：{now_str}")
 
 
@@ -6484,7 +6604,7 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
                     continue
             body = "☁️【雲端】" + _intraday_body(tk, label, sig, name, df, _gdisp, routes, _band_long, _now, _stage1_txt, _is_long_sig, (frames['dm'].get(tk), frames['dw'].get(tk)))
             _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
-            _ok = send_gmail(f"☁️【雲端】{icon}{_rt}{title}{label}{name} {tk} - {_now}", body, urgent=True)
+            _ok = send_gmail(f"☁️【雲端】{icon}{_rt}{title}{label}{name} {tk}{(' ' + _cn_name(tk)) if _cn_name(tk) else ''} - {_now}", body, urgent=True)
             print(f"  {'✅' if _ok else '❌'} {tk} {title} {label} {name} {routes}")
             if _ok and sig in ('buyD', 'sellD'):   # ✅09171113 條件D 進場紀錄（供條件D 特殊出場規則判斷）
                 _record_condd_entry(c, 'long' if sig == 'buyD' else 'short', f'{title}{label}（{"、".join(routes)}）')
@@ -6656,20 +6776,22 @@ def scan_futures_15mk(gates=None):   # ✅09170937 gates＝{標的: (第一道�
                 _near_low  = (_l.iloc[-_n15:] <= _bb_gate).any()
                 _g1l, _g1s, _g2l, _g2s = (gates or {}).get(_tk, (False, False, False, False))   # ✅09170937
                 _buy  = (_g1l and _g2l and stage_pass(_df, True, entry=True)   # ✅09271746 第三道改表二（主帥 09/27 16:36）
-                         and _r_now > BUY_RSI_MIN)
+                         )   # ✅11041640 RSI 門檻停用（Ｃ-227；表二⑤已含 RSI(5)、RSI(10) 箭頭）
                 #   ★★★【為什麼是 AND】主帥 09/18 02:34、09:37：早期第一道＝月K、第二道＝週K，由大至小，
                 #     ★那時寫 or 是對的（月K 或 週K 任一達標即可）；
                 #     ★★現在第一道本身已經是【月K OR 週K】（短線是【日K OR ^TWII 60分K OR EWT 60分K】），
                 #     ★★★『二擇一』已經在第一道內部完成，所以第一道與第二道之間必須是 AND，條件D 才有前兩道保護。
                 _buy  = bool(_buy or (_g1l and _g2l and check_condD_long(_df)))   # ✅09180234 條件D 路徑：第一道 AND 第二道（不套碰軌）
+                _buy  = bool(_buy or (_g1l and _g2l and check_condH(_df, True)))   # ✅11041640 條件H（Ｃ-224）
                 # 空方鏡像：近5根任一最高價觸及布林上軌帶 AND 前1根→當根 RSI↓ AND MACD柱↓ AND 近5根碰上軌   # ✅09181106 18→5
                 #     導致 2026/08/26 10:08 在 RSI=69.5(>65) 的上漲趨勢中發出做空訊號。
                 #     ★5分K路徑(第4875行)與日K路徑本來就有此門檻，★只有15分K漏掉 → ＡＫ１８。
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-023）
                 _near_high = (_h.iloc[-_n15:] >= _bt_gate).any()
                 _sell = (_g1s and _g2s and stage_pass(_df, False, entry=True)   # ✅09271746 同上
-                         and _r_now < SHORT_RSI_MAX)
+                         )   # ✅11041640 RSI 門檻停用（Ｃ-227；表二⑤已含 RSI(5)、RSI(10) 箭頭）
                 _sell = bool(_sell or (_g1s and _g2s and check_condD_short(_df)))   # ✅09180234 條件D 空方鏡像：第一道 AND 第二道   # ✅09170658 近 TOUCH_LOOKBACK_BARS 根碰上軌（原當根收盤價門檻），鏡像多方
+                _sell = bool(_sell or (_g1s and _g2s and check_condH(_df, False)))   # ✅11041640 條件H（Ｃ-224）
 
                 # ✅09170255 15分K 補平倉與回補：規則與 5分K 完全相同（不一國兩制）
                 #   主帥 09/17 02:55：「5分K和15分K都要改看【近5根有沒有碰到上下軌?】+【前1根和當根比較,macd和rsi有沒有V轉或A轉?】」
@@ -7419,7 +7541,8 @@ def main_task():
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-028）
                 _fut_buy = (_1st_long and _buy_2nd
                             and stage_pass(df5, True, entry=True)   # ✅09271746 第三道改表二（主帥 09/27 16:36；原 A/B/E/F 見策略說明附錄 C10）
-                            and rsi_now > BUY_RSI_MIN)
+                            )   # ✅11041640 RSI 門檻停用（Ｃ-227；表二⑤已含 RSI(5)、RSI(10) 箭頭）
+                _fut_buy = bool(_fut_buy or (_1st_long and _buy_2nd and check_condH(df5, True)))   # ✅11041640 條件H（Ｃ-224）
                 # ✅09181118 條件D 路徑：前提為【第一道 AND 第二道】，不套近5根碰軌（主帥 09/17 08:34 例外）
                 # ✅09180234【條件D 前提改為第一道 AND 第二道】主帥 09/18 02:05：「必須先達成第一道和第二道的條件，才會觸發條件D 的正式進場決策」
                 #   ★09/14 08:21「條件D 只會發生在第三道，絕對不可發生在第一道 or 第二道」＝條件D 不得當作第一、二道的通過條件，★不是可以略過前兩道（09170937 誤解為 or，本輪更正）
@@ -7461,7 +7584,8 @@ def main_task():
                 #   （沿革見檔尾【附錄．程式註解沿革存查】H-029）
                 _fut_short = (_short_1st and _short_2nd
                               and stage_pass(df5, False, entry=True)   # ✅09271746 同上（空方）
-                              and rsi_now < (100 - BUY_RSI_MIN))
+                              )   # ✅11041640 RSI 門檻停用（Ｃ-227；表二⑤已含 RSI(5)、RSI(10) 箭頭）
+                _fut_short = bool(_fut_short or (_short_1st and _short_2nd and check_condH(df5, False)))   # ✅11041640 條件H（Ｃ-224）
                 _fut_short_D = bool(_short_1st and _short_2nd and _fut_cond_D_short)   # ✅09180234 條件D 空方鏡像：同改為第一道 AND 第二道
 
                 _is_night_now = (now_str_f[11:16] >= '01:00' and now_str_f[11:16] < '05:00')

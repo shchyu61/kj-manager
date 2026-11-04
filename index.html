@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11032159</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11041640</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -2967,13 +2967,37 @@
               if (!df || df.Close.length < 25 || !df.macd_hist) return false;
               const dir = entry ? isLong : !isLong;
               if (!kjTouchOk(df, dir, cfg)) return false;
-              if (!entry) { const r1 = L(df.rsi14, 2), r0 = L(df.rsi14, 1), m1 = L(df.macd_hist, 2), m0 = L(df.macd_hist, 1); return isLong ? (r0 < r1 && m0 < m1) : (r0 > r1 && m0 > m1); }   // ✅11032159【出場三項】近5根碰軌 AND 當根 RSI 轉向 AND 當根 MACD柱 轉向（主帥 2026/11/03 19:59 第 2 點 d；Ｃ-220）
+              if (!entry) { const m1 = L(df.macd_hist, 2), m0 = L(df.macd_hist, 1); return isLong ? (kjRsiDir(df, false) && m0 < m1) : (kjRsiDir(df, true) && m0 > m1); }   // ✅11041640【出場三項】近5根碰軌 AND 當根 RSI 轉向 AND 當根 MACD柱 轉向（主帥 2026/11/03 19:59 第 2 點 d；Ｃ-220）
               if (!kjOscPreOk(df.macd_hist, dir)) return false;
               if (!kjTurnOk(df, dir)) return false;
               if (!entry) { const r1 = L(df.rsi14, 2), r0 = L(df.rsi14, 1); if (!dir ? (r0 >= r1) : (r0 <= r1)) return false; }
               if (entry && !kjBodyOk(df, isLong)) return false;
+              if (entry && !kjRsiDir(df, isLong)) return false;   // ✅11041640 ⑤ RSI(5)、RSI(10) 箭頭（Ｃ-227）
               return true;
             } catch (e) { return false; }
+          }
+          // ✅11041640 條件H（主帥 2026/11/04 15:32 第 2 點、15:38；Ｃ-224）：雲端 _rsi_n、check_condH 逐行移植
+          function kjRsi(c, n) { const a = 1 / n, out = new Array(c.length).fill(NaN); let pn = 0, pd = 0, nn = 0, nd = 0, cnt = 0;
+            for (let i = 1; i < c.length; i++) { const d = c[i] - c[i - 1]; if (Number.isNaN(d)) continue; const p = d > 0 ? d : 0, q = d < 0 ? -d : 0;
+              pn = p + (1 - a) * pn; pd = 1 + (1 - a) * pd; nn = q + (1 - a) * nn; nd = 1 + (1 - a) * nd; cnt++;
+              if (cnt >= n) { const ap = pn / pd, an = nn / nd; out[i] = (ap + an) === 0 ? NaN : 100 * ap / (ap + an); } }
+            return out; }
+          function kjCondH(df, isLong, cfg) {
+            try {
+              if (!df || df.Close.length < 30 || !df.macd_hist) return false;
+              if (!kjTouchOk(df, isLong, cfg)) return false;
+              if (!kjBodyOk(df, isLong)) return false;   // ✅11041640 前1根實體同表二④（Ｃ-224）
+              const r5 = kjRsi(df.Close, 5), r10 = kjRsi(df.Close, 10);
+              const a5 = L(r5, 1), b5 = L(r5, 2), a10 = L(r10, 1), b10 = L(r10, 2), m0 = L(df.macd_hist, 1), m1 = L(df.macd_hist, 2);
+              if ([a5, b5, a10, b10, m0, m1].some(x => x === undefined || x === null || Number.isNaN(x))) return false;
+              return isLong ? (m0 > m1 && a5 > b5 && a10 > b10 && b5 <= b10 && a5 > a10) : (m0 < m1 && a5 < b5 && a10 < b10 && b5 >= b10 && a5 < a10);
+            } catch (e) { return false; }
+          }
+          // ✅11041640 RSI(5)、RSI(10) 兩條箭頭同方向（雲端 _rsi_dir_ok 逐行移植；主帥 2026/11/04 16:40；Ｃ-227）
+          function kjRsiDir(df, up) {
+            try { const r5 = kjRsi(df.Close, 5), r10 = kjRsi(df.Close, 10); const a5 = L(r5, 1), b5 = L(r5, 2), a10 = L(r10, 1), b10 = L(r10, 2);
+              if ([a5, b5, a10, b10].some(x => x === undefined || x === null || Number.isNaN(x))) return false;
+              return up ? (a5 > b5 && a10 > b10) : (a5 < b5 && a10 < b10); } catch (e) { return false; }
           }
           // ✅09271800 雲端 check_condD_long／check_condD_short 逐行移植：近5根最低價皆在中軌上（做空：最高價皆在中軌下）、近5根 OSC 任一段連跌3根（做空連漲）、
           //   前1根與當根 OSC 皆轉升（做空轉跌）、當根 RSI 上升（做空下降）；★第三道不看碰軌（策略說明第六章、表三 D）
@@ -2983,7 +3007,7 @@
               const o = df.macd_hist.slice(n - N); let d3 = false;
               for (let j = 0; j < o.length - 2; j++) { if (o[j] > o[j + 1] && o[j + 1] > o[j + 2]) { d3 = true; break; } }
               const mh = df.macd_hist, r = df.rsi14;
-              return d3 && mh[n - 2] > mh[n - 3] && mh[n - 1] > mh[n - 2] && r[n - 1] > r[n - 2];
+              return d3 && mh[n - 2] > mh[n - 3] && mh[n - 1] > mh[n - 2] && kjRsiDir(df, true);
             } catch (e) { return false; }
           }
           function kjCondDShort(df) {
@@ -2992,10 +3016,10 @@
               const o = df.macd_hist.slice(n - N); let u3 = false;
               for (let j = 0; j < o.length - 2; j++) { if (o[j] < o[j + 1] && o[j + 1] < o[j + 2]) { u3 = true; break; } }
               const mh = df.macd_hist, r = df.rsi14;
-              return u3 && mh[n - 2] < mh[n - 3] && mh[n - 1] < mh[n - 2] && r[n - 1] < r[n - 2];
+              return u3 && mh[n - 2] < mh[n - 3] && mh[n - 1] < mh[n - 2] && kjRsiDir(df, false);
             } catch (e) { return false; }
           }
-          root.kjCore = { KJ_TOUCH_N, KJ_BOLL_DDOF, kjEMA, kjMACD, kjRSI, kjBoll, kjIndicators, kjGateUpper, kjGateLower, kjTouchOk, kjOscPreOk, kjTurnOk, kjBodyOk, kjStagePass, kjCondDLong, kjCondDShort };
+          root.kjCore = { KJ_TOUCH_N, KJ_BOLL_DDOF, kjEMA, kjMACD, kjRSI, kjBoll, kjIndicators, kjGateUpper, kjGateLower, kjTouchOk, kjOscPreOk, kjTurnOk, kjBodyOk, kjStagePass, kjCondH, kjRsiDir, kjCondDLong, kjCondDShort };
         })(typeof window !== 'undefined' ? window : globalThis);
 
         // ✅09271755 網頁與雲端共用門檻常數（雲端 BUY_BOLL_TOLERANCE＝1.02、SELL_BOLL_TOLERANCE＝0.98、BAND_NEAR_RATIO＝0.25、BUY_RSI_MIN＝35、SHORT_RSI_MAX＝65）
@@ -3051,8 +3075,8 @@
                 const _rsiNow = df.rsi14[n - 1], _rsiPrv = df.rsi14[n - 2];
                 for (let i = 1; i <= _nb; i++) { const k = n - i; if (lo[k] <= K.kjGateLower(df.boll_top20[k], df.boll_bot20[k], C.tolL, C.ratio)) { _r.touchLong = i; break; } }
                 for (let i = 1; i <= _nb; i++) { const k = n - i; if (hi[k] >= K.kjGateUpper(df.boll_top20[k], df.boll_bot20[k], C.tolU, C.ratio)) { _r.touchShort = i; break; } }
-                _r.long  = K.kjStagePass(df, true,  true, C) && _rsiNow > window.KJ_RSI_BUY;
-                _r.short = K.kjStagePass(df, false, true, C) && _rsiNow < window.KJ_RSI_SHORT;
+                _r.long  = K.kjStagePass(df, true,  true, C) || K.kjCondH(df, true, C);   // ✅11041640 條件H
+                _r.short = K.kjStagePass(df, false, true, C) || K.kjCondH(df, false, C);
                 _r.rsiNow = _rsiNow; _r.rsiPrv = _rsiPrv;
                 _r.boll = { upper: df.boll_top20[n - 1], lower: df.boll_bot20[n - 1] };
                 return _r;
@@ -3278,9 +3302,9 @@ ${window._strikeHint(_hit.px, !_isCall)}
                 out.e2L = f2.some(d => S(d, true, false)); out.e2S = f2.some(d => S(d, false, false));
                 if (!df3) return out;
                 const n = df3.Close.length, rsi = df3.rsi14[n - 1];
-                const buyN = out.g1L && out.g2L && S(df3, true, true) && rsi > window.KJ_RSI_BUY;
+                const buyN = out.g1L && out.g2L && (S(df3, true, true) || (!!df3 && K.kjCondH(df3, true, C)));   // ✅11041640 條件H
                 const buyD = out.g1L && out.g2L && K.kjCondDLong(df3);
-                const shN  = out.g1S && out.g2S && S(df3, false, true) && rsi < (100 - window.KJ_RSI_BUY);
+                const shN  = out.g1S && out.g2S && (S(df3, false, true) || (!!df3 && K.kjCondH(df3, false, C)));
                 const shD  = out.g1S && out.g2S && K.kjCondDShort(df3);
                 out.buy   = (buyN || buyD) && entryOk && !(isNight && holdL);
                 out.close = !out.buy && holdL && S(df3, true, false) && out.e1L && out.e2L;
@@ -3316,7 +3340,7 @@ ${window._strikeHint(_hit.px, !_isCall)}
         //   第一道多方不成立才走做空（同雲端第 3715 行）；出場＝三道出場版（網頁無條件D 進場紀錄，全市場不含條件D，表四）；守門員同雲端 main_task：大盤已分析須多頭才放行。
         window._stockDecide = (dfI, dfD, d5, d15, mktOk) => {
             const K = window.kjCore, C = window.KJ_CFG, S = (d, L, E) => !!d && K.kjStagePass(d, L, E, C);
-            const G3 = (d, L) => { if (!S(d, L, true)) return false; const r = d.rsi14[d.Close.length - 1]; return L ? r > window.KJ_RSI_BUY : r < window.KJ_RSI_SHORT; };
+            const G3 = (d, L) => { if (!S(d, L, true)) return !!d && K.kjCondH(d, L, C); return true; };
             const o = {};
             try {
                 o.g1L = S(dfI, true, true);  o.g1S = S(dfI, false, true);
