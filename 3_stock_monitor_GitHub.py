@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '11041640'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '11081315'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -169,8 +169,8 @@ TXF_BAR_ENABLED      = True  # 台指期5分K快照累積器總開關
 # │ ★開啟前必須先在 yml 加 concurrency 設定（cancel-in-progress: false）。
 # │ ★★這一項列為待辦，主帥確認後改 True 即可，程式碼已備妥。
 # └──────────────────────────────────────────────────────────────────
-TXF_LOOP_SAMPLING    = False # ★迴圈取樣總開關（見上方決策註記）
-TXF_LOOP_SECONDS     = 270   # 單次 job 內迴圈取樣總時長（秒）
+TXF_LOOP_SAMPLING    = True  # ★迴圈取樣總開關；✅11081315 開啟（主帥 2026/11/06 05:11 第 1 題甲案；condw_scan.yml 08251403 已加 concurrency、cancel-in-progress: false；改 False 即回到每 5 分鐘 1 個樣本）
+TXF_LOOP_SECONDS     = 200   # 單次 job 內迴圈取樣總時長（秒）；✅11081315 270→200：condw 迴圈每 5 分鐘一輪，取樣加掃描須在 300 秒內，否則跳過下一輪
 TXF_LOOP_INTERVAL    = 20    # 迴圈取樣間隔（秒）
 TXF_BAR_KEEP         = 120   # Firestore 只保留最近N根，避免文件無限膨脹
 
@@ -186,7 +186,7 @@ TXF_BAR_KEEP         = 120   # Firestore 只保留最近N根，避免文件無�
 # │   ★嚴禁改用【臺指期】現價與加權指數昨收相減——兩者相差百餘點，會虛增漲跌幅。
 # │ ★執行時段限台灣 09:00~13:35（台股交易時段），非此時段直接跳過。
 # └──────────────────────────────────────────────────────────────────────
-TW_INTRADAY_EXTREME_ENABLED = True   # 盤中即時極端異動偵測總開關
+TW_INTRADAY_EXTREME_ENABLED = False  # 盤中即時極端異動偵測總開關；✅11081315 關閉（主帥 2026/11/06 20:36 第 2c 點：「今天開始,把這個【盤中即時通知】取消…你怎麼改成【單獨條件就提醒呢!!!?】」；改 True 即恢復；Ｃ-233）
 TW_EXTREME_PTS              = 750    # 門檻點數（沿用原值，與夜盤同幅度）
 TW_CLOSE_CONFIRM_ENABLED    = False  # ✅08092144 收盤後的「收盤確認」信：主帥指示關閉
 
@@ -217,6 +217,8 @@ FINMIND_TOKEN      = __import__('os').environ.get('FINMIND_TOKEN', '')  # 可選
 FINMIND_MIN_PASS   = 4       # 通過財務篩選最低支數（低於此數不啟用）
 FINMIND_CACHE_HOURS = 168    # 財務資料快取7天（週報不常更新）
 # ── 週選擇權履約價推薦設定 ✅(08032126) ──
+OPT_PREMIUM_MIN      = 12    # ✅11081315 第一順位下限（主帥 11/06 21:09「不列入低於12元」、21:14「不會太便宜低於10元不到的垃圾價格」；21:19 2甲）
+OPT_PREMIUM_MAX2     = 60    # ✅11081315 第二順位上限：12～16 元都沒有時，選 16～60 元最便宜一檔；全部 >60 元不建議（主帥 21:09「不列入…超過60元」、21:14、21:19 2甲）
 OPT_PREMIUM_MAX      = 16    # ★主帥定案：以小博大，進場權利金上限(元)；>16 不推薦(歸零損失大)
 OPT_SNAPSHOT_TIMEOUT = 6     # 選擇權快照單次逾時秒數（失敗即放棄、不重抓）
 OPT_CHAIN_CACHE_SEC  = 60    # 同一分鐘內重用快照，避免重複拉取（單次回應可達2MB）
@@ -999,6 +1001,21 @@ US_MARKET_HOLIDAYS = {
     '2028-01-17': '馬丁路德金恩紀念日', '2028-02-21': '總統日', '2028-04-14': '耶穌受難日', '2028-05-29': '陣亡將士紀念日',
     '2028-06-19': '六月節', '2028-07-04': '獨立紀念日', '2028-09-04': '勞動節', '2028-11-23': '感恩節', '2028-12-25': '聖誕節',
 }
+
+# ✅11081315 表尾擋（奇門 11080121 第二節①：「凡依日期切換之對照表…表尾之後的日期不得沿用最後一列，須明確報錯或補表」；9_交付前自檢 (376)）
+#   休市表過期時每次執行明確印出警示；判定照舊改走資料判定（_tw_market_closed_today），不沿用最後一列。
+def _holiday_table_warn():
+    try:
+        _td = _now_tw().strftime('%Y-%m-%d')
+        for _nm, _tb in (('台股', TW_MARKET_HOLIDAYS), ('美股', US_MARKET_HOLIDAYS)):
+            if _tb and _td > max(_tb):
+                print(f'⚠️ {_nm}休市表只到 {max(_tb)}，今天 {_td} 已超出表尾：休市預告與提早結束停用、改由資料判定；請補次年休市表（9_交付前自檢 (376)）')
+    except Exception:
+        pass
+
+
+_holiday_table_warn()
+
 
 
 def _tw_holiday_name(_d):
@@ -2330,6 +2347,162 @@ def _claim_alert_firebase(alert_key, today_str):
         print(f"  ⚠️ _claim_alert_firebase異常：{str(_e)[:60]}")
         return None
 
+# ══════════════════════════════════════════════════════════════════════
+# ✅11081315【有進場就要有出場：訊號持倉】主帥 2026/11/08 02:30 第 2 點：「a.你不用管我有沒有持有,如果我有持有,我會寫入本機版或網頁版…你只要管程式碼的策略能不能正常執行…」「b.…有進場當然要有出場啊!…」「c.難道我沒有持有債券,就不用出場獲利了結了嗎?」（Ｃ-237）
+#   寄出進場信（買進／做空）的標的記入 Firestore signal_positions；之後全市場掃描與即時路線一律視同持股判斷出場；
+#   寄出出場信（平倉／回補）即移除。持股（本機常數＋網頁版 Firebase 持股）照舊判斷出場，不受影響。
+#   保留至出場或 SIGPOS_MAX_DAYS 天、最多 SIGPOS_MAX_N 檔（AI 判斷：120 天≈中期週K 一個波段；回滾：SIGPOS_ENABLED＝False）
+#   多台機器同時寫入：比照 _claim_alert_firebase 以 updateTime 先決條件重試 3 次，不會互相蓋掉。
+# ══════════════════════════════════════════════════════════════════════
+SIGPOS_ENABLED  = True
+SIGPOS_MAX_DAYS = 120
+SIGPOS_MAX_N    = 80
+SIGPOS_TTL_SEC  = 240   # 即時路線長時間迴圈：每 4 分鐘重讀一次，取得他台機器新寫入的訊號持倉
+_SIGPOS = None
+_SIGPOS_T = 0.0
+
+
+def _sp_key(t):
+    return str(t).upper().replace('.TWO', '').replace('.TW', '')
+
+
+def _sigpos_url():
+    return (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+            f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/signal_positions")
+
+
+def _sigpos_headers():
+    import json as _json
+    _cj = _fb_cred_json()
+    if not _cj:
+        return None
+    import google.oauth2.service_account as _sa
+    import google.auth.transport.requests as _gtr
+    _c = _sa.Credentials.from_service_account_info(_json.loads(_cj), scopes=['https://www.googleapis.com/auth/datastore'])
+    _c.refresh(_gtr.Request())
+    return {"Authorization": f"Bearer {_c.token}", "Content-Type": "application/json"}
+
+
+def _sigpos_trim(d):
+    from datetime import timedelta as _td
+    _cut = (_now_tw() - _td(days=SIGPOS_MAX_DAYS)).strftime('%Y-%m-%d')
+    d = {k: v for k, v in (d or {}).items() if isinstance(v, dict) and str(v.get('date', '')) >= _cut}
+    if len(d) > SIGPOS_MAX_N:
+        for _o in sorted(d, key=lambda x: str(d[x].get('date', '')))[:len(d) - SIGPOS_MAX_N]:
+            d.pop(_o, None)
+    return d
+
+
+def _sigpos_fetch():
+    """讀 Firestore 訊號持倉；有憑證帶憑證讀（不受安全規則影響），無憑證以公開讀取；失敗回 None。"""
+    try:
+        import requests as _req, json as _json
+        try:
+            _h = _sigpos_headers()
+        except Exception:
+            _h = None
+        _r = _req.get(_sigpos_url(), headers=_h or {}, timeout=10)
+        if _r.status_code == 404:
+            return {}
+        if _r.status_code != 200:
+            return None
+        _raw = ((_r.json() or {}).get('fields') or {}).get('pos', {}).get('stringValue', '')
+        return _json.loads(_raw) if _raw else {}
+    except Exception as _e:
+        print(f'  ⚠️ 訊號持倉讀取失敗（{str(_e)[:40]}）→ 本輪只看持股')
+        return None
+
+
+def _sigpos_remote(k, val):
+    """原子寫入一筆（val＝dict 記入；None 移除）；回傳寫入後全表或 None（無憑證／失敗）。"""
+    try:
+        import requests as _req, json as _json
+        _h = _sigpos_headers()
+        if not _h:
+            print('  ⏭️ 訊號持倉：無 Firebase 憑證，本輪不寫入'); return None
+        for _attempt in range(3):
+            _r = _req.get(_sigpos_url(), headers=_h, timeout=10)
+            if _r.status_code == 200:
+                _doc = _r.json(); _ut = _doc.get('updateTime')
+                _raw = ((_doc.get('fields') or {}).get('pos') or {}).get('stringValue', '')
+                _d = _json.loads(_raw) if _raw else {}
+                _pc = f"?currentDocument.updateTime={_ut}" if _ut else ''
+            elif _r.status_code == 404:
+                _d = {}; _pc = '?currentDocument.exists=false'
+            else:
+                return None
+            if val is None:
+                _d.pop(k, None)
+            else:
+                _d[k] = val
+            _d = _sigpos_trim(_d)
+            _p = _req.patch(_sigpos_url() + _pc, headers=_h, timeout=15,
+                            json={"fields": {"pos": {"stringValue": _json.dumps(_d, ensure_ascii=False)}}})
+            if _p.status_code == 200:
+                return _d
+        return None
+    except Exception as _e:
+        print(f'  ⚠️ 訊號持倉寫入失敗（{str(_e)[:40]}）'); return None
+
+
+def _sigpos_load():
+    global _SIGPOS, _SIGPOS_T
+    import time as _tm
+    if not SIGPOS_ENABLED:
+        return {}
+    if _SIGPOS is not None and _tm.time() - _SIGPOS_T < SIGPOS_TTL_SEC:
+        return _SIGPOS
+    _f = _sigpos_fetch()
+    _SIGPOS = _sigpos_trim(_f) if _f is not None else (_SIGPOS or {})
+    _SIGPOS_T = _tm.time()
+    return _SIGPOS
+
+
+def _sigpos_codes(side=None):
+    """side＝'long'／'short'；None＝兩方向全部（全市場掃描 is_holding 用）。"""
+    return set(k for k, v in (_sigpos_load() or {}).items() if side is None or v.get('side') == side)
+
+
+def _sigpos_set(code, side, price=None, src=''):
+    """side＝'long'／'short' 記入；None＝出場移除（只在表內才寫）。"""
+    global _SIGPOS
+    if not SIGPOS_ENABLED:
+        return
+    _d = _sigpos_load(); _k = _sp_key(code)
+    if side is None:
+        if _k not in _d:
+            return
+        _v = None
+    else:
+        if _k in _d and _d[_k].get('side') == side:
+            return
+        try:
+            _pv = round(float(price), 4) if price is not None else None
+        except Exception:
+            _pv = None
+        _v = {'side': side, 'date': _now_tw().strftime('%Y-%m-%d'), 'price': _pv, 'src': str(src)[:30]}
+    _new = _sigpos_remote(_k, _v)
+    if _new is not None:
+        _SIGPOS = _new
+    elif _v is None:
+        _d.pop(_k, None)
+    else:
+        _d[_k] = _v
+    print(f"  {'📥 訊號持倉記入' if _v else '📤 訊號持倉移除'}：{_k}{('（' + side + '）') if _v else ''}{'' if _new is not None else '（只記本輪）'}")
+
+
+def _night_day(today_str, sess):
+    """✅11081315 夜盤跨午夜同一晚用同一個日期（主帥 2026/11/08 02:30 第 3 點 a：「…只要達成1次觸發,另外2次自動取消觸發,不要1晚上觸發2次以上同樣的gmail通知信!!!」）：夜盤且台灣 08:00 前 → 前一天日期。"""
+    try:
+        _n = _now_tw()
+        if sess == 'night' and _n.hour < 8:
+            from datetime import timedelta as _td
+            return (_n - _td(days=1)).strftime('%Y-%m-%d')
+    except Exception:
+        pass
+    return today_str
+
+
 def _claim_notify_slot(key, today_str, notified, max_slots=2):
     """✅08091324【🔴A】通知額度的【原子佔位】取得。回傳 True＝可發送。
     ★問題背景：買/賣訊號彙整信原本只靠本地 4_notified_today.json 計數去重。
@@ -3535,14 +3708,18 @@ def _pick_strikes_by_premium(rows, want_put, spot):
             _s = float(_sv); _p = float(_pv)
             if (_is_put and _s >= spot) or ((not _is_put) and _s <= spot):
                 continue                      # 只要價外
-            if not (0 < _p <= OPT_PREMIUM_MAX):
-                continue                      # 只要 ≤16 元
+            if not (0 < _p <= OPT_PREMIUM_MAX2):
+                continue                      # ✅11081315 先收 ≤60 元，再分兩順位
             _tmp.append((_s, _p, str(_cv)))
         _best = {}
         for _s, _p, _c in _tmp:
             if _s not in _best or _p < _best[_s][1]:
                 _best[_s] = (_s, _p, _c)
-        return sorted(_best.values(), key=lambda x: -x[1])[:3]
+        _t1 = [x for x in _best.values() if OPT_PREMIUM_MIN <= x[1] <= OPT_PREMIUM_MAX]   # 第一順位 12～16 元
+        if _t1:
+            return sorted(_t1, key=lambda x: -x[1])[:3]
+        _t2 = [x for x in _best.values() if OPT_PREMIUM_MAX < x[1] <= OPT_PREMIUM_MAX2]   # 第二順位 16～60 元最便宜一檔
+        return sorted(_t2, key=lambda x: x[1])[:1]
     except Exception as _e:
         print(f"  ⚠️ 選擇權鏈解析失敗（{str(_e)[:40]}）→ 降級為距離推估")
         return []
@@ -3654,21 +3831,23 @@ def get_weekly_option_hint(current_price, signal_type):
             f"建議標的：{_opt_type}（價外，以小博大）\n"
         )
         if _picks:
-            _hint += (f"\n★依【期交所即時權利金】篩選（上限 {OPT_PREMIUM_MAX} 元）：\n")
+            _hint += (f"\n★依【即時權利金】篩選（第一順位 {OPT_PREMIUM_MIN}～{OPT_PREMIUM_MAX} 元；沒有就選 {OPT_PREMIUM_MAX}～{OPT_PREMIUM_MAX2} 元最便宜一檔）：\n")
             for _s, _p, _c in _picks:
                 _hint += f"  → {int(_s)} {_opt_type}　權利金 {_p:g} 元" + (f"　[{_c}]" if _c else "") + "\n"
             _hint += "（排序：最接近價平者優先＝結算落入價內機率較高）\n"
+        elif _rows:
+            _hint += f"\n⚠️ 權利金沒有落在 {OPT_PREMIUM_MIN}～{OPT_PREMIUM_MAX2} 元的價外檔（不是太貴就是低於 {OPT_PREMIUM_MIN} 元），不建議買\n"
         else:
             _atm = round(current_price / 50) * 50
             _strikes = ([_atm - 50, _atm - 100, _atm - 150] if _is_put
                         else [_atm + 50, _atm + 100, _atm + 150])
             _hint += (f"\n⚠️【未取得即時權利金報價】以下為【距離推估】，\n"
-                      f"　　尚【未驗證】是否 ≤{OPT_PREMIUM_MAX} 元，下單前請自行確認市價：\n")
+                      f"　　尚【未驗證】權利金，下單前請自行確認：第一順位 {OPT_PREMIUM_MIN}～{OPT_PREMIUM_MAX} 元；沒有就選 {OPT_PREMIUM_MAX}～{OPT_PREMIUM_MAX2} 元最便宜一檔；全部超過 {OPT_PREMIUM_MAX2} 元不建議買\n")
             for _s in _strikes:
                 _hint += f"  → {int(_s)} {_opt_type}（價外，權利金待確認）\n"
         _hint += (
             f"\n⚠️ 進場原則（主帥定案）：\n"
-            f"  ✅ 進場權利金 ≤ {OPT_PREMIUM_MAX} 元；超過即不進場（歸零時損失過大）\n"
+            f"  ✅ 進場權利金第一順位 {OPT_PREMIUM_MIN}～{OPT_PREMIUM_MAX} 元；行情特殊、沒有這價位時，選 {OPT_PREMIUM_MAX}～{OPT_PREMIUM_MAX2} 元最便宜一檔；超過 {OPT_PREMIUM_MAX2} 元不進場（主帥 07/17 定案；11/06 21:19 2甲 補第二順位）\n"
             f"  ✅ 取價外選項，以小博大（便宜、行情到位可暴賺數十倍）\n"
             f"\n策略：建倉後不停損，持有至期貨5分K碰上/下軌反轉或結算"
         )
@@ -3743,7 +3922,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
 
         # 🔴 [優先處理賣出]
         if is_holding:
-            _is_short_hold = (ticker in HOLDINGS_SHORT) or (ticker.split('.')[0] in HOLDINGS_SHORT)  # ✅ 07010514 空單判別
+            _is_short_hold = (ticker in HOLDINGS_SHORT) or (ticker.split('.')[0] in HOLDINGS_SHORT) or (_sp_key(ticker) in _sigpos_codes('short'))  # ✅ 07010514 空單判別
             _df_mon = calc_indicators(df_w)
             _df_wk  = get_stock_data(ticker, period='2y', interval='1wk', cache=cache_mid_1wk_1d)
             _df_wk  = calc_indicators(_df_wk) if (_df_wk is not None and len(_df_wk) >= 26) else None
@@ -4280,11 +4459,17 @@ def scan_limit_up():
         print(f"  ⚠️ scan_limit_up異常：{str(_e)[:60]}")
 
 
+FUND_HOLDING          = True   # ✅11081315 主帥持有安聯月配息基金 → 判斷出場（主帥 11/06 05:14：「…【基金(安聯境外月配息基金對應的3支ETF)】,到今天還還沒收到進出場的gmail通知信」）；False＝只判斷進場
+FUND_INTRADAY_ENABLED = True   # ✅11081315 合成基金加進每 5 分鐘即時路線（主帥 11/06 05:23 b 點：「我同意…」；Ｃ-235）；False＝回到只在全市場掃描判斷一次
+
+
 def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
     """✅09271746【基金改三道＋第三道 RSI 門檻，不再用 eLeader】主帥 2026/09/27 17:27：「不要再用eleader去判斷了!!!……這3支（SPY、QQQ、HYG）,當然也要符合最新的第一道第二道第三道的規定啊!!!」
     ・17:38「採用你的建議,我選甲案」：三支先合成一條基金代理線（SPY 50%／QQQ 30%／HYG 20%，build_fund_proxy_df 不變），再用這一條跑三道。
     ・第一道 月K OR 週K、第二道 日K、第三道 5分K OR 15分K，皆用表二（stage_pass）；RSI 看 RSI(5)、RSI(10) 箭頭（✅11041640；主帥 2026/11/04 16:40；Ｃ-227；09/27 乙案停用）。
-    ・基金只做多（買進），原設計即無做空。"""
+    ・✅11081315 補出場（先修後報，Ｃ-235；原函式只判斷買進）：第一道（月K OR 週K）AND 第二道（日K）AND 第三道（5分K OR 15分K），每一道都用出場三項（stage_pass entry=False，Ｃ-220）。
+    ・✅11081315 月K／週K／日K 判斷結果同一天快取於 /tmp（同一個雲端 job 內有效），即時路線每 5 分鐘只重抓 5分K、15分K（主帥 09/26 17:29：「月K、週K 不會每天變，一天抓一次即可」）。
+    ・同一根K棒同方向只寄一封；每日每方向最多 2 封（沿用原規定 2 次）。"""
     global buy_signals, sell_signals
     try:
         print(f"\n🚀 正在啟動合成追蹤：{fund_name}...")
@@ -4294,42 +4479,79 @@ def scan_synthetic_fund(fund_name="安聯月配息基金(合成代標)"):
             _h = _normalize_df(yf.download("HYG", period=period, interval=interval, progress=False))
             _d = build_fund_proxy_df(_s, _q, _h)
             return calc_indicators(_d) if _d is not None and len(_d) >= 26 else None
-        df_mo = _px('5y', '1mo'); df_w = _px('2y', '1wk')
-        _g1_mo = bool(df_mo is not None and stage_pass(df_mo, True, entry=True))
-        _g1_wk = bool(df_w is not None and stage_pass(df_w, True, entry=True))
-        if not (_g1_mo or _g1_wk):
-            print(f"ℹ️ {fund_name}：第一道（月K OR 週K）未通過")
+        import json as _js
+        _today_f = _now_tw().strftime("%Y-%m-%d"); _cf = '/tmp/kj_fund_gates.json'; _g = None
+        try:
+            _c = _js.load(open(_cf, encoding='utf-8'))
+            if _c.get('day') == _today_f:
+                _g = _c
+        except Exception:
+            _g = None
+        if _g is None:
+            df_mo = _px('5y', '1mo'); df_w = _px('2y', '1wk'); df_d = _px('1y', '1d')
+            _sp = lambda d, e: bool(d is not None and stage_pass(d, True, entry=e))
+            _g = {'day': _today_f, 'mo_in': _sp(df_mo, True), 'wk_in': _sp(df_w, True), 'd_in': _sp(df_d, True),
+                  'mo_out': _sp(df_mo, False), 'wk_out': _sp(df_w, False), 'd_out': _sp(df_d, False)}
+            try:
+                _js.dump(_g, open(_cf, 'w', encoding='utf-8'))
+            except Exception:
+                pass
+        _dirs = []
+        if (_g['mo_in'] or _g['wk_in']) and _g['d_in']:
+            _dirs.append('in')
+        if FUND_HOLDING and (_g['mo_out'] or _g['wk_out']) and _g['d_out']:
+            _dirs.append('out')
+        if not _dirs:
+            print(f"ℹ️ {fund_name}：第一道（月K OR 週K）＋第二道（日K）進場、出場皆未通過")
             return
-        df_d = _px('1y', '1d')
-        if not (df_d is not None and stage_pass(df_d, True, entry=True)):
-            print(f"ℹ️ {fund_name}：第二道（日K）未通過")
-            return
-        _hit = None
-        for _iv in ('5m', '15m'):
-            _df3 = _px('5d', _iv)
-            if _df3 is not None and (stage_pass(_df3, True, entry=True) or check_condH(_df3, True)):   # ✅11041640 條件H
-                _hit = (_iv, _df3); break
-        if not _hit:
-            print(f"ℹ️ {fund_name}：第三道（5分K OR 15分K，含 RSI(5)、RSI(10) 箭頭）未通過")
-            return
-        _iv, _df3 = _hit
-        c_price = float(_df3['Close'].iloc[-1]); r_prev = float(_df3['rsi14'].iloc[-2]); r_now = float(_df3['rsi14'].iloc[-1])
-        l_val = float(_df3['Low'].iloc[-1]); bb_val = float(_df3['boll_bot20'].iloc[-1])
-        buy_signals.append(('基金', fund_name, c_price, l_val, bb_val, r_now, r_prev))
-        _fund_key = f"基金_{fund_name}_BUY"
-        _today_f = _now_tw().strftime("%Y-%m-%d")
-        if _today_f not in notified: notified[_today_f] = []
-        if notified[_today_f].count(_fund_key) >= 2:
-            print(f"🔕 {fund_name} 今日買進訊號已通知過，跳過")
-            return
-        notified[_today_f].append(_fund_key)
-        save_notified(notified)
-        _per = '月K' if _g1_mo else '週K'
-        msg_body = (f"🔔 {fund_name}（SPY／QQQ／HYG 合成代理線）三道皆通過\n"
-                    f"第一道：{'月K ' if _g1_mo else ''}{'週K' if _g1_wk else ''}｜第二道：日K｜第三道：{_iv}\n"
-                    f"代理價：{c_price:.2f}　RSI：{r_prev:.1f} → {r_now:.1f}\n")
-        send_gmail(f"☁️【雲端】🔔【{_get_period_label(_per)}】基金買進訊號：{fund_name}", msg_body)
-        print(f"✅ {fund_name} 已發送觸發買進訊號，已加入今日彙整清單！")
+        for _dir in _dirs:
+            _hit = None
+            for _iv in ('5m', '15m'):
+                _df3 = _px('5d', _iv)
+                if _df3 is None:
+                    continue
+                _ok = ((stage_pass(_df3, True, entry=True) or check_condH(_df3, True)) if _dir == 'in'
+                       else stage_pass(_df3, True, entry=False))
+                if _ok:
+                    _hit = (_iv, _df3); break
+            if not _hit:
+                print(f"ℹ️ {fund_name}：第三道（{'進場' if _dir == 'in' else '出場'}，5分K OR 15分K）未通過")
+                continue
+            _iv, _df3 = _hit
+            c_price = float(_df3['Close'].iloc[-1]); r_prev = float(_df3['rsi14'].iloc[-2]); r_now = float(_df3['rsi14'].iloc[-1])
+            _tag = 'BUY' if _dir == 'in' else 'SELL'
+            _c1 = _claim_alert_firebase(f"FUND_{_tag}_{_iv}_{_cw_bar_ts(_df3)}", _today_f)
+            if _c1 is False:
+                print(f"🔕 {fund_name}：同一根K棒（{_tag}）已寄過"); continue
+            _slot = None
+            for _s in (1, 2):
+                _c2 = _claim_alert_firebase(f"FUND_{_tag}_{_today_f}#{_s}", _today_f)
+                if _c2 is None:
+                    _fk = f"基金_{fund_name}_{_tag}"
+                    if _today_f not in notified:
+                        notified[_today_f] = []
+                    if notified[_today_f].count(_fk) >= 2:
+                        break
+                    notified[_today_f].append(_fk); save_notified(notified); _slot = _s; break
+                if _c2 is True:
+                    _slot = _s; break
+            if _slot is None:
+                print(f"🔕 {fund_name}：今日 {_tag} 已達 2 封"); continue
+            if _dir == 'in':
+                l_val = float(_df3['Low'].iloc[-1]); bb_val = float(_df3['boll_bot20'].iloc[-1])
+                buy_signals.append(('基金', fund_name, c_price, l_val, bb_val, r_now, r_prev))
+                _per = '月K' if _g['mo_in'] else '週K'
+                msg_body = (f"🔔 {fund_name}（SPY／QQQ／HYG 合成代理線）三道皆通過\n"
+                            f"第一道：{'月K ' if _g['mo_in'] else ''}{'週K' if _g['wk_in'] else ''}｜第二道：日K｜第三道：{_iv}\n"
+                            f"代理價：{c_price:.2f}　RSI：{r_prev:.1f} → {r_now:.1f}\n")
+                send_gmail(f"☁️【雲端】🔔【{_get_period_label(_per)}】基金買進訊號：{fund_name}", msg_body)
+            else:
+                _per = '月K' if _g['mo_out'] else '週K'
+                msg_body = (f"🔔 {fund_name}（SPY／QQQ／HYG 合成代理線）出場三道皆通過（出場三項：近5根碰上軌、當根 RSI 轉向、當根 MACD柱 轉向）\n"
+                            f"第一道：{'月K ' if _g['mo_out'] else ''}{'週K' if _g['wk_out'] else ''}｜第二道：日K｜第三道：{_iv}\n"
+                            f"代理價：{c_price:.2f}　RSI：{r_prev:.1f} → {r_now:.1f}\n建議：考慮分批贖回或停利\n")
+                send_gmail(f"☁️【雲端】🔔【{_get_period_label(_per)}】基金出場訊號：{fund_name}", msg_body)
+            print(f"✅ {fund_name} 已發送{'買進' if _dir == 'in' else '出場'}訊號（本日第 {_slot} 封）")
     except Exception as e:
         print(f"❌ scan_synthetic_fund 異常：{e}")
 # ============================================================
@@ -5397,6 +5619,12 @@ def _condw_gate3(df, nbars, label):
     #   ・條件W 仍【只跑第三道】，不看第一道、第二道（主帥 09/02 定案，本輪未變）。
     #   ・5分K 與 15分K 各自呼叫本函式、各自判斷（主帥 09/19 23:32：兩個週期都重要）。
     _buy = bool(stage_pass(df, True, entry=True) or check_condH(df, True))   # ✅11041640 條件H
+    # ✅11081315 主帥 11/06 21:19「1甲」：條件W 進場加 DIF 同向（做多 DIF↑；做空鏡像 DIF↓）；只加在條件W，不動條件A～H（Ｃ-231）
+    _dif_up = _dif_dn = True
+    if CONDW_DIF_REQUIRED:
+        _d0, _d1 = float(df['macd_line'].iloc[-1]), float(df['macd_line'].iloc[-2])
+        _dif_up, _dif_dn = _d0 > _d1, _d0 < _d1
+    _buy = bool(_buy and _dif_up)
 
     # ── 空方鏡像：Λ轉觸頂翻落（★R-08 已於 08/19 撤銷，★★做空為主帥要求）──
     _short = False
@@ -5413,10 +5641,11 @@ def _condw_gate3(df, nbars, label):
         # ✅09170658 更正 09170232 P0③：改為近 TOUCH_LOOKBACK_BARS 根碰上軌，鏡像多方
         _touch_hi = bool((hi.iloc[-TOUCH_LOOKBACK_BARS:] >= _gate_upper(bt.iloc[-TOUCH_LOOKBACK_BARS:], bb.iloc[-TOUCH_LOOKBACK_BARS:])).any())
         _short = bool(stage_pass(df, False, entry=True) or check_condH(df, False))   # ✅09192332 空方鏡像
+        _short = bool(_short and _dif_dn)   # ✅11081315 DIF 同向（Ｃ-231）
 
     print(f"  \u2139\ufe0f 條件W {label}（{n}根）："
           f"RSI={rsi_prev:.1f}→{rsi_now:.1f}({'\u2191' if rsi_up else '\u2193'})  "
-          f"MACD柱={'\u2191' if mac_up else '\u2193'}  "
+          f"MACD柱={'\u2191' if mac_up else '\u2193'}  DIF={'\u2191' if _dif_up else ('\u2193' if _dif_dn else '平')}  "
           f"多方={'\u2713' if _buy else '\u2717'}  空方={'\u2713' if _short else '\u2717'}")
     return {'bar_ts': _cw_bar_ts(df), 'buy': _buy, 'short': _short, 'close': close, 'label': label,
             'boll_bot': boll_bot, 'boll_top': boll_top,
@@ -5426,6 +5655,7 @@ def _condw_gate3(df, nbars, label):
 _CONDW_LOCAL_CLAIMS = set()   # ✅10051453 甲-4：條件W 配額本地後援（Firebase 不可用時用；同程序內有效）
 
 
+CONDW_DIF_REQUIRED = True   # ✅11081315 條件W 進場加 DIF 同向（主帥 11/06 21:19「1甲」；False＝回到原條件，回滾開關）
 CONDW_DELAY_NOTE_ENABLED = True   # ✅10161937 條件W 信件延遲提醒與反向建議（主帥 10/16 14:01 第 7 點）；改 False 即回到原信件內容（回滾開關）
 
 
@@ -5445,6 +5675,192 @@ def _condw_delay_note(close, d):
     return _head, _tail
 
 
+# ══════════════════════════════════════════════════════════════════════
+# ✅11081315【夜盤資料．期交所台指期快照優先】主帥 2026/11/06 05:11 第 1 題甲案、20:52 第 2 題甲案（Ｃ-229、Ｃ-230）
+#   主帥 05:11 第 2 點 b：「…我的訴求是【任一】,也就是兩者【or】擇一就可以,不用兩者【and】都要有!」→ 5分K OR 15分K
+#   快照可用＝最後一根 TXF_MAX_AGE_MIN 分鐘內、至少 TXF_MIN_BARS_5M 根、近 20 根有高度（最高＞最低）比例 ≥ TXF_MIN_QUALITY；
+#   15分K 由 3 根 5分K 合成；不可用才退回 Yahoo ^TWII（照舊延遲，信首附 10/16 延遲提醒與反向建議）
+# ══════════════════════════════════════════════════════════════════════
+TXF_SOURCE_ENABLED = True    # False＝條件W／條件I 回到只用 Yahoo ^TWII（回滾開關）
+TXF_MIN_BARS_5M    = 40      # 布林 20＋MACD 26／9 暖身
+TXF_MAX_AGE_MIN    = 12      # 最後一根起點距今超過 12 分鐘＝快照中斷
+TXF_MIN_QUALITY    = 0.6     # 近 20 根有高度比例下限（迴圈取樣關閉時多為 O=H=L=C，會被擋下）
+
+
+def _txf_bars_to_df(bars, now=None):
+    """快照K棒（Firestore txf_5m_bars 的 list）→ 5分K DataFrame（台灣時間索引）；不合格回 (None, 原因)。"""
+    import pandas as _pd
+    _tz = pytz.timezone('Asia/Taipei')
+    now = now or datetime.now(_tz)
+    _rows = []
+    for _b in (bars or []):
+        try:
+            _t = _tz.localize(datetime.strptime(_b['t'], '%Y-%m-%d %H:%M'))
+            _rows.append((_t, float(_b['o']), float(_b['h']), float(_b['l']), float(_b['c']), float(_b.get('v') or 0)))
+        except Exception:
+            continue
+    if not _rows:
+        return None, '無K棒'
+    _df = _pd.DataFrame([r[1:] for r in _rows], index=_pd.DatetimeIndex([r[0] for r in _rows]),
+                        columns=['Open', 'High', 'Low', 'Close', 'Volume'])
+    _df = _df[~_df.index.duplicated(keep='last')].sort_index()
+    _age = (now - _df.index[-1].to_pydatetime()).total_seconds() / 60
+    if _age > TXF_MAX_AGE_MIN:
+        return None, f'最後一根距今 {_age:.0f} 分（快照中斷）'
+    if len(_df) < TXF_MIN_BARS_5M:
+        return None, f'只有 {len(_df)} 根（需 {TXF_MIN_BARS_5M}）'
+    _tail = _df.iloc[-20:]
+    _q = float((_tail['High'] > _tail['Low']).mean())
+    if _q < TXF_MIN_QUALITY:
+        return None, f'品質不足（近 20 根有高度 {_q:.0%}）'
+    return _df, f'{len(_df)} 根，近 20 根有高度 {_q:.0%}'
+
+
+def _txf_store_df():
+    """讀期交所台指期快照K棒（Firestore public 讀取，同 _load_futures_position）；失敗回 (None, 原因)。"""
+    try:
+        import requests as _req, json as _json
+        _url = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+                f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/txf_5m_bars")
+        _r = _req.get(_url, timeout=12)
+        if _r.status_code != 200:
+            return None, f'讀取 HTTP {_r.status_code}'
+        _raw = ((_r.json() or {}).get('fields') or {}).get('bars', {}).get('stringValue', '')
+        return _txf_bars_to_df(_json.loads(_raw) if _raw else [])
+    except Exception as _e:
+        return None, f'讀取失敗 {str(_e)[:30]}'
+
+
+def _resample_15m(df5):
+    """3 根 5分K 合成 1 根 15分K（最後一根可能未完成，與 Yahoo 含未完成棒相同）。"""
+    if df5 is None or df5.empty:
+        return None
+    _a = df5.resample('15min', label='left', closed='left').agg(
+        {'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
+    return _a.dropna(subset=['Close'])
+
+
+def _us_premarket_ref():
+    """✅11081315 主帥 11/06 05:11 第 2 點 a：「…如果有其他美股或投資種類有辦法得知22:00~22:30的5分K或15分K,就加入(是加入,不是取代原方案)此投資種類。」
+    美股盤前（冬令台灣 17:00～22:30）EWT、TSM 5分K（Yahoo prepost）；只附在信裡、不參與判斷；取不到回空字串（尚未實測）。"""
+    try:
+        _n = datetime.now(pytz.timezone('Asia/Taipei')); _t = _n.hour * 60 + _n.minute
+        if not (17 * 60 <= _t < 22 * 60 + 30):
+            return ''
+        _parts = []
+        for _tk in ('EWT', 'TSM'):
+            try:
+                _d = _normalize_df(yf.download(_tk, period='2d', interval='5m', prepost=True, progress=False))
+                _dd = _normalize_df(yf.download(_tk, period='5d', interval='1d', progress=False))
+                if _d is None or _d.empty or _dd is None or _dd.empty:
+                    continue
+                _pc = float(_dd['Close'].iloc[-1]); _cur = float(_d['Close'].iloc[-1])   # 盤前時段日K 最後一根＝前一交易日收盤
+                _parts.append(f"{_tk} {(_cur / _pc - 1) * 100:+.2f}%（{_cur:.2f}）")
+            except Exception:
+                continue
+        return ("\n美股盤前參考（只參考、不參與判斷）：" + '、'.join(_parts)) if _parts else ''
+    except Exception:
+        return ''
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ✅11081315【條件I：急跌／急漲＋轉折】主帥 2026/11/06 04:56 第 4 點：「好,新增【條件I或現有的條件(由AI判斷該修改寫入到哪個條件?)】,把今天的情形新增到策略。…此條件不強調【近5根是否碰到上軌或下軌】,只強調【有沒有超過600點或500點(由AI依照你的判斷)】。」
+#   04:36：「…以後的鏡像做多,也要比照辦理,寫入策略裡面。」；20:36 第 2c 點：不設單獨警示（「你怎麼改成【單獨條件就提醒呢!!!?】」）（Ｃ-232）
+#   做空：當盤最高 − 當根收盤 ≥ CONDI_PTS，且 5分K OR 15分K 前1根→當根 MACD柱↓、RSI(5)↓、RSI(10)↓ → buy PUT
+#   做多鏡像：當根收盤 − 當盤最低 ≥ CONDI_PTS，且 MACD柱↑、RSI(5)↑、RSI(10)↑ → buy CALL；不看碰軌
+#   當盤：夜盤 15:00 起、日盤 08:45 起；時段＝條件W 時窗；每窗每方向最多 CONDI_MAX_PER_WINDOW 封；同一根K棒同方向只寄一封
+#   門檻 500（AI 判斷，依據：11/05 夜盤最高 42298、22:15 A 轉那根收 41700，跌 598，600 點會漏；回滾：改 600）
+# ══════════════════════════════════════════════════════════════════════
+CONDI_ENABLE         = True   # False＝不跑條件I（回滾開關）
+CONDI_PTS            = 500
+CONDI_MAX_PER_WINDOW = 2
+
+
+def _condi_session_start(now):
+    _t = now.hour * 60 + now.minute
+    if 8 * 60 + 45 <= _t < 15 * 60:
+        return now.replace(hour=8, minute=45, second=0, microsecond=0)
+    if _t >= 15 * 60:
+        return now.replace(hour=15, minute=0, second=0, microsecond=0)
+    from datetime import timedelta as _td
+    return (now - _td(days=1)).replace(hour=15, minute=0, second=0, microsecond=0)
+
+
+def _condi_eval(df5, df15, now=None):
+    """條件I 判斷；回傳命中 list（dir＝'sell' 做空／'buy' 做多）。"""
+    _out = []
+    now = now or datetime.now(pytz.timezone('Asia/Taipei'))
+    _st = _condi_session_start(now)
+    for _df, _lb in ((df5, '5分K'), (df15, '15分K')):
+        if _df is None or len(_df) < 35:
+            continue
+        _d = calc_indicators(_df.copy())
+        if _d is None:
+            continue
+        try:
+            _idx = _d.index if _d.index.tz is not None else _d.index.tz_localize('UTC')
+            _sess = _d[_idx.tz_convert('Asia/Taipei') >= _st]
+        except Exception:
+            continue
+        if _sess.empty:
+            continue
+        _hs = float(_sess['High'].max()); _ls = float(_sess['Low'].min()); _c = float(_d['Close'].iloc[-1])
+        _m0 = float(_d['macd_hist'].iloc[-1]); _m1 = float(_d['macd_hist'].iloc[-2])
+        if _hs - _c >= CONDI_PTS and _m0 < _m1 and _rsi_dir_ok(_d, False):
+            _out.append({'dir': 'sell', 'label': _lb, 'close': _c, 'ext': _hs, 'pts': _hs - _c, 'bar_ts': _cw_bar_ts(_d)})
+        if _c - _ls >= CONDI_PTS and _m0 > _m1 and _rsi_dir_ok(_d, True):
+            _out.append({'dir': 'buy', 'label': _lb, 'close': _c, 'ext': _ls, 'pts': _c - _ls, 'bar_ts': _cw_bar_ts(_d)})
+    return _out
+
+
+def _condi_send(wid, df5, df15, src, now_str_f):
+    if not CONDI_ENABLE or not wid:
+        return
+    _hits = _condi_eval(df5, df15)
+    if not _hits:
+        print(f'  ❌ 條件I：未達急跌／急漲 {CONDI_PTS} 點＋轉折'); return
+    _today = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d')
+    for _dir in ('sell', 'buy'):
+        _hs = [h for h in _hits if h['dir'] == _dir]
+        if not _hs:
+            continue
+        h = next((x for x in _hs if x['label'] == '15分K'), _hs[0])
+        _dup = False
+        for x in _hs:
+            _k = f"condIsig_{wid}_{_dir}_{x['label']}_{x['bar_ts']}"
+            _c = _claim_alert_firebase(_k, _today)
+            if _c is None:
+                _lk = f'{_today}|{_k}'; _c = _lk not in _CONDW_LOCAL_CLAIMS; _CONDW_LOCAL_CLAIMS.add(_lk)
+            if _c is False:
+                _dup = True; break
+        if _dup:
+            print(f'  🔁 條件I：同一根K棒同方向（{_dir}）已寄過，不重複寄'); continue
+        _slot = None
+        for _s in range(1, CONDI_MAX_PER_WINDOW + 1):
+            _k2 = f'condI_{wid}_{_dir}#{_s}'
+            _c2 = _claim_alert_firebase(_k2, _today)
+            if _c2 is None:
+                _lk2 = f'{_today}|{_k2}'
+                if _lk2 in _CONDW_LOCAL_CLAIMS:
+                    continue
+                _CONDW_LOCAL_CLAIMS.add(_lk2); _c2 = True
+            if _c2 is True:
+                _slot = _s; break
+        if _slot is None:
+            print(f'  ⚠️ 條件I：本窗 {_dir} 已達 {CONDI_MAX_PER_WINDOW} 次上限，靜音'); continue
+        _ti = '急跌做空（buy PUT）' if _dir == 'sell' else '急漲做多（buy CALL）'
+        _ar = '↓' if _dir == 'sell' else '↑'
+        msg = (f"☁️【雲端】⭐【條件I 週選擇權{_ti}】⭐（本窗第{_slot}次）\n"
+               f"標的：台指　資料：{src}\n"
+               f"{'當盤最高' if _dir == 'sell' else '當盤最低'}：{h['ext']:.0f}　當根收盤：{h['close']:.0f}　"
+               f"{'跌' if _dir == 'sell' else '漲'} {h['pts']:.0f} 點（門檻 {CONDI_PTS}）\n"
+               f"觸發週期：{h['label']}　前1根→當根 MACD柱{_ar}、RSI(5){_ar}、RSI(10){_ar}　★不看碰軌\n"
+               f"判斷用K棒時間：{h['bar_ts'] or '未取得'}\n進場窗：{wid}\n時間：{now_str_f}"
+               + _us_premarket_ref() + get_weekly_option_hint(h['close'], _dir))
+        _ok = send_gmail(f"☁️【雲端】⭐條件I週選{'做空' if _dir == 'sell' else '買進'} 台指 - {now_str_f}", msg, urgent=True)
+        print(f"  {'✅' if _ok else '❌'} 條件I {_ti}／{h['label']}（本窗第{_slot}次）{'已發送' if _ok else '發送失敗'}")
+
+
 def scan_condition_w():
     # ✅08250451【修正·與 08102047 同型】★台指期K棒累積移到【所有關卡之前】無條件執行。
     #     ★當時的結論是「累積快照是記錄行情，不該受任何策略關卡影響」，
@@ -5458,6 +5874,10 @@ def scan_condition_w():
         # ✅09022155 收盤前提醒信放在【所有策略關卡之前】無條件執行。
         #   ★理由同 08102047 累積器事故：★★放在關卡後面會被 return/continue 跳掉。
         _futures_close_alert(datetime.now(pytz.timezone('Asia/Taipei')))
+        # ✅11081315 主帥 11/06 05:11 第 1 題甲案：EWT 夜盤極端異動警報加進每 5 分鐘夜盤迴圈（原只在 22:33 全市場掃描跑一次）；每方向每日上限與跨班去重沿用原函式
+        _tvn = datetime.now(pytz.timezone('Asia/Taipei')); _tvn = _tvn.hour * 60 + _tvn.minute
+        if _tvn >= 15 * 60 or _tvn < 5 * 60 + 10:
+            check_overnight_extreme_move()
     except Exception as _e:
         print(f'  ⚠️ 台指期K棒累積異常（{str(_e)[:50]}）→ 不影響條件W')
 
@@ -5497,7 +5917,16 @@ def scan_condition_w():
     try:
         # ══ 抓 5分K（必跑）與 15分K（CONDW_ENABLE_15MK 開啟時）══
         _res = []
-        df5 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
+        # ✅11081315【期交所台指期快照優先】主帥 11/06 05:11 第 1 題甲案、20:52 第 2 題甲案（Ｃ-229、Ｃ-230）
+        _txf5, _txf15, _src, df15 = None, None, 'Yahoo ^TWII（延遲約 15～25 分）', None
+        if TXF_SOURCE_ENABLED:
+            _txf5, _why = _txf_store_df()
+            if _txf5 is not None:
+                _txf15 = _resample_15m(_txf5); _src = f'期交所台指期快照（{_why}）'
+                print(f'  ✅ 條件W：資料來源 {_src}')
+            else:
+                print(f'  ℹ️ 條件W：期交所快照不可用（{_why}）→ 退回 Yahoo ^TWII')
+        df5 = _txf5 if _txf5 is not None else _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='5m', progress=False))
         # ✅09231550【資料新鮮度守門】ＡＭ６６：^TWII 為現貨，夜盤無資料 → 夜間拿到的是前一日下午的舊K棒；
         #   ★最後一根距今逾 45 分鐘即視為非即時，本次不判斷（避免以舊K棒發出訊號；主帥 09/23 15:03 條件W 查證時提出）。
         try:
@@ -5506,10 +5935,10 @@ def scan_condition_w():
             _age5 = (datetime.now(pytz.timezone('Asia/Taipei')) - _lt5.tz_convert('Asia/Taipei')).total_seconds() / 60
         except Exception:
             _age5 = 0
-        if _age5 > 45:
+        if _txf5 is None and _age5 > 45:
             print(f'  \U0001F515 條件W：^TWII 5分K 最後一根距今 {_age5:.0f} 分鐘（現貨未開盤）→ 本次不判斷')
             return
-        if df5 is not None and not df5.empty and _bar_too_old(df5, '條件W-5分K'):
+        if _txf5 is None and df5 is not None and not df5.empty and _bar_too_old(df5, '條件W-5分K'):
             _h = _taifex_hint_text()
             if _h:
                 print(f'  ℹ️ 供參考：{_h.strip()}')
@@ -5519,7 +5948,7 @@ def scan_condition_w():
             _res.append(_r5)
         if CONDW_ENABLE_15MK:
             try:
-                df15 = _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='15m', progress=False))
+                df15 = _txf15 if _txf5 is not None else _normalize_df(yf.download(CONDW_TARGET, period='5d', interval='15m', progress=False))
                 _r15 = _condw_gate3(df15, CONDW_LOOKBACK_15MK, '15分K')
                 if _r15:
                     _res.append(_r15)
@@ -5527,6 +5956,10 @@ def scan_condition_w():
                 print(f'  ⚠️ 條件W：15分K 取得失敗（{str(_e15)[:40]}），★不影響5分K')
         if not _res:
             print('  ⚠️ 條件W：5分K 與 15分K 均無可用資料，跳過'); return
+        try:   # ✅11081315【條件I】主帥 11/06 04:56 第 4 點、20:36 第 2c 點（Ｃ-232）
+            _condi_send(wid, df5, df15, _src, now_str_f)
+        except Exception as _ei:
+            print(f'  ⚠️ 條件I 異常（{str(_ei)[:50]}）→ 不影響條件W')
 
         # ══ ★★★OR 合併（★主帥 09/02 明示：兩個週期是 OR，不是 AND）══
         _buy_hits   = [r for r in _res if r['buy']]
@@ -5593,9 +6026,9 @@ def scan_condition_w():
                    f"RSI：{r['rsi_prev']:.1f} → {r['rsi_now']:.1f}（{_arrow}）　MACD柱：{_arrow}\n"
                    f"進場窗：{wid}\n"
                    f"時間：{now_str_f}\n"
-                   f"判斷用K棒時間：{r.get('bar_ts') or '未取得'}（{r['label']} 最後一根的起點；Yahoo 約延遲 15～25 分；✅10261313 Ｃ-193）"
-                   + _opt_hint)
-            _dn_h, _dn_t = _condw_delay_note(r['close'], _dir)   # ✅10161937 主帥 10/16 14:01 第 7 點
+                   f"判斷用K棒時間：{r.get('bar_ts') or '未取得'}（{r['label']} 最後一根的起點；資料：{_src}；✅10261313 Ｃ-193）"
+                   + _us_premarket_ref() + _opt_hint)
+            _dn_h, _dn_t = _condw_delay_note(r['close'], _dir) if _txf5 is None else ('', '')   # ✅10161937 主帥 10/16 14:01 第 7 點；✅11081315 用期交所即時快照判斷時不附（主帥 11/06 20:52 第 2 題甲案：「好,採用你的建議,我選甲案。」；Ｃ-230）
             msg = _dn_h + msg + _dn_t
             _ok = send_gmail(f"☁️【雲端】⭐條件W週選{'買進' if _dir=='buy' else '做空'} "
                              f"{CONDW_TARGET} - {now_str_f}", msg, urgent=True)
@@ -6033,7 +6466,7 @@ def check_holdings_health():
 #   ・只在台股日盤執行；每輪最多 STOCK_INTRADAY_MAX 檔（持股優先）；四個週期各一次批次下載，避免 Yahoo 限流
 # ============================================================
 STOCK_INTRADAY_ENABLED = True   # ✅09171036 個股短線路線總開關（False＝完全不執行）；✅09172001 同時控制第二步（美股／虛擬幣／外匯／黃金）
-STOCK_INTRADAY_MAX     = 20     # ✅09171036 每輪最多掃描檔數
+STOCK_INTRADAY_MAX     = 32     # ✅09171036 每輪最多掃描檔數；✅11081315 20→32：外匯 5、黃金 1、虛擬幣清單、債券 ETF 2 加入即時路線（Ｃ-235；Yahoo 限流尚未實測，若被擋改回 20）
 # ✅09180234【個股短線路線開關】主帥 09/18 01:22：「加一個『短線路線開關』，預設關閉，長中期路線照常。」
 #   ★管的是【個股短線】（台股、美股、虛擬幣、外匯、黃金：日K OR 60分K → 30分K → 5分K OR 15分K）。
 #   ★★與網頁版【期貨5分K】開關【無關】；★★★期貨與週選擇權（條件W、台指）不受本開關影響。
@@ -6509,6 +6942,7 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
     real＝{代碼: 下載用代號}；key5＝5分K 字典的鍵函式；frames＝各週期資料字典；title＝信件標題前綴。"""
     _tw = datetime.now(pytz.timezone('Asia/Taipei')); _day = _tw.strftime('%Y-%m-%d'); _now = _tw.strftime('%Y/%m/%d %H:%M')
     _merge_buf = []; _sig_head = [None]   # ✅09180924 每日一封的合併緩衝
+    _merge_pos = []   # ✅11081315 合併信寄出後記入訊號持倉（Ｃ-237）
     for c in codes:
         tk = real[c]
         df5 = frames['d5'].get(key5(c))
@@ -6598,6 +7032,7 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
                     pass   # 出場：占用當日額度，但★不併入合併信，往下走單獨即時寄出
                 if sig in ('buy', 'buyD', 'sell', 'sellD'):
                     _merge_buf.append(_intraday_body(tk, label, sig, name, df, _gdisp, routes, _band_long, _now, _stage1_txt, _is_long_sig, (frames['dm'].get(tk), frames['dw'].get(tk))))
+                    _merge_pos.append((c, 'long' if sig in ('buy', 'buyD') else 'short', float(df['Close'].iloc[-1])))
                     print(f'  📥 每日一封：{tk} {label} {name} 併入本輪合併信')
                     if _sig_head[0] is None:
                         _sig_head[0] = (icon, name)
@@ -6606,6 +7041,8 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
             _rt = ('【' + '＋'.join(routes) + '】') if routes else ''
             _ok = send_gmail(f"☁️【雲端】{icon}{_rt}{title}{label}{name} {tk}{(' ' + _cn_name(tk)) if _cn_name(tk) else ''} - {_now}", body, urgent=True)
             print(f"  {'✅' if _ok else '❌'} {tk} {title} {label} {name} {routes}")
+            if _ok:   # ✅11081315 訊號持倉：進場記入、平倉／回補移除（Ｃ-237）
+                _sigpos_set(c, {'buy': 'long', 'buyD': 'long', 'sell': 'short', 'sellD': 'short'}.get(sig), float(df['Close'].iloc[-1]), f'{title}{label}')
             if _ok and sig in ('buyD', 'sellD'):   # ✅09171113 條件D 進場紀錄（供條件D 特殊出場規則判斷）
                 _record_condd_entry(c, 'long' if sig == 'buyD' else 'short', f'{title}{label}（{"、".join(routes)}）')
     # ✅09180924【每日一封】本輪合併信：把同一時刻觸發的所有標的與週期寫進同一封寄出
@@ -6619,6 +7056,9 @@ def _intraday_emit(codes, real, key5, frames, long_set, short_set, title, cat=No
                  + "\n──────────────────────────────────────\n".join(_merge_buf))
         _ok2 = send_gmail(_subj, _body, urgent=True)
         print(f"  {'✅' if _ok2 else '❌'} 每日一封：合併寄出 {len(_merge_buf)} 檔")
+        if _ok2:
+            for _c, _sd, _px in _merge_pos:
+                _sigpos_set(_c, _sd, _px, title)
 
 
 def scan_stock_intraday_tw():
@@ -6630,7 +7070,7 @@ def scan_stock_intraday_tw():
             print('  🔕 個股短線：非台股日盤，跳過')
             return
         codes = []
-        for c in list(HOLDINGS_TW) + [x for x in HOLDINGS_SHORT if str(x).isdigit()]:
+        for c in list(HOLDINGS_TW) + [x for x in HOLDINGS_SHORT if str(x).isdigit()] + sorted(k for k in _sigpos_codes() if k.isdigit()):   # ✅11081315 訊號持倉（Ｃ-237）
             if c not in codes:
                 codes.append(str(c))
         try:
@@ -6661,7 +7101,7 @@ def scan_stock_intraday_tw():
         d60 = _intraday_batch(list(real.values()), '3mo', '60m')   # ✅09171354 短線第一道：60分K
         _intraday_emit(codes, real, lambda c: c + '.TW',   # ✅09172001 逐檔判斷抽出為共用函式，台股行為不變
                        {'d5': d5, 'd15': d15, 'dd': dd, 'd30': d30, 'dm': dm, 'dw': dw, 'd60': d60},
-                       set(str(x) for x in HOLDINGS_TW), set(str(x) for x in HOLDINGS_SHORT), '個股即時', cat='tw')
+                       set(str(x) for x in HOLDINGS_TW) | {k for k in _sigpos_codes('long') if k.isdigit()}, set(str(x) for x in HOLDINGS_SHORT) | {k for k in _sigpos_codes('short') if k.isdigit()}, '個股即時', cat='tw')
     except Exception as _e:
         print(f'  ⚠️ 個股短線整體異常（{str(_e)[:60]}）→ 不影響其他掃描')
 
@@ -6700,6 +7140,10 @@ def scan_stock_intraday_global():
                 codes.append(c)
         for c in list(HOLDINGS_US) + list(HOLDINGS_CRYPTO) + list(HOLDINGS_FX) + list(HOLDINGS_GOLD):
             long_set.add(str(c).upper()); _add(c)
+        for c, v in (_sigpos_load() or {}).items():   # ✅11081315 訊號持倉視同持股（台股另由個股即時路線處理；Ｃ-237）
+            if str(c).isdigit():
+                continue
+            (long_set if v.get('side') == 'long' else short_set).add(str(c).upper()); _add(c)
         for c in short_set:
             _add(c)
         for c in WATCH_SHORT_LIST:   # ✅09181029 觀察做空清單：只掃描、不列入持倉集合 → 只有做空進場，不會有回補
@@ -6710,6 +7154,15 @@ def scan_stock_intraday_global():
                     _add(it.get('code', ''))
         except Exception as _e:
             print(f'  ⚠️ 即時路線（全球）：觀察清單讀取失敗（{str(_e)[:40]}），只掃持股')
+        # ✅11081315 外匯、黃金、虛擬幣、債券 ETF 清單全部加進即時路線（主帥 11/06 05:23 a 點：「不要我說一個,你才動一個!…我沒說到的【外匯】【黃金】...難道就不用檢查和加入策略嗎?」；Ｃ-235）：
+        #   只判斷進場（不在持股集合，不會發出場）；開市規則照舊（open_cat：外匯黃金週末除外、虛擬幣有持倉才全天）
+        for c in list(FX_LIST) + list(GOLD_LIST) + list(CRYPTO_LIST) + ['EMB', 'AGG']:
+            _add(c)
+        if FUND_INTRADAY_ENABLED and open_cat.get('us'):   # ✅11081315 合成基金每 5 分鐘（美股開市時）
+            try:
+                scan_synthetic_fund("SPY / QQQ / HYG三合一追蹤【安聯月配息基金】(合成代標)")
+            except Exception as _fe:
+                print(f'  ⚠️ 即時路線：合成基金異常（{str(_fe)[:40]}）')
         codes = codes[:STOCK_INTRADAY_MAX]
         if not codes:
             print(f"  ℹ️ 即時路線（全球）：目前開市類別 {[k for k, v in open_cat.items() if v]} 無持股或觀察標的，跳過")
@@ -7074,7 +7527,7 @@ def main_task():
         
             # --- [優化: 加入 try...except 容錯, 避免網路閃斷中斷掃描] ---
             try:
-                is_holding = ticker in holdings_tw_full
+                is_holding = ticker in holdings_tw_full or _sp_key(ticker) in _sigpos_codes()   # ✅11081315 訊號持倉視同持股（Ｃ-237）
                 if SCAN_MODE == 'mixed':
                     result_raw = scan_stock_mixed(ticker, is_holding)
                     _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
@@ -7164,7 +7617,7 @@ def main_task():
         print(f'\n📊 美股掃描：共{len(US_STOCKS)}支')
         prefetch_realtime_prices(US_STOCKS, '美股')   # ✅08061155 批次預抓即時價
         for ticker in US_STOCKS:
-            is_holding = ticker in HOLDINGS_US
+            is_holding = ticker in HOLDINGS_US or _sp_key(ticker) in _sigpos_codes()   # ✅11081315 訊號持倉視同持股（Ｃ-237）
             if SCAN_MODE == 'mixed':
                 result_raw = scan_stock_mixed(ticker, is_holding)
                 _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
@@ -7219,7 +7672,7 @@ def main_task():
         # ── 債券基金（EMB/AGG）獨立掃描（各自走台股/美股相同流程）──
         for _bond_ticker in ['EMB', 'AGG']:
             _bond_name = {'EMB': '新興市場債券ETF（參考FR02）', 'AGG': '全球綜合債券ETF（參考FR04）'}.get(_bond_ticker, _bond_ticker)
-            _r_bond = scan_stock(_bond_ticker, is_holding=False)
+            _r_bond = scan_stock(_bond_ticker, is_holding=(_sp_key(_bond_ticker) in _sigpos_codes()))   # ✅11081315 債券 ETF 進場後也判斷出場（主帥 2026/11/08 02:30 第 2 點：「a.你不用管我有沒有持有,如果我有持有,我會寫入本機版或網頁版…你只要管程式碼的策略能不能正常執行…」「b.…有進場當然要有出場啊!…」「c.難道我沒有持有債券,就不用出場獲利了結了嗎?」；Ｃ-237）
             if _r_bond and _r_bond[0] == 'BUY':
                 buy_signals.append(('債券基金', _bond_ticker, *_r_bond[1:], '長期投資' if SCAN_MODE=='weekly' else '中期投資'))
                 print(f'⭐ 債券基金 {_bond_ticker}（{_bond_name}）觸發買進訊號')
@@ -7236,7 +7689,7 @@ def main_task():
         print(f'\n📊 虛擬幣掃描：共{len(CRYPTO_LIST)}支')
         prefetch_realtime_prices(CRYPTO_LIST, '虛擬幣')   # ✅08061155 批次預抓即時價
         for ticker in CRYPTO_LIST:
-            is_holding = ticker in HOLDINGS_CRYPTO
+            is_holding = ticker in HOLDINGS_CRYPTO or _sp_key(ticker) in _sigpos_codes()   # ✅11081315 訊號持倉視同持股（Ｃ-237）
             if SCAN_MODE == 'mixed':
                 result_raw = scan_stock_mixed(ticker, is_holding)
                 _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
@@ -7266,7 +7719,7 @@ def main_task():
         print(f'\n📊 外匯掃描：共{len(FX_LIST)}支（做多+做空）')
         prefetch_realtime_prices(FX_LIST, '外匯')   # ✅08061155 批次預抓即時價
         for ticker in FX_LIST:
-            is_holding = ticker in HOLDINGS_FX
+            is_holding = ticker in HOLDINGS_FX or _sp_key(ticker) in _sigpos_codes()   # ✅11081315 訊號持倉視同持股（Ｃ-237）
             if SCAN_MODE == 'mixed':
                 result_raw = scan_stock_mixed(ticker, is_holding)
                 _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
@@ -7294,7 +7747,7 @@ def main_task():
         print(f'\n📊 黃金掃描：共{len(GOLD_LIST)}支（做多+做空）')
         prefetch_realtime_prices(GOLD_LIST, '黃金')
         for ticker in GOLD_LIST:
-            is_holding = ticker in HOLDINGS_GOLD
+            is_holding = ticker in HOLDINGS_GOLD or _sp_key(ticker) in _sigpos_codes()   # ✅11081315 訊號持倉視同持股（Ｃ-237）
             if SCAN_MODE == 'mixed':
                 result_raw = scan_stock_mixed(ticker, is_holding)
                 _mlabel = result_raw[-1] if result_raw and isinstance(result_raw[-1], str) and result_raw[-1] in ('長期投資','中期投資') else None
@@ -7901,8 +8354,10 @@ def main_task():
             #   彼此看不見 → 同一支會被重複寄出。
             # ✅09261759【丁案】同一訊號不論哪台機器掃到只寄一封：台股由「同班只跑一次」佔位保證只有一台掃；
             #   美股等本來就每日一封（上方 _once_mkts）；即時路線另以 K 棒時間去重。故本處額度邏輯不改（主帥 16:41）。
-            if _claim_notify_slot(key, today, notified, _mx):
+            if _claim_notify_slot(key, _night_day(today, _sess_now), notified, _mx):   # ✅11081315 夜盤跨午夜同一晚一個日期（22:33／00:33／01:33／03:03 共用）
                 filtered.append(s)
+                if market != '基金':
+                    _sigpos_set(code, 'long', s[2] if len(s) > 2 else None, market)   # ✅11081315 訊號持倉（Ｃ-237）
 
         if filtered:
             body = f"掃描時間：{now_str}\n\n"
@@ -7955,8 +8410,10 @@ def main_task():
             # ✅08091324【🔴A 對稱處理】賣出訊號有完全相同的雲端並行重複風險，
             #   只修買進會留半套，故一併改用原子佔位。
             # ✅09261759【丁案】同上（賣出對稱）
-            if _claim_notify_slot(key, today, notified, _mx_s):
+            if _claim_notify_slot(key, _night_day(today, _sess_now), notified, _mx_s):   # ✅11081315
                 filtered.append(s)
+                if market != '基金':
+                    _sigpos_set(code, 'short' if '做空' in str(market) else None, s[2] if len(s) > 2 else None, market)   # ✅11081315 做空記入、賣出／回補移除（Ｃ-237）
 
         if filtered:
             body = f"掃描時間：{now_str}\n\n"

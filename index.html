@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11042320</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11081315</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -2430,6 +2430,40 @@
         // ── 系統B：買進訊號自動發Gmail通知 ──────────────────────
         const notifiedToday = new Set(); // 防止同一標的同一天重複發信
 
+        // ✅11081315【訊號持倉．三版同步】主帥 2026/11/08 02:30 第 2 點：「…有進場當然要有出場啊!…難道我沒有持有債券,就不用出場獲利了結了嗎?」；03:01 第 2 點：「我們的主程式,共有【本機版】【網頁版】【雲端版】,為什麼你只針對【兩版】?…」（Ｃ-237、Ｃ-239）
+        //   ・與本機、雲端同一份 Firestore artifacts/kj-wealth-manager/public/signal_positions（欄位 pos＝JSON 字串）：
+        //     本頁寄出買進信 → 記入 long；寄出賣出信 → 移除；手動掃描時，表內標的視同持股（標「訊號持倉」），會判斷並寄出場信。
+        //   ・只限管理員讀寫（AI 判斷：家人帳號的觀察清單不得混進主帥的訊號持倉；家人照常收自己持股與觀察清單的進出場信）；回滾：window.SIGPOS_ENABLED＝false
+        window.SIGPOS_ENABLED = true;
+        window._sigposRead = async () => {
+            if (!window.SIGPOS_ENABLED || !window._isAdmin) return {};
+            try {
+                const r = await fetch('https://firestore.googleapis.com/v1/projects/kj-wealth-manager/databases/(default)/documents/artifacts/kj-wealth-manager/public/signal_positions');
+                if (!r.ok) return {};
+                const j = await r.json(); const raw = (((j || {}).fields || {}).pos || {}).stringValue || '';
+                const d = raw ? JSON.parse(raw) : {};
+                const cut = new Date(Date.now() - 120 * 86400000 + 8 * 3600000).toISOString().slice(0, 10);   // 與主程式 SIGPOS_MAX_DAYS＝120 一致
+                const o = {}; Object.keys(d).forEach(k => { if (d[k] && String(d[k].date || '') >= cut) o[k] = d[k]; });
+                return o;
+            } catch (e) { window._silentFail('訊號持倉讀取', e); return {}; }
+        };
+        window._sigposWrite = async (codes, side) => {
+            if (!window.SIGPOS_ENABLED || !window._isAdmin || !codes || !codes.length) return;
+            try {
+                await initFirebaseAuth();
+                const _ref = doc(window.db, 'artifacts', window.appId, 'public', 'signal_positions');
+                const _s = await getDoc(_ref);
+                const d = (_s.exists() && _s.data().pos) ? JSON.parse(_s.data().pos) : {};
+                const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+                let ch = false;
+                codes.forEach(c => {
+                    const k = String(c).toUpperCase().replace('.TWO', '').replace('.TW', '');
+                    if (side) { if (!d[k] || d[k].side !== side) { d[k] = { side: side, date: today, price: null, src: '網頁' }; ch = true; } }
+                    else if (d[k]) { delete d[k]; ch = true; }
+                });
+                if (ch) await setDoc(_ref, { pos: JSON.stringify(d) }, { merge: true });
+            } catch (e) { window._silentFail('訊號持倉寫入', e); }
+        };
         const sendBuyNotify = async (signals) => {
             if (!signals || signals.length === 0) return;
             if (!currentUserEmail) return;
@@ -2453,6 +2487,7 @@
                     signal_body: body, subject: '股票PRO｜買進通知 ' + String(newSignals.length) + '（' + String(scanTime) + '）', message: String(body), });
                 newSignals.forEach(s => notifiedToday.add(s.code));
                 window.showAlert(`📧 已發送 ${newSignals.length} 支買進訊號通知到 ${currentUserEmail}`);
+                window._sigposWrite(newSignals.map(s => s.code), 'long');   // ✅11081315 訊號持倉記入（Ｃ-237）
                 console.log('✅ 買進通知已發送');
             } catch(e) {
                 console.error('❌ 買進通知發送失敗：', e);
@@ -2483,6 +2518,7 @@
                     signal_body: body, subject: '股票PRO｜賣出通知 ' + String(`賣出 ${newSignals.length}`) + '（' + String(scanTime) + '）', message: String(body), });
                 newSignals.forEach(s => notifiedSellToday.add(s.code));
                 window.showAlert(`📧 已發送 ${newSignals.length} 支賣出訊號通知到 ${currentUserEmail}`);
+                window._sigposWrite(newSignals.map(s => s.code), null);   // ✅11081315 出場 → 訊號持倉移除（Ｃ-237）
             } catch(e) {
                 console.error('❌ 賣出通知發送失敗：', e);
             }
@@ -3080,6 +3116,7 @@
                 for (let i = 1; i <= _nb; i++) { const k = n - i; if (hi[k] >= K.kjGateUpper(df.boll_top20[k], df.boll_bot20[k], C.tolU, C.ratio)) { _r.touchShort = i; break; } }
                 _r.long  = K.kjStagePass(df, true,  true, C) || K.kjCondH(df, true, C);   // ✅11041640 條件H
                 _r.short = K.kjStagePass(df, false, true, C) || K.kjCondH(df, false, C);
+                { const _ml = K.kjMACD(cl).line; _r.difUp = _ml[n - 1] > _ml[n - 2]; _r.difDn = _ml[n - 1] < _ml[n - 2]; }   // ✅11081315 DIF（條件W 用；Ｃ-231）
                 _r.rsiNow = _rsiNow; _r.rsiPrv = _rsiPrv;
                 _r.boll = { upper: df.boll_top20[n - 1], lower: df.boll_bot20[n - 1] };
                 return _r;
@@ -3128,6 +3165,72 @@
                 return true;
             } catch (e) { return true; }                          // 取不到 localStorage 一律放行，不因此漏發
         };
+        // ✅11081315【期交所台指期快照優先】主帥 11/06 05:11 第 1 題甲案、20:52 第 2 題甲案（Ｃ-229、Ｃ-230）；與 Python _txf_bars_to_df／_resample_15m 同義
+        window.TXF_SOURCE_ENABLED = true;   // false＝回到只用 Yahoo（回滾開關）
+        window.CONDW_DIF_REQUIRED = true;   // ✅11081315 條件W 進場加 DIF 同向（主帥 11/06 21:19「1甲」；Ｃ-231）
+        window.CONDI_ENABLE = true; window.CONDI_PTS = 500;   // ✅11081315 條件I（主帥 11/06 04:56 第 4 點、20:36 第 2c 點；Ｃ-232）
+        window._txfBarsToD = (bars, nowSec) => {
+            const now = nowSec || Math.floor(Date.now() / 1000), rows = [];
+            for (const b of (bars || [])) { const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(b.t || ''); if (!m) continue;
+                const ts = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 8, +m[5]) / 1000;
+                const o = +b.o, h = +b.h, l = +b.l, c = +b.c; if ([o, h, l, c].some(x => !isFinite(x))) continue; rows.push([ts, o, h, l, c, +(b.v || 0)]); }
+            rows.sort((a, b) => a[0] - b[0]); const u = []; for (const r of rows) { if (u.length && u[u.length - 1][0] === r[0]) u[u.length - 1] = r; else u.push(r); }
+            if (!u.length) return { d: null, why: '無K棒' };
+            const age = (now - u[u.length - 1][0]) / 60; if (age > 12) return { d: null, why: `最後一根距今 ${age.toFixed(0)} 分（快照中斷）` };
+            if (u.length < 40) return { d: null, why: `只有 ${u.length} 根（需 40）` };
+            const t20 = u.slice(-20), q = t20.filter(r => r[2] > r[3]).length / t20.length;
+            if (q < 0.6) return { d: null, why: `品質不足（近 20 根有高度 ${Math.round(q * 100)}%）` };
+            return { d: { ts: u.map(r => r[0]), op: u.map(r => r[1]), hi: u.map(r => r[2]), lo: u.map(r => r[3]), c: u.map(r => r[4]), vo: u.map(r => r[5]) }, why: `${u.length} 根，近 20 根有高度 ${Math.round(q * 100)}%` };
+        };
+        window._resample15 = (d) => { if (!d) return null; const o = { ts: [], op: [], hi: [], lo: [], c: [], vo: [] };
+            for (let i = 0; i < d.ts.length; i++) { const b = Math.floor(d.ts[i] / 900) * 900, k = o.ts.length - 1;
+                if (k >= 0 && o.ts[k] === b) { o.hi[k] = Math.max(o.hi[k], d.hi[i]); o.lo[k] = Math.min(o.lo[k], d.lo[i]); o.c[k] = d.c[i]; o.vo[k] += d.vo[i]; }
+                else { o.ts.push(b); o.op.push(d.op[i]); o.hi.push(d.hi[i]); o.lo.push(d.lo[i]); o.c.push(d.c[i]); o.vo.push(d.vo[i]); } }
+            return o; };
+        window._txfStore = async () => {
+            try { const r = await fetch('https://firestore.googleapis.com/v1/projects/kj-wealth-manager/databases/(default)/documents/artifacts/kj-wealth-manager/public/txf_5m_bars');
+                if (!r.ok) return { d: null, why: '讀取 HTTP ' + r.status };
+                const j = await r.json(), raw = (((j || {}).fields || {}).bars || {}).stringValue || '';
+                return window._txfBarsToD(raw ? JSON.parse(raw) : []);
+            } catch (e) { return { d: null, why: '讀取失敗' }; } };
+        // ✅11081315【條件I】當盤（夜盤 15:00 起、日盤 08:45 起）跌（漲）≥ 500 點＋5分K OR 15分K 前1根→當根 MACD柱、RSI(5)、RSI(10) 同向；不看碰軌；與 Python _condi_eval 同義
+        window._condiSessStart = (nowSec) => { const p = window._condgTP(nowSec);
+            const day0 = Date.UTC(+p.ymd.slice(0, 4), +p.ymd.slice(5, 7) - 1, +p.ymd.slice(8, 10)) / 1000 - 8 * 3600;
+            if (p.tv >= 8 * 60 + 45 && p.tv < 15 * 60) return day0 + (8 * 60 + 45) * 60;
+            if (p.tv >= 15 * 60) return day0 + 15 * 3600;
+            return day0 - 9 * 3600; };
+        window._condiEval = (list, nowSec) => {
+            const K = window.kjCore, out = [], st = window._condiSessStart(nowSec || Math.floor(Date.now() / 1000));
+            for (const { d, lab } of list) { if (!d || !d.c || d.c.length < 35) continue;
+                const df = K.kjIndicators({ Open: d.op, High: d.hi, Low: d.lo, Close: d.c }); if (!df) continue;
+                const idx = d.ts.map((t, i) => i).filter(i => d.ts[i] >= st); if (!idx.length) continue;
+                const n = d.c.length, c = d.c[n - 1], hs = Math.max(...idx.map(i => d.hi[i])), ls = Math.min(...idx.map(i => d.lo[i]));
+                const m0 = df.macd_hist[n - 1], m1 = df.macd_hist[n - 2];
+                if (hs - c >= window.CONDI_PTS && m0 < m1 && K.kjRsiDir(df, false)) out.push({ dir: 'sell', lab, c, ext: hs, pts: hs - c, bt: d.ts[n - 1] });
+                if (c - ls >= window.CONDI_PTS && m0 > m1 && K.kjRsiDir(df, true)) out.push({ dir: 'buy', lab, c, ext: ls, pts: c - ls, bt: d.ts[n - 1] });
+            } return out; };
+        window._condiRun = async (win, dd, src, now) => {
+            if (!window.CONDI_ENABLE || !win) return;
+            const hits = window._condiEval([{ d: dd['5m'], lab: '5分K' }, { d: dd['15m'], lab: '15分K' }]);
+            for (const dir of ['sell', 'buy']) {
+                const hs = hits.filter(h => h.dir === dir); if (!hs.length) continue;
+                const h = hs.find(x => x.lab === '15分K') || hs[0], today = new Date().toLocaleDateString('sv-SE'); let skip = false;
+                try { const kb = `condi_bar_${win}_${dir}_${h.lab}_${h.bt}`; if (localStorage.getItem(kb)) skip = true; else localStorage.setItem(kb, '1');
+                    const kc = `condi_cnt_${win}_${dir}_${today}`, c = +(localStorage.getItem(kc) || 0); if (!skip && c >= 2) skip = true; else if (!skip) localStorage.setItem(kc, String(c + 1)); } catch (e) {}
+                if (skip) continue;
+                const isS = dir === 'sell', ar = isS ? '↓' : '↑';
+                const body = `${isS ? '🔻【條件I 週選擇權：急跌做空 buy PUT】🔻' : '⭐【條件I 週選擇權：急漲做多 buy CALL】⭐'}
+資料：${src}
+${isS ? '當盤最高' : '當盤最低'}：${h.ext.toFixed(0)}　當根收盤：${h.c.toFixed(0)}　${isS ? '跌' : '漲'} ${h.pts.toFixed(0)} 點（門檻 ${window.CONDI_PTS}）
+觸發週期：${h.lab}　前1根→當根 MACD柱${ar}、RSI(5)${ar}、RSI(10)${ar}　★不看碰軌
+建議標的（價外，以小博大）：
+${window._strikeHint(h.c, !isS)}
+⚠️【未取得即時權利金報價】以上為【距離推估】：第一順位 12～16 元；沒有就選 16～60 元最便宜一檔；全部超過 60 元不建議買（主帥 11/06 21:19 2甲）
+時間：${now}`;
+                if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, { to_email: currentUserEmail, scan_time: now,
+                    signal_count: '條件I 1', signal_body: body, subject: '股票PRO｜' + (isS ? '做空' : '買進') + '通知 條件I 1（' + String(now) + '）', message: String(body) });
+            }
+        };
         window.scanFutures15mAndCondW = async () => {
             if (currentUserEmail !== 'shchyu61@gmail.com') return;
             const _now = new Date().toLocaleString('zh-TW');
@@ -3170,28 +3273,31 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
             if (!_win) return;
             try {
                 let _hit = null;
+                let _tx = { d: null, why: '未啟用' }; if (window.TXF_SOURCE_ENABLED) _tx = await window._txfStore();   // ✅11081315 期交所快照優先、退回 Yahoo（Ｃ-229、Ｃ-230）
+                const _useTx = !!_tx.d, _src = _useTx ? `期交所台指期快照（${_tx.why}）` : 'Yahoo ^TWII（延遲約 15～25 分）', _dd = {};
                 for (const _iv of ['5m', '15m']) {
-                    const _d = await window._fetchTW(_iv);
+                    const _d = _useTx ? (_iv === '5m' ? _tx.d : window._resample15(_tx.d)) : await window._fetchTW(_iv);
+                    _dd[_iv] = _d;
                     const _g = window._gate3(_d.op, _d.hi, _d.lo, _d.c, _d.vo, 5);
+                    if (window.CONDW_DIF_REQUIRED) { _g.long = _g.long && !!_g.difUp; _g.short = _g.short && !!_g.difDn; }   // ✅11081315 DIF 同向（Ｃ-231）
                     if (_g.long || _g.short) { const _tt = (_d.ts || _d.t || []); _hit = { g:_g, iv:_iv, px:_d.c[_d.c.length - 1], bt:_tt[_tt.length - 1] }; break; }   // ✅10261313 Ｃ-193 bt＝判斷用K棒時間
                 }
+                if (!_dd['15m']) _dd['15m'] = _useTx ? window._resample15(_tx.d) : await window._fetchTW('15m');
+                try { await window._condiRun(_win, _dd, _src, _now); } catch (e) { console.log('條件I：', e); }   // ✅11081315 條件I（Ｃ-232）
                 if (!_hit) return;
                 const _isCall = _hit.g.long;
                 if (!window._tfOnce('CONDW', _isCall ? 'call' : 'put')) return;   // ✅09200000 跨週期去重（5分K 與 15分K 共用一把鍵）
                 const _body = `${_isCall ? '⭐【條件W 週選擇權：buy CALL】⭐' : '🔻【條件W 週選擇權：buy PUT】🔻'}
-⏱⚠️【條件W 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒
-💡【反向建議】原本要做 ${_isCall ? 'buy CALL' : 'buy PUT'}，建議改做 ${_isCall ? 'buy PUT' : 'buy CALL'}（主帥 10/16 指示）
+${_useTx ? '' : `⏱⚠️【條件W 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒\n💡【反向建議】原本要做 ${_isCall ? 'buy CALL' : 'buy PUT'}，建議改做 ${_isCall ? 'buy PUT' : 'buy CALL'}（主帥 10/16 指示）\n`}資料：${_src}
 時窗：${({W2:'週二15:05→週三11:30', W4:'週四15:05→週五11:30', W2D:'週二 09:05→11:30', W4D:'週四 09:05→11:30'})[_win] || _win}
 週期：${_hit.iv === '5m' ? '5分K' : '15分K'}（條件W 只跑第三道，不看前兩道）
 方向：${_isCall ? '做多（V轉）' : '做空（A轉）'}
 碰軌：近 5 根中第 ${_isCall ? _hit.g.touchLong : _hit.g.touchShort} 根碰${_isCall ? '下軌' : '上軌'}
 台指現價：${_hit.px.toFixed(0)}
-判斷用K棒時間：${(() => { const x = _hit.bt; if (x === undefined || x === null || x === '') return '未取得'; const d = new Date(typeof x === 'number' ? (x < 1e12 ? x * 1000 : x) : x); return isNaN(d) ? String(x) : d.toLocaleString('zh-TW', { timeZone:'Asia/Taipei', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }); })()}（K棒起點；Yahoo 約延遲 15～25 分；Ｃ-193）
+判斷用K棒時間：${(() => { const x = _hit.bt; if (x === undefined || x === null || x === '') return '未取得'; const d = new Date(typeof x === 'number' ? (x < 1e12 ? x * 1000 : x) : x); return isNaN(d) ? String(x) : d.toLocaleString('zh-TW', { timeZone:'Asia/Taipei', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }); })()}（K棒起點；資料：${_src}；Ｃ-193）
 建議標的（價外，以小博大）：
 ${window._strikeHint(_hit.px, _isCall)}
-— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參考 —
-${window._strikeHint(_hit.px, !_isCall)}
-⚠️【未取得即時權利金報價】以上為【距離推估】，尚【未驗證】是否 ≤16 元，下單前請自行確認市價。
+${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參考 —\n${window._strikeHint(_hit.px, !_isCall)}\n`}⚠️【未取得即時權利金報價】以上為【距離推估】：第一順位 12～16 元；沒有就選 16～60 元最便宜一檔；全部超過 60 元不建議買（主帥 11/06 21:19 2甲）
 時間：${_now}`;
                 if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail, scan_time: _now,
@@ -3876,6 +3982,15 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                 ...stocks.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '持股' })),
                 ..._dedupWatch.slice().sort(_sortFn).map(s => ({ code: s.code, cat: s.cat||'tw', tag: '觀察' }))
             ];
+            // ✅11081315 訊號持倉視同持股：觀察清單中的改標「訊號持倉」，不在清單者補進來（Ｃ-237、Ｃ-239）
+            try {
+                const _sp = await window._sigposRead();
+                Object.keys(_sp).forEach(k => {
+                    const _i = all.findIndex(x => String(x.code).toUpperCase() === k);
+                    if (_i >= 0) { if (all[_i].tag === '觀察') all[_i].tag = '訊號持倉'; }
+                    else all.push({ code: k, cat: /^\d+$/.test(k) ? 'tw' : (/-USD$/.test(k) ? 'crypto' : (/=X$/.test(k) ? 'fx' : 'us')), tag: '訊號持倉' });
+                });
+            } catch (e) { window._silentFail('訊號持倉併入', e); }
             if (all.length === 0) { window.showAlert('請先新增股票。'); return; }
             // 掃描前預載全額交割清單
             await fetchCashDeliveryStocks().catch(e => window._silentFail('全額交割股清單', e));
@@ -3910,7 +4025,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                         result = await analyzeStock(code); // 有快取自動跳過抓取
                     }
                     const name = stockNameMap[code] || '未定義資產';
-                    const cardHtml = makeDiagCard(code, result, true, tag === '持股')
+                    const cardHtml = makeDiagCard(code, result, true, tag === '持股' || tag === '訊號持倉')
                         .replace(
                             `<div class="text-[12px] ${result.rsi_trend === 'rising' ? 'text-emerald-400' : 'text-rose-400'} uppercase">${name}</div>`,
                             `<div class="text-[12px] text-slate-400 uppercase">${name} <span class="text-blue-400">(${tag})</span></div>`
@@ -3943,7 +4058,7 @@ RSI：${rsiPrv.toFixed(1)} → ${rsiNow.toFixed(1)}（↑）
                     manualBuySignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: cached.conditions.join('、'), mixedLabel: cached._mixedLabel || null });
                 }
                 // 賣出訊號只針對持股
-                if (tag === '持股' && cached.sell_signal) {
+                if ((tag === '持股' || tag === '訊號持倉') && cached.sell_signal) {   // ✅11081315 訊號持倉也判斷出場
                     manualSellSignals.push({ code, price: cached.price, rsi: cached.rsi, boll: bollText, conditions: '賣出條件觸發' });
                 }
             });
