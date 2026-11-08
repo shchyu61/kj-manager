@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11081315</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11081645</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -1036,7 +1036,7 @@
     </div>
 
     <script type="module">
-        import { doc, setDoc, getDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";   // ✅09251623 非管理員登入紀錄只追加（房租 09251438 ①a）
+        import { doc, setDoc, getDoc, updateDoc, arrayUnion, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";   // ✅09251623 非管理員登入紀錄只追加（房租 09251438 ①a）
         import { signInAnonymously, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // ✅ 確保盾牌等圖示一定渲染（module script為defer，需手動補觸發）
@@ -2464,6 +2464,59 @@
                 if (ch) await setDoc(_ref, { pos: JSON.stringify(d) }, { merge: true });
             } catch (e) { window._silentFail('訊號持倉寫入', e); }
         };
+        // ✅11081645【休市前一晚提醒．三版一致】主帥 2026/11/08 16:15 第 2 點：「搞什麼?我不是早就定案【本機版】【網頁版】【雲端版】都要同步改版和一樣內容和時間和程式碼嗎?為什麼到今天2026/11/8了,竟然還有【沒有20 點班次】或【三版不一致】的情形發生!!!?」；16:19：「補充,一樣只要寄1次通知信就好,不要本機版和網頁版各寄1封吵到我!」（Ｃ-241、Ｃ-243）
+        //   ・休市表與雲端、本機同一份（由主程式 TW_MARKET_HOLIDAYS／US_MARKET_HOLIDAYS 產生）；颱風停班讀雲端寫入的 public/holiday_eve（網頁讀不到政府網站）
+        //   ・頁面開著就顯示「明日休市」橫幅；20:00～20:59 管理員頁面才寄信，且先查與雲端、本機共用的佔位 notified_log「holiday_eve_日期」，有人寄過就不寄（一晚只寄一封）
+        window.HOLIDAY_EVE_NOTIFY = true;
+        const _HOL_TW = {"2026-01-01": "開國紀念日", "2026-02-12": "春節前結算交割日（不交易）", "2026-02-13": "春節前結算交割日（不交易）", "2026-02-16": "農曆春節", "2026-02-17": "農曆春節", "2026-02-18": "農曆春節", "2026-02-19": "農曆春節", "2026-02-20": "春節補假", "2026-02-27": "和平紀念日補假", "2026-04-03": "兒童節補假", "2026-04-06": "民族掃墓節補假", "2026-05-01": "勞動節", "2026-06-19": "端午節", "2026-09-25": "中秋節", "2026-09-28": "教師節", "2026-10-09": "國慶日補假", "2026-10-26": "台灣光復暨金門古寧頭大捷紀念日補假", "2026-12-25": "行憲紀念日"};
+        const _HOL_US = {"2026-01-01": "元旦", "2026-01-19": "馬丁路德金恩紀念日", "2026-02-16": "總統日", "2026-04-03": "耶穌受難日", "2026-05-25": "陣亡將士紀念日", "2026-06-19": "六月節", "2026-07-03": "獨立紀念日（補假）", "2026-09-07": "勞動節", "2026-11-26": "感恩節", "2026-12-25": "聖誕節", "2027-01-01": "元旦", "2027-01-18": "馬丁路德金恩紀念日", "2027-02-15": "總統日", "2027-03-26": "耶穌受難日", "2027-05-31": "陣亡將士紀念日", "2027-06-18": "六月節（補假）", "2027-07-05": "獨立紀念日（補假）", "2027-09-06": "勞動節", "2027-11-25": "感恩節", "2027-12-24": "聖誕節（補假）", "2028-01-17": "馬丁路德金恩紀念日", "2028-02-21": "總統日", "2028-04-14": "耶穌受難日", "2028-05-29": "陣亡將士紀念日", "2028-06-19": "六月節", "2028-07-04": "獨立紀念日", "2028-09-04": "勞動節", "2028-11-23": "感恩節", "2028-12-25": "聖誕節"};
+        const _twNow = () => new Date(Date.now() + 8 * 3600000);
+        const _ymd = (d) => d.toISOString().slice(0, 10);
+        const _wk = (d) => { const w = d.getUTCDay(); return w === 0 || w === 6; };
+        window._holidayEveInfo = async (nowOverride) => {
+            const n = nowOverride || _twNow(); const tm = new Date(n.getTime() + 86400000); const W = '日一二三四五六';
+            if (_wk(tm)) return null;
+            const k = _ymd(tm); const hits = [];
+            const span = (tb) => { let d = new Date(tm.getTime()); const s = []; while (tb[_ymd(d)] || _wk(d)) { if (!_wk(d)) s.push((d.getUTCMonth() + 1) + '/' + d.getUTCDate()); d = new Date(d.getTime() + 86400000); } return [s, d]; };
+            for (const [nm, tb] of [['台股', _HOL_TW], ['美股', _HOL_US]]) if (tb[k]) { const [s, nx] = span(tb); hits.push([nm, tb[k], s, nx]); }
+            if (!hits.some(h => h[0] === '台股')) {
+                try {
+                    const r = await fetch('https://firestore.googleapis.com/v1/projects/kj-wealth-manager/databases/(default)/documents/artifacts/kj-wealth-manager/public/holiday_eve');
+                    if (r.ok) { const f = ((await r.json()) || {}).fields || {}; const ty = (f.typhoon || {}).stringValue || '';
+                        if (((f.date || {}).stringValue || '') === k && ty) { let nx = new Date(tm.getTime() + 86400000); while (_HOL_TW[_ymd(nx)] || _wk(nx)) nx = new Date(nx.getTime() + 86400000); hits.push(['台股', ty, [(tm.getUTCMonth() + 1) + '/' + tm.getUTCDate()], nx]); } }
+                } catch (e) { window._silentFail('休市提醒讀取', e); }
+            }
+            if (!hits.length) return null;
+            const md = (d) => (d.getUTCMonth() + 1) + '/' + d.getUTCDate();
+            const mk = hits.map(h => h[0]).join('、');
+            const sub = '📅 明日休市提醒：' + md(tm) + '（週' + W[tm.getUTCDay()] + '）' + mk + '休市';
+            const body = ['明天 ' + md(tm) + '（週' + W[tm.getUTCDay()] + '）休市不交易：', ''];
+            for (const [nm, why, s, nx] of hits) { body.push('・' + nm + '：' + why + '（休市日：' + s.join('、') + '；下一個交易日 ' + md(nx) + '（週' + W[nx.getUTCDay()] + '））'); if (nm === '美股') body.push('　　台灣時間 ' + md(tm) + ' 晚上到隔天清晨美股不開盤'); }
+            for (const nm of ['台股', '美股']) if (!mk.includes(nm)) body.push('・' + nm + '：照常交易');
+            body.push('', '（週六、週日固定假日不另通知；颱風等臨時休市不在休市表內）');
+            return { k: k, sub: sub, body: body.join('\n') };
+        };
+        window._holidayEveRun = async () => {
+            if (!window.HOLIDAY_EVE_NOTIFY) return;
+            const info = await window._holidayEveInfo();
+            let bn = document.getElementById('kjHolidayBanner');
+            if (!bn) { bn = document.createElement('div'); bn.id = 'kjHolidayBanner'; bn.style.cssText = 'display:none;background:#fff3cd;color:#664d03;border:1px solid #ffe69c;padding:8px 12px;margin:6px;border-radius:6px;font-weight:bold;'; document.body.insertBefore(bn, document.body.firstChild); }
+            bn.textContent = info ? info.sub : ''; bn.style.display = info ? 'block' : 'none';
+            if (!info || _twNow().getUTCHours() !== 20 || !window._isAdmin) return;
+            try {
+                await initFirebaseAuth();
+                const ref = doc(window.db, 'artifacts', window.appId, 'public', 'notified_log');
+                const today = _ymd(_twNow()); const key = 'holiday_eve_' + info.k;
+                const got = await runTransaction(window.db, async (tx) => {
+                    const sn = await tx.get(ref); const data = (sn.exists() && sn.data().data) ? JSON.parse(sn.data().data) : {};
+                    const arr = data[today] || []; if (arr.includes(key)) return false;
+                    arr.push(key); data[today] = arr; tx.set(ref, { data: JSON.stringify(data) }, { merge: true }); return true;
+                });
+                if (!got) return;
+                if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, { to_email: currentUserEmail, signal_body: info.body, subject: '🌐【網頁】' + info.sub, message: String(info.body) });
+            } catch (e) { window._silentFail('休市提醒', e); }
+        };
+        setTimeout(() => window._holidayEveRun(), 8000); setInterval(() => window._holidayEveRun(), 300000);
         const sendBuyNotify = async (signals) => {
             if (!signals || signals.length === 0) return;
             if (!currentUserEmail) return;

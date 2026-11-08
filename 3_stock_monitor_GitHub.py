@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '11081315'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '11081645'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -259,6 +259,13 @@ PENDING_GMAIL_MAX_PER_RUN = 5   # ✅09301529 等待-29 甲案（主帥 2026/09/
 # 台股持有股票，要去此章節最下面的第51行自己輸入。
 
 # 美股掃描清單（道瓊30 + DRIP精選 + 持有股票）
+# ══════════════════════════════════════════════════════════════════════
+# 【〇-1、觀察清單區（掃描清單）】✅11081645 與【〇-2、持有股票區】分開（主帥 2026/11/08 16:36 第 3 點 d：「…本機版是否能明顯區分【0-1章節_觀察清單區】或【0-2章節_持有股票區】?…由AI判斷和決定。我只要求明顯區隔,方便我瀏覽,不要擠在一起。」）
+#   ・這裡是「沒有持有、要盯進場」的清單；網頁版「待買觀察」會自動合併補掃（WATCHLIST_ENABLED），兩邊填一邊即可
+#   ・① 台股：全市場掃描，不用填　③ 基金：程式自動用 SPY、QQQ、HYG 合成，不用填
+# ══════════════════════════════════════════════════════════════════════
+
+# ── ② 美股 ──
 US_STOCKS = [
     # 道瓊工業30支
     'AAPL', 'AMGN', 'AXP', 'BA', 'CAT',
@@ -273,6 +280,7 @@ US_STOCKS = [
     'O', 'PFE'
 ]
 
+# ── ④ 虛擬幣 ──
 # 虛擬幣清單
 CRYPTO_LIST = [
     'BTC-USD',   # 比特幣
@@ -280,15 +288,16 @@ CRYPTO_LIST = [
     'DOGE-USD'   # 狗狗幣
 ]
 
-# 持有清單（賣出/平倉只掃這些）
-HOLDINGS_US     = ['KO', 'O', 'PFE']
-HOLDINGS_CRYPTO = ['BTC-USD', 'ETH-USD', 'DOGE-USD']
 
+# ── ⑤ 外匯 ──
 FX_LIST = ['EURUSD=X', 'USDTWD=X', 'GBPJPY=X', 'USDCHF=X', 'JPY=X']
-HOLDINGS_FX = []               # ✅09181029 EURUSD=X 移至 WATCH_SHORT_LIST（觀察做空、非持倉）；有實際持倉再填回
+# ── ⑥ 黃金／貴金屬 ──
 GOLD_LIST = ['GC=F']           # ✅09170232 P0⑥ 黃金期貨，比照外匯全時段掃描（主帥 09/16 17:22：「程式碼還是要先改成甲案，以備不時之需」）
-HOLDINGS_GOLD = []             # ✅09170232 P0⑥ 黃金持有清單（有持有時填入，例如 ['GC=F']）
-HOLDINGS_SHORT = []            # ✅09181029 做空【持股】清單（已進場的空單→走回補檢查）；EURUSD=X 已移至 WATCH_SHORT_LIST
+
+# ── ⑦ 債券基金 ETF ──
+BOND_LIST = ['EMB', 'AGG']   # ✅11081645 原寫死在兩處掃描；網頁觀察清單「債券基金」分類（例 ILF）會自動加入
+
+# ── ⑧ 觀察做空 ──
 # ✅09181029【觀察做空清單】主帥 09/18 10:24、10:29（甲案）：
 #   ★用途：看空但【尚未進場】的標的 → 只會收到【做空進場】訊號，
 #     ★★不會被當成持倉，★★★不會產生回補（出場）通知。
@@ -297,7 +306,40 @@ HOLDINGS_SHORT = []            # ✅09181029 做空【持股】清單（已進�
 #   ★網頁版補齊（W-16）後，待買觀察可直接選做空，本清單即可清空。
 #   ★★主帥請同時把該標的從【網頁版持股清單】移除，否則 Firebase 合併回來仍會算持倉。
 WATCH_SHORT_LIST = ['EURUSD=X']
+# ══════════════════════════════════════════════════════════════════════
+# 【〇-1、觀察清單區】到此結束
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 【〇-2、持有股票區】✅11081645 依網頁版順序分區（主帥 2026/11/08 16:15 第 3 點：「…能不能規畫更明顯不要擠在一起的段落,最好能明顯區分台股、美股...按照網頁版的編排順序區隔開,方便我一目瞭然輸入。」）
+#   ・只填「已經持有」的標的：賣出、平倉、回補只看這裡；網頁版持股清單會自動合併進來，兩邊填一邊即可
+#   ・沒有持有就留空 []；代碼寫法照各區說明
+# ══════════════════════════════════════════════════════════════════════
+
+# ── ① 台股（4 碼代號，不加 .TW）──
 HOLDINGS_TW     = ['2330', '3037','3147','6188']  # 有台股持有時填入，例如：['2330', '2317']
+
+# ── ② 美股（代號）──
+HOLDINGS_US     = ['O', 'PFE']   # ✅11081645 KO 已賣出（主帥 2026/11/08 16:15 第 6 點：「…美股可口可樂已賣出獲利了結,但是未來還會持續投資可口可樂,所以待買觀察還保留著可口可樂。」）
+
+# ── ③ 基金（安聯境外月配息基金）──
+#   持有就填 True、全部贖回填 False；SPY、QQQ、HYG 是程式自動合成來代表這檔基金的代號，★不用填在任何地方（網頁版基金分類照常填）
+FUND_HOLDING          = True   # ✅11081645 由基金程式段移到這裡（主帥 2026/11/08 16:15 第 3 點：「…能不能規畫更明顯不要擠在一起的段落,最好能明顯區分台股、美股...按照網頁版的編排順序區隔開,方便我一目瞭然輸入。」）
+
+# ── ④ 虛擬幣（代號加 -USD）──
+HOLDINGS_CRYPTO = ['BTC-USD', 'ETH-USD', 'DOGE-USD']
+
+# ── ⑤ 外匯（代號加 =X）──
+HOLDINGS_FX = []               # ✅09181029 EURUSD=X 移至 WATCH_SHORT_LIST（觀察做空、非持倉）；有實際持倉再填回
+
+# ── ⑥ 黃金／貴金屬（GC=F）──
+HOLDINGS_GOLD = []             # ✅09170232 P0⑥ 黃金持有清單（有持有時填入，例如 ['GC=F']）
+
+# ── ⑦ 債券基金 ETF：不用填；EMB、AGG 進場後由訊號持倉自動判斷出場（Ｃ-237）──
+
+# ── ⑧ 做空持倉（已進場的空單；代號照上面各區寫法）──
+HOLDINGS_SHORT = []            # ✅09181029 做空【持股】清單（已進場的空單→走回補檢查）；EURUSD=X 已移至 WATCH_SHORT_LIST
+# ══════════════════════════════════════════════════════════════════════
 
 # ============================================================
 # 【２．策略參數設定區】← 所有策略的可調數值都在這裡，不需往下翻
@@ -1017,6 +1059,149 @@ def _holiday_table_warn():
 _holiday_table_warn()
 
 
+# ══════════════════════════════════════════════════════════════════════
+# ✅11081645【休市前一晚提醒】主帥 2026/11/08 15:55 第 2 點：「現在開始,如果當天股票因為國定假日或其他原因休市,gmail通知信必須在前一天晚上21:00晚上我和小孩睡覺前,寄發gmail通知信給我讓我知道隔天休市不交易(台股和美股都要通知。星期六和日,不用通知我,那是每星期的固定假日,不用額外通知我)。在對話視窗跟我說是沒用的,只有gmail通知信,我的手機app才會發出聲音提醒我。」（Ｃ-241）
+#   ・雲端持股健檢班 20:02、20:32（週一～週五）與週日 20:32 呼叫：明天（台灣日期）不是週六日、且在 TW_MARKET_HOLIDAYS／US_MARKET_HOLIDAYS → 寄一封 gmail
+#   ・同一天只寄一封（Firestore 佔位 holiday_eve_日期；無 Firebase 時用本機 notified 紀錄）；urgent＝True（21:30 睡眠時段前送達）
+#   ・颱風等臨時休市不在休市表內（是否改讀官方停班停課公告待主帥裁示）；本機版程式相同但筆電無此班次；網頁版不適用
+# ══════════════════════════════════════════════════════════════════════
+HOLIDAY_EVE_NOTIFY = True
+
+
+
+TYPHOON_CHECK_ENABLED = True   # ✅11081645 颱風停班讀人事行政總處公告（主帥 2026/11/08 16:15 第 5 點：「採用你的建議,我選甲案。」（颱風等臨時休市讀官方停班停課公告）；Ｃ-244）；False＝只用休市表
+TYPHOON_URL = 'https://www.dgpa.gov.tw/typh/daily/nds.html'
+
+
+def _dgpa_closed_tomorrow(tm):
+    """✅11081645 回傳 (True/False/None, 摘錄)：臺北市明天（或 M月D日）停止上班＝台股休市；None＝讀取失敗（不寄、只印）。"""
+    if not TYPHOON_CHECK_ENABLED:
+        return (None, '')
+    try:
+        import requests as _req, re as _re
+        _r = _req.get(TYPHOON_URL, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+        _r.encoding = _r.apparent_encoding or 'utf-8'
+        _t = _re.sub(r'\s+', ' ', _re.sub(r'<[^>]+>', ' ', _r.text))
+        _ds = ('明天', '明日', '%d月%d日' % (tm.month, tm.day))
+        for _m in _re.finditer('臺北市|台北市', _t):
+            for _sen in _re.split('[。；]', _t[_m.start():_m.start() + 160]):
+                if '停止上班' in _sen and any(_d in _sen for _d in _ds) and '尚未' not in _sen:
+                    print('🌀 颱風停班：' + _sen.strip()[:60]); return (True, _sen.strip()[:40])
+        print('🌀 颱風停班：臺北市明天未宣布停止上班（%s 讀取成功）' % TYPHOON_URL); return (False, '')
+    except Exception as _e:
+        print('⚠️ 颱風停班公告讀取失敗（%s）' % str(_e)[:50]); return (None, str(_e)[:40])
+
+
+
+TWSE_HOLIDAY_URL = 'https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?response=json'   # ✅11081645 證交所休市公告（主帥 2026/11/08 16:36 第 2 點：「讀不到人事行政局官網就算了,證交所或期交所或民間有很多券商或理財達人的網頁都可查詢或公告。」；Ｃ-246）
+
+
+def _twse_closed_tomorrow(tm):
+    """✅11081645 證交所休市日期表（官方）：明天在表內且不是「開始交易」→ (True, 摘要)；讀取失敗 → (None, '')。"""
+    try:
+        import requests as _req, re as _re
+        _j = _req.get(TWSE_HOLIDAY_URL, timeout=15, headers={'User-Agent': 'Mozilla/5.0'}).json()
+        for _row in (_j.get('data') or []):
+            _m = _re.match(r'(\d{2,4})[/-](\d{1,2})[/-](\d{1,2})', str(_row[0]))
+            if not _m:
+                continue
+            _y = int(_m.group(1)); _y = _y + 1911 if _y < 1911 else _y
+            if (_y, int(_m.group(2)), int(_m.group(3))) == (tm.year, tm.month, tm.day):
+                _ds = ' '.join(str(_x) for _x in _row[1:]).strip()
+                if '開始交易' in _ds:
+                    return (False, '')
+                print('🏛️ 證交所休市公告：' + _ds[:40]); return (True, '證交所公告：' + _ds[:30])
+        print('🏛️ 證交所休市公告：明天不在休市表（讀取成功）'); return (False, '')
+    except Exception as _e:
+        print('⚠️ 證交所休市公告讀取失敗（%s）' % str(_e)[:50]); return (None, '')
+
+
+def _tw_typhoon_closed_tomorrow(tm):
+    """✅11081645 臨時休市多來源（主帥 2026/11/08 16:36 第 2 點：「讀不到人事行政局官網就算了,證交所或期交所或民間有很多券商或理財達人的網頁都可查詢或公告。」）：人事行政總處停班公告 → 證交所休市公告；任一說休市就算休市。"""
+    _a = _dgpa_closed_tomorrow(tm)
+    if _a[0]:
+        return _a
+    _b = _twse_closed_tomorrow(tm)
+    if _b[0]:
+        return _b
+    return (False, '') if (_a[0] is False or _b[0] is False) else (None, '')
+
+def _holiday_eve_status_write(k, hits, ty):
+    """✅11081645 把明日休市結果寫到 Firestore public/holiday_eve，網頁版讀這份顯示橫幅（網頁讀不到政府網站）。"""
+    try:
+        import requests as _req
+        _h = _sigpos_headers()
+        if not _h:
+            return False
+        _u = (f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+              f"/databases/(default)/documents/artifacts/{FIREBASE_PROJECT_ID}/public/holiday_eve")
+        _f = {'date': {'stringValue': k}, 'markets': {'stringValue': '、'.join(h[0] for h in hits)}, 'typhoon': {'stringValue': ty or ''}}
+        return _req.patch(_u, headers=_h, timeout=15, json={'fields': _f}).status_code == 200
+    except Exception:
+        return False
+
+def _holiday_eve_notify(now=None):
+    """✅11081645 休市前一晚提醒；回傳本次寄出之市場清單（測試用）。"""
+    if not HOLIDAY_EVE_NOTIFY:
+        return []
+    try:
+        from datetime import timedelta as _td
+        _n = now or _now_tw(); _tm = _n + _td(days=1); _W = '一二三四五六日'
+        if _tm.weekday() >= 5:
+            print('📅 休市前一晚提醒：明天是週末固定假日，不另通知'); return []
+        _k = _tm.strftime('%Y-%m-%d'); _hit = []
+        for _nm, _tb in (('台股', TW_MARKET_HOLIDAYS), ('美股', US_MARKET_HOLIDAYS)):
+            if _k in _tb:
+                _d = _tm; _span = []
+                while _d.strftime('%Y-%m-%d') in _tb or _d.weekday() >= 5:
+                    if _d.weekday() < 5:
+                        _span.append('%d/%d' % (_d.month, _d.day))
+                    _d += _td(days=1)
+                _hit.append((_nm, _tb[_k], _span, _d))
+        if not any(h[0] == '台股' for h in _hit):   # ✅11081645 颱風等臨時休市（Ｃ-244）
+            _ty = _tw_typhoon_closed_tomorrow(_tm)
+            if _ty[0]:
+                _nx = _tm + _td(days=1)
+                while _nx.strftime('%Y-%m-%d') in TW_MARKET_HOLIDAYS or _nx.weekday() >= 5:
+                    _nx += _td(days=1)
+                _hit.append(('台股', (_ty[1] if _ty[1].startswith('證交所') else '颱風停止上班（' + _ty[1] + '）'), ['%d/%d' % (_tm.month, _tm.day)], _nx))
+        _tail = ['%s只到 %s' % (_nm, max(_tb)) for _nm, _tb in (('台股', TW_MARKET_HOLIDAYS), ('美股', US_MARKET_HOLIDAYS)) if _tb and _k > max(_tb)]
+        if not _hit:
+            print('📅 休市前一晚提醒：明天 %s 台股、美股皆照常交易%s' % (_k, ('（⚠️ 休市表已過表尾：' + '、'.join(_tail) + '，請補次年表）') if _tail else ''))
+            return []
+        _holiday_eve_status_write(_k, _hit, next((h[1] for h in _hit if h[1].startswith(('颱風', '證交所'))), ''))
+        # ✅11081645 三版共用同一個佔位 notified_log「holiday_eve_日期」：雲端、筆電、網頁誰先判到誰寄，一晚只寄一封（主帥 2026/11/08 16:15 第 2 點：「搞什麼?我不是早就定案【本機版】【網頁版】【雲端版】都要同步改版和一樣內容和時間和程式碼嗎?為什麼到今天2026/11/8了,竟然還有【沒有20 點班次】或【三版不一致】的情形發生!!!?」；16:19：「補充,一樣只要寄1次通知信就好,不要本機版和網頁版各寄1封吵到我!」）
+        _today = _n.strftime('%Y-%m-%d'); _c = _claim_alert_firebase('holiday_eve_%s' % _k, _today)
+        if _c is False:
+            print('🔕 休市前一晚提醒：今天已寄過'); return []
+        if _c is None:
+            _nt = globals().get('notified')
+            if isinstance(_nt, dict):
+                if ('holiday_eve_%s' % _k) in _nt.get(_today, []):
+                    print('🔕 休市前一晚提醒：今天已寄過（本機紀錄）'); return []
+                _nt.setdefault(_today, []).append('holiday_eve_%s' % _k)
+                try:
+                    save_notified(_nt)
+                except Exception:
+                    pass
+        _mk = '、'.join(h[0] for h in _hit)
+        _sub = '📅 明日休市提醒：%d/%d（週%s）%s休市' % (_tm.month, _tm.day, _W[_tm.weekday()], _mk)
+        _body = ['明天 %d/%d（週%s）休市不交易：' % (_tm.month, _tm.day, _W[_tm.weekday()]), '']
+        for _nm, _why, _span, _nx in _hit:
+            _body.append('・%s：%s（休市日：%s；下一個交易日 %d/%d（週%s））' % (_nm, _why, '、'.join(_span), _nx.month, _nx.day, _W[_nx.weekday()]))
+            if _nm == '美股':
+                _body.append('　　台灣時間 %d/%d 晚上到隔天清晨美股不開盤' % (_tm.month, _tm.day))
+        for _nm in ('台股', '美股'):
+            if _nm not in _mk:
+                _body.append('・%s：照常交易' % _nm)
+        _body += ['', '（週六、週日固定假日不另通知；颱風等臨時休市不在休市表內）']
+        send_gmail('☁️【雲端】' + _sub, '\n'.join(_body), urgent=True)
+        print('✅ 休市前一晚提醒已寄出：' + _sub)
+        return [h[0] for h in _hit]
+    except Exception as _e:
+        print('⚠️ 休市前一晚提醒異常：%s' % str(_e)[:60]); return []
+
+
 
 def _tw_holiday_name(_d):
     """✅10100148 台股（含期貨）官方休市日名稱；非休市日回傳空字串。_d 可為 date 或 datetime（台灣日期）。"""
@@ -1671,6 +1856,29 @@ _fb_holdings_merged = False
 _condd_cache = None
 
 
+
+_HOLD_DIFF = []   # ✅11081645 本機版持股常數與網頁版持股不一致的清單（主帥 2026/11/08 16:36 第 3 點 b：「有時候很忙,我可能會遺忘改另一版。」；Ｃ-247）
+
+
+def _hold_diff_note():
+    """✅11081645 有持股健檢信要寄時附在信末；不一致本身不另寄信（主帥 16:36 第 3 點 a：O 只寫在本機版保留）。"""
+    if not _HOLD_DIFF:
+        return ''
+    return '\n\n【持股兩版不一致提醒】' + '；'.join(_HOLD_DIFF) + '（寫在任一版都算持有；若已賣出請兩版都刪；主帥 11/08 16:36 第 3 點 b）'
+
+
+def _bond_list():
+    """✅11081645 債券 ETF 掃描清單＝BOND_LIST＋網頁觀察清單「債券基金」分類（去重）。"""
+    _l = list(BOND_LIST)
+    try:
+        _load_watchlist()
+        for _w in (_watchlist_cache.get('items') or []):
+            if isinstance(_w, dict) and _w.get('cat') == 'bond' and str(_w.get('code', '')).upper() not in _l:
+                _l.append(str(_w.get('code')).upper())
+    except Exception:
+        pass
+    return _l
+
 def _merge_firebase_holdings():
     global _fb_holdings_merged
     if _fb_holdings_merged or not HOLDINGS_FROM_FIREBASE:
@@ -1680,6 +1888,8 @@ def _merge_firebase_holdings():
         _load_watchlist()
         _hs = _fb_holdings or []
         _add = []
+        _loc = {'台股': set(HOLDINGS_TW), '美股': set(HOLDINGS_US), '虛擬幣': set(HOLDINGS_CRYPTO), '外匯': set(HOLDINGS_FX), '黃金': set(HOLDINGS_GOLD)}   # ✅11081645 合併前的本機版常數
+        _web = {k: set() for k in _loc}; _wfund = False
         for _h in _hs:
             _c, _cat, _dir = _h['code'], _h['cat'], _h['direction']
             if _cat == 'tw':
@@ -1693,12 +1903,23 @@ def _merge_firebase_holdings():
             elif _cat == 'gold':
                 _tk, _lst = _c, HOLDINGS_GOLD
             else:
+                _wfund = _wfund or _cat == 'fund'
                 continue   # 基金、債券沿用既有安聯基金流程，不併入
+            _web[{'tw': '台股', 'us': '美股', 'crypto': '虛擬幣', 'fx': '外匯', 'gold': '黃金'}[_cat]].add(_tk)
             if _tk not in _lst:
                 _lst.append(_tk); _add.append(_tk)
             if _dir == 'short' and _tk not in HOLDINGS_SHORT:
                 HOLDINGS_SHORT.append(_tk)
         print(f'  💼 持股清單併入：新增 {len(_add)} 檔 {_add}（程式常數保留）')
+        for _k in _loc:   # ✅11081645 兩版不一致清單（主帥 2026/11/08 16:36 第 3 點 b：「有時候很忙,我可能會遺忘改另一版。」）
+            if _loc[_k] - _web[_k]:
+                _HOLD_DIFF.append('%s 只寫在本機版：%s' % (_k, '、'.join(sorted(_loc[_k] - _web[_k]))))
+            if _web[_k] - _loc[_k]:
+                _HOLD_DIFF.append('%s 只寫在網頁版：%s' % (_k, '、'.join(sorted(_web[_k] - _loc[_k]))))
+        if _hs and _wfund != bool(FUND_HOLDING):
+            _HOLD_DIFF.append('基金：本機版 FUND_HOLDING＝%s、網頁版%s基金持股' % (FUND_HOLDING, '有' if _wfund else '沒有'))
+        if _HOLD_DIFF:
+            print('  ⚠️ 持股兩版不一致：' + '；'.join(_HOLD_DIFF))
     except Exception as _e:
         print(f'  ⚠️ 持股清單併入失敗（{str(_e)[:50]}）→ 沿用程式常數')
 
@@ -4459,7 +4680,7 @@ def scan_limit_up():
         print(f"  ⚠️ scan_limit_up異常：{str(_e)[:60]}")
 
 
-FUND_HOLDING          = True   # ✅11081315 主帥持有安聯月配息基金 → 判斷出場（主帥 11/06 05:14：「…【基金(安聯境外月配息基金對應的3支ETF)】,到今天還還沒收到進出場的gmail通知信」）；False＝只判斷進場
+# FUND_HOLDING 已移到檔頭【〇-2、持有股票區】③（✅11081645）
 FUND_INTRADAY_ENABLED = True   # ✅11081315 合成基金加進每 5 分鐘即時路線（主帥 11/06 05:23 b 點：「我同意…」；Ｃ-235）；False＝回到只在全市場掃描判斷一次
 
 
@@ -6447,6 +6668,10 @@ def check_holdings_health():
         f"※ 持股清單於程式 HOLDINGS_TW／HOLDINGS_US／HOLDINGS_CRYPTO／HOLDINGS_FX／HOLDINGS_GOLD 設定。\n"
     )
     try:
+        _hn = _now_tw(); _hk = 'holdings_health_%s_%d' % (_hn.strftime('%Y-%m-%d'), 0 if _hn.minute < 30 else 1)   # ✅11081645 雲端與筆電同一時段只寄一封（主帥 2026/11/08 16:15 第 2 點：「搞什麼?我不是早就定案【本機版】【網頁版】【雲端版】都要同步改版和一樣內容和時間和程式碼嗎?為什麼到今天2026/11/8了,竟然還有【沒有20 點班次】或【三版不一致】的情形發生!!!?」；16:19：「補充,一樣只要寄1次通知信就好,不要本機版和網頁版各寄1封吵到我!」）
+        _body = _body + _hold_diff_note()   # ✅11081645 附持股兩版不一致提醒（Ｃ-247）
+        if _claim_alert_firebase(_hk, _hn.strftime('%Y-%m-%d')) is False:
+            print('🔕 持股健檢：本時段已由另一台寄出'); return
         send_gmail(_subject, _body)
         print(f"📧 持股健檢示警已寄出（示警{_alert_cnt}／續抱{_ok_cnt}／失敗{_fail_cnt}）")
     except Exception as _e:
@@ -7156,7 +7381,7 @@ def scan_stock_intraday_global():
             print(f'  ⚠️ 即時路線（全球）：觀察清單讀取失敗（{str(_e)[:40]}），只掃持股')
         # ✅11081315 外匯、黃金、虛擬幣、債券 ETF 清單全部加進即時路線（主帥 11/06 05:23 a 點：「不要我說一個,你才動一個!…我沒說到的【外匯】【黃金】...難道就不用檢查和加入策略嗎?」；Ｃ-235）：
         #   只判斷進場（不在持股集合，不會發出場）；開市規則照舊（open_cat：外匯黃金週末除外、虛擬幣有持倉才全天）
-        for c in list(FX_LIST) + list(GOLD_LIST) + list(CRYPTO_LIST) + ['EMB', 'AGG']:
+        for c in list(FX_LIST) + list(GOLD_LIST) + list(CRYPTO_LIST) + _bond_list():   # ✅11081645 債券含網頁觀察清單債券基金分類（ILF 等；Ｃ-247）
             _add(c)
         if FUND_INTRADAY_ENABLED and open_cat.get('us'):   # ✅11081315 合成基金每 5 分鐘（美股開市時）
             try:
@@ -7361,6 +7586,9 @@ def main_task():
     # ✅ (07130626)【持股每日健檢模式】SCAN_TYPE='holdings'：只做持股健檢並寄一封報告，不跑全市場掃描
     _merge_firebase_holdings()   # ✅09171113 持股清單讀 Firebase（持股健檢與各市場掃描共用）
     if SCAN_TYPE == 'holdings':
+        _holiday_eve_notify()   # ✅11081645 休市前一晚提醒（Ｃ-241）
+        if _now_tw().weekday() >= 5:   # ✅11081645 週日 20:32 班只做休市提醒，不做持股健檢
+            print('📅 週末班：只做休市前一晚提醒'); return
         if _holdings_sent:
             print("📋 本次執行已完成持股健檢，跳過重複執行")
             return
@@ -7670,7 +7898,7 @@ def main_task():
         scan_synthetic_fund("SPY / QQQ / HYG三合一追蹤【安聯月配息基金】(合成代標)")
 
         # ── 債券基金（EMB/AGG）獨立掃描（各自走台股/美股相同流程）──
-        for _bond_ticker in ['EMB', 'AGG']:
+        for _bond_ticker in _bond_list():   # ✅11081645 債券含網頁觀察清單債券基金分類（Ｃ-247）
             _bond_name = {'EMB': '新興市場債券ETF（參考FR02）', 'AGG': '全球綜合債券ETF（參考FR04）'}.get(_bond_ticker, _bond_ticker)
             _r_bond = scan_stock(_bond_ticker, is_holding=(_sp_key(_bond_ticker) in _sigpos_codes()))   # ✅11081315 債券 ETF 進場後也判斷出場（主帥 2026/11/08 02:30 第 2 點：「a.你不用管我有沒有持有,如果我有持有,我會寫入本機版或網頁版…你只要管程式碼的策略能不能正常執行…」「b.…有進場當然要有出場啊!…」「c.難道我沒有持有債券,就不用出場獲利了結了嗎?」；Ｃ-237）
             if _r_bond and _r_bond[0] == 'BUY':
@@ -8660,6 +8888,9 @@ if __name__ == "__main__":
             loops = 1; market_name = '期貨5分K（GitHub Actions）'
         else:
             loops = 1; market_name = '台股（GitHub Actions）'
+    # ✅11081645 本機持股健檢與休市提醒班：筆電排程 20:02、20:32（週一～週五）與週日 20:32 以 SCAN_TYPE=holdings 執行，與雲端同時間、同程式（主帥 2026/11/08 16:15 第 2 點：「搞什麼?我不是早就定案【本機版】【網頁版】【雲端版】都要同步改版和一樣內容和時間和程式碼嗎?為什麼到今天2026/11/8了,竟然還有【沒有20 點班次】或【三版不一致】的情形發生!!!?」；16:19：「補充,一樣只要寄1次通知信就好,不要本機版和網頁版各寄1封吵到我!」）
+    elif SCAN_TYPE == 'holdings':
+        loops = 1; market_name = '持股健檢與休市提醒（本機）'
     # 台股：開盤後5分(09:05) ~ 收盤前5分(13:25)
     elif now.weekday() < 5 and ((hour == 9 and minute >= 5) or (10 <= hour <= 12) or (hour == 13 and minute <= 25)):   # ✅10080053 加 weekday<5：週六改走下方週六補跑分支（run_log_3 10/03 週六 10:05 筆電備援被本分支攔截、只掃幣匯金 9 輪，全量重建從未執行；Ｃ-66）
         loops = 1   # ✅10080053 原 9 次（每 30 分鐘一次，05/19 盤中輪詢舊設計）→ 1 次：台股只掃 12:00（R-26、Ｃ-43），第 2～9 次 run_log_3 實證只重掃幣匯金觀察且皆不發；跑完 5 秒自動關窗（主帥 2026/05/04 16:32：「如何將本機版若結果是以下內容或非盤中時段無執行動作,則自動於5秒後關閉視窗,而不用等5分鐘後再關閉py視窗?」）
