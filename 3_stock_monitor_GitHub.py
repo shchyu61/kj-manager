@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '11090816'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '11100615'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -5992,6 +5992,7 @@ def _us_premarket_ref():
 #   當盤：夜盤 15:00 起、日盤 08:45 起；時段＝條件W 時窗；每窗每方向最多 CONDI_MAX_PER_WINDOW 封；同一根K棒同方向只寄一封
 #   門檻 500（AI 判斷，依據：11/05 夜盤最高 42298、22:15 A 轉那根收 41700，跌 598，600 點會漏；回滾：改 600）
 # ══════════════════════════════════════════════════════════════════════
+# ★因應 2026/11/05（週四）夜盤大跌事件新增之程式碼（約 21:30 A轉起跌、11/06 03:30 前後已跌約 3000 點；主帥 2026/11/06 04:56 第 4 點；11/10 06:15 第 3 點 b 要求註記；Ｃ-232、Ｃ-261）
 CONDI_ENABLE         = True   # False＝不跑條件I（回滾開關）
 CONDI_PTS            = 500
 CONDI_MAX_PER_WINDOW = 2
@@ -6272,7 +6273,7 @@ def scan_condition_w():
 #     5分K 與 15分K 為 OR（比照條件W 主帥 09/02「兩個週期是 OR」）；CONDG_YELLOW_BOTH＝True 改 AND（回滾／改定開關）
 #   進場：紅框 AND 黃框 → 大跌 buy PUT／大漲 buy CALL；週二～週五 09:05～11:30；每日每方向 1 封；出場同條件W（主帥 14:43 第 4 題「同W」）；休市日不跑
 #   筆電：併入 TEST_MODE='futures'（4_futures_monitor；主帥 16:51 第 4 點「為什麼不套用到【TEST_MODE='futures'】?」）；雲端：condW 班次同跑；Firestore 佔位只發一封
-#   夜盤警示：週二～週五 03:30～05:10，紅框 B 成立即寄「夜盤大跌（大漲）徵兆警示」（只警示、不進場；每日每方向 1 封）
+#   ✅11100615 夜盤徵兆警示信已刪除（主帥 2026/11/10 06:15 第 3 點 c：「…如果不是,請刪除此通知信的程式碼,以後不准再寄發此通知信!!!」；前案：11021823 批 AI 提案方案 B 新增夜盤 03:30～05:10 警示信，非主帥 11/02 14:20 第 3 點 b 所要求；Ｃ-259）；紅框 B 仍於日盤 09:05～11:30 以 EWT 台灣 03:30～05:00 已收完之K棒判斷
 # ══════════════════════════════════════════════════════════════════════
 CONDG_ENABLE      = True        # 條件G 總開關（False＝完全不跑；回滾開關）
 CONDG_EWT         = 'EWT'       # 紅框 B 夜盤代理（美股時段；冬令收盤＝台灣 05:00）
@@ -6283,20 +6284,16 @@ CONDG_YELLOW_BARS = 2           # 黃框：今日第 1～2 根（主帥 14:43 �
 CONDG_YELLOW_BOTH = False       # False＝5分K OR 15分K；True＝AND
 CONDG_DAY_FROM    = 9 * 60 + 5  # 日盤進場判斷起 09:05（R-02：起始嚴禁 09:00）
 CONDG_DAY_TO      = 11 * 60 + 30  # 日盤進場判斷迄 11:30（主帥 2026/11/02 16:51 第 2 點 a：「正確是09:00~11:30,不是只有09:00~09:10的短短10分鐘!!!」）
-CONDG_WARN_FROM   = 3 * 60 + 30 # 夜盤警示判斷起 03:30
-CONDG_WARN_TO     = 5 * 60 + 10 # 夜盤警示判斷迄 05:10
 
 
 def _condg_window(now=None):
-    """條件G 時段：週二～週五 09:05～10:30 回 'day'；03:30～05:10 回 'night'；其餘 None。"""
+    """條件G 時段：週二～週五 09:05～11:30 回 'day'；其餘 None（✅11100615 夜盤 'night' 已刪除；Ｃ-259）。"""
     now = now or datetime.now(pytz.timezone('Asia/Taipei'))
     if not CONDG_ENABLE or now.weekday() not in (1, 2, 3, 4):
         return None
     tv = now.hour * 60 + now.minute
     if CONDG_DAY_FROM <= tv <= CONDG_DAY_TO:
         return 'day'
-    if CONDG_WARN_FROM <= tv <= CONDG_WARN_TO:
-        return 'night'
     return None
 
 
@@ -6394,15 +6391,15 @@ def _condg_eval(now=None, fetch=None, calc=None):
 
 
 def scan_condition_g():
-    """✅11021443【條件G】日盤 09:05～10:30：紅框 AND 黃框 → buy PUT／buy CALL；夜盤 03:30～05:10：紅框 B → 警示信（只警示）。出場同條件W。"""
+    """✅11021443【條件G】日盤 09:05～11:30：紅框 AND 黃框 → buy PUT／buy CALL；出場同條件W（✅11100615 夜盤警示信已刪除；Ｃ-259）。"""
     tz = pytz.timezone('Asia/Taipei')
     now = datetime.now(tz)
     win = _condg_window(now)
     if win is None:
-        print('  ℹ️ 條件G：不在時段（週二～週五 03:30～05:10 夜盤警示、09:05～11:30 日盤進場），跳過')
+        print('  ℹ️ 條件G：不在時段（週二～週五 09:05～11:30 日盤進場），跳過')
         return
     now_str = now.strftime('%Y/%m/%d %H:%M'); today = now.strftime('%Y-%m-%d')
-    print(f"\n📊 條件G 夜盤大跌（大漲）延續：{'夜盤警示' if win == 'night' else '日盤進場'}")
+    print("\n📊 條件G 夜盤大跌（大漲）延續：日盤進場")
     try:
         _hn_g = _tw_holiday_name(now)
     except Exception:
@@ -6414,18 +6411,9 @@ def scan_condition_g():
         x = r[d]; _put = (d == 'sell')
         _nm = '大跌' if _put else '大漲'; _op = 'buy PUT' if _put else 'buy CALL'
         print(f"  ℹ️ 條件G {_nm}：紅框={'✓' if x['red_ok'] else '✗'}（{'；'.join(x['red']) or '無'}）  黃框={'✓' if x['yellow_ok'] else '✗'}")
-        if win == 'night':
-            if not x['warn']:
-                continue
-            _el = r.get('ewt_last')
-            _age = ((now - _el.to_pydatetime()).total_seconds() / 60 - 5) if _el is not None else 999
-            if _age > 45:   # (176) 代理資料新鮮度：EWT 最後一根已收完K棒收盤距今逾 45 分（美股休市或資料延遲）不發警示
-                print(f'  🔕 條件G：EWT 最後一根距今約 {_age:.0f} 分，非即時，不發夜盤警示'); continue
-            key = f'condGwarn_{today}_{d}'
-        else:
-            if not x['go']:
-                continue
-            key = f'condG_{today}_{d}'
+        if not x['go']:
+            continue
+        key = f'condG_{today}_{d}'
         _claim = _claim_alert_firebase(key, today)
         if _claim is None:   # Firebase 不可用：同程序本地後援（比照條件W 甲-4）
             _lk = f'{today}|{key}'
@@ -6435,29 +6423,22 @@ def scan_condition_g():
         if _claim is not True:
             print(f'  ℹ️ 條件G：{key} 今日已發（筆電與雲端以 Firestore 佔位，只發一封），靜音')
             continue
-        if win == 'night':
-            _subj = f"☁️【雲端】🌙條件G 夜盤{_nm}徵兆警示（只警示、不進場）- {now_str}"
-            _body = (f"☁️【雲端】🌙【條件G 夜盤{_nm}徵兆警示】★只警示、不進場\n"
-                     f"紅框：{'；'.join(x['red_b'])}\n"
-                     f"★今日 09:05～11:30 最近 1～2 根 5分K 或 15分K 出現{'收黑' if _put else '收紅'}，才發 {_op} 進場信\n"
-                     f"時間：{now_str}\n（✅11021443 條件G；主帥 2026/11/02 14:20 第 3、4 點、14:43 選案）")
-        else:
-            _close = r.get('close')
-            try:
-                _hint = get_weekly_option_hint(_close, d) if _close else ''
-            except Exception:
-                _hint = ''
-            _subj = f"☁️【雲端】⭐條件G週選{'做空' if _put else '買進'} {CONDW_TARGET} - {now_str}"
-            _body = (f"☁️【雲端】⭐【條件G 週選擇權{_nm}延續 → {_op}】⭐\n"
-                     f"標的：{CONDW_TARGET}（台指）\n"
-                     f"紅框：{'；'.join(x['red'])}\n"
-                     f"黃框：{'；'.join(s for _, s in x['yellow'])}\n"
-                     + (f"收盤：{_close:.2f}\n" if _close else '')
-                     + f"出場：同條件W\n時間：{now_str}\n"
-                     f"⏱ Yahoo 台股 5分K／15分K 約延遲 15～25 分（判斷用的是約 20 分鐘前的K棒）\n"
-                     f"（✅11021443 條件G；主帥 2026/11/02 14:20 第 3、4 點、14:43 選案「1甲、2AB、3第1～2根、4同W」）" + _hint)
+        _close = r.get('close')
+        try:
+            _hint = get_weekly_option_hint(_close, d) if _close else ''
+        except Exception:
+            _hint = ''
+        _subj = f"☁️【雲端】⭐條件G週選{'做空' if _put else '買進'} {CONDW_TARGET} - {now_str}"
+        _body = (f"☁️【雲端】⭐【條件G 週選擇權{_nm}延續 → {_op}】⭐\n"
+                 f"標的：{CONDW_TARGET}（台指）\n"
+                 f"紅框：{'；'.join(x['red'])}\n"
+                 f"黃框：{'；'.join(s for _, s in x['yellow'])}\n"
+                 + (f"收盤：{_close:.2f}\n" if _close else '')
+                 + f"出場：同條件W\n時間：{now_str}\n"
+                 f"⏱ Yahoo 台股 5分K／15分K 約延遲 15～25 分（判斷用的是約 20 分鐘前的K棒）\n"
+                 f"（✅11021443 條件G；主帥 2026/11/02 14:20 第 3、4 點、14:43 選案「1甲、2AB、3第1～2根、4同W」）" + _hint)
         _ok = send_gmail(_subj, _body, urgent=True)
-        print(f"  {'✅' if _ok else '❌'} 條件G {_nm}{'警示' if win == 'night' else ' ' + _op}{'已發送' if _ok else '發送失敗'}")
+        print(f"  {'✅' if _ok else '❌'} 條件G {_nm}{' ' + _op}{'已發送' if _ok else '發送失敗'}")
 
 
 def _kline_cache_path():
@@ -8846,8 +8827,6 @@ if __name__ == "__main__":
                 scan_condition_g()
             except Exception as _eg:
                 print(f'  ⚠️ 條件G 異常：{str(_eg)[:60]}')
-            if _condg_window() == 'night' and _condw_current_window() is None and not (_exit_l or _alert_l):
-                print('⏱️ 夜盤只跑條件G 警示，5秒後結束'); time.sleep(5); break
             try:
                 _run_with_heartbeat(main_task, 'main')   # ✅09230055 心跳包覆
             except Exception as e:

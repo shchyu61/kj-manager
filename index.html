@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11090856</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11100615</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -3226,6 +3226,7 @@
         // ✅11081315【期交所台指期快照優先】主帥 11/06 05:11 第 1 題甲案、20:52 第 2 題甲案（Ｃ-229、Ｃ-230）；與 Python _txf_bars_to_df／_resample_15m 同義
         window.TXF_SOURCE_ENABLED = true;   // false＝回到只用 Yahoo（回滾開關）
         window.CONDW_DIF_REQUIRED = true;   // ✅11081315 條件W 進場加 DIF 同向（主帥 11/06 21:19「1甲」；Ｃ-231）
+        // ★因應 2026/11/05（週四）夜盤大跌事件新增之程式碼（約 21:30 A轉起跌、11/06 03:30 前後已跌約 3000 點；主帥 2026/11/06 04:56 第 4 點；11/10 06:15 第 3 點 b 要求註記；Ｃ-232、Ｃ-261）
         window.CONDI_ENABLE = true; window.CONDI_PTS = 500;   // ✅11081315 條件I（主帥 11/06 04:56 第 4 點、20:36 第 2c 點；Ｃ-232）
         window._txfBarsToD = (bars, nowSec) => {
             const now = nowSec || Math.floor(Date.now() / 1000), rows = [];
@@ -3367,7 +3368,7 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
         //   紅框 A：^TWII 5分K／15分K 今日第 1 根為當根看近 5 根；紅框 B：EWT 5分K／15分K 台灣 03:30～05:00 任一根為當根看近 5 根
         //   大跌：近 5 根任一最高≥中軌且當根收≤下軌，或近 5 根任一最高≥上軌且當根收≤中軌；大漲鏡像
         //   黃框：週二～週五 09:05～11:30 判斷當下，^TWII 今日最近 1～2 根已收完 5分K 或 15分K 任一收黑（大漲收紅）
-        //   進場：紅框 AND 黃框；夜盤警示：週二～週五 03:30～05:10 紅框 B 成立（只警示）；每日每方向 1 封
+        //   進場：紅框 AND 黃框；每日每方向 1 封（✅11100615 夜盤徵兆警示信已刪除：主帥 2026/11/10 06:15 第 3 點 c；前案 11021823 AI 提案方案 B；Ｃ-259）
         window.CONDG_ENABLE = true;
         window._condgTP = (t) => { const d = new Date((t + 8 * 3600) * 1000); return { ymd: d.toISOString().slice(0, 10), tv: d.getUTCHours() * 60 + d.getUTCMinutes(), wd: d.getUTCDay() }; };
         window._condgWindow = (nowSec) => {
@@ -3375,7 +3376,6 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
             const p = window._condgTP(nowSec || Math.floor(Date.now() / 1000));
             if (p.wd < 2 || p.wd > 5) return null;
             if (p.tv >= 9 * 60 + 5 && p.tv <= 11 * 60 + 30) return 'day';
-            if (p.tv >= 3 * 60 + 30 && p.tv <= 5 * 60 + 10) return 'night';
             return null;
         };
         window._condgRedAt = (df, i, n) => {
@@ -3446,12 +3446,9 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
             const r = window._condgEval(srcs);
             for (const d of ['sell', 'buy']) {
                 const x = r[d], put = d === 'sell', nm = put ? '大跌' : '大漲', op = put ? 'buy PUT' : 'buy CALL';
-                if (win === 'night' ? !x.warn : !x.go) continue;
-                if (win === 'night' && (r.ewtLast == null || Math.floor(Date.now() / 1000) - r.ewtLast - 300 > 2700)) continue;   // (176) EWT 非即時不發夜盤警示
-                if (!window._tfOnce(win === 'night' ? 'CONDGWARN' : 'CONDG', put ? 'put' : 'call')) continue;   // 每日每方向 1 封
-                const _body = win === 'night'
-                    ? `🌙【條件G 夜盤${nm}徵兆警示】★只警示、不進場\n紅框：${x.red_b.join('；')}\n★今日 09:05～11:30 最近 1～2 根 5分K 或 15分K 出現${put ? '收黑' : '收紅'}，才發 ${op} 進場信\n時間：${_now}`
-                    : `⭐【條件G 週選擇權${nm}延續 → ${op}】⭐\n紅框：${x.red.join('；')}\n黃框：${x.yellow.join('；')}\n台指現價：${r.close != null ? Number(r.close).toFixed(0) : '未取得'}\n出場：同條件W\n⏱ Yahoo 報價約延遲 15～25 分\n建議標的（價外）：\n${r.close != null ? window._strikeHint(r.close, !put) : ''}\n時間：${_now}`;
+                if (!x.go) continue;
+                if (!window._tfOnce('CONDG', put ? 'put' : 'call')) continue;   // 每日每方向 1 封
+                const _body = `⭐【條件G 週選擇權${nm}延續 → ${op}】⭐\n紅框：${x.red.join('；')}\n黃框：${x.yellow.join('；')}\n台指現價：${r.close != null ? Number(r.close).toFixed(0) : '未取得'}\n出場：同條件W\n⏱ Yahoo 報價約延遲 15～25 分\n建議標的（價外）：\n${r.close != null ? window._strikeHint(r.close, !put) : ''}\n時間：${_now}`;
                 if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail, scan_time: _now,
                     signal_count: '條件G 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('條件G 1') + '（' + String(_now) + '）', message: String(_body), });
