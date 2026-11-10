@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '11100615'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '11101301'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -5996,6 +5996,36 @@ def _us_premarket_ref():
 CONDI_ENABLE         = True   # False＝不跑條件I（回滾開關）
 CONDI_PTS            = 500
 CONDI_MAX_PER_WINDOW = 2
+CONDI_TURN_REQUIRED  = True   # ✅11101301 條件I 剛A轉／剛V轉（主帥 2026/11/10 13:01 第 2 點選甲；09/04 19:19 定義；Ｃ-262；False＝回到 11081315 版，回滾開關）
+CONDGI_DELAY_NOTE_ENABLED = True   # ✅11101301 條件G、條件I 用 Yahoo 資料時附延遲提醒與反向建議（比照 Ｃ-169、Ｃ-230；主帥 11/10 13:01 第 4 點；Ｃ-264；False＝不附，回滾開關）
+
+
+def _condi_turn(mh, is_long):
+    """✅11101301【條件I 剛A轉／剛V轉】主帥 2026/11/10 13:01 第 2 點：「採用你的建議,我選甲案。但是你的重點放錯地方了吧!!!你的重點應該是【是不是起漲點或起跌點吧】,怎麼會是【是不是做空時當根收盤須在布林中軌以上；做多鏡像須在中軌以下】!呢?…當根K棒在中軌以下,也適用【是不是起漲點或起跌點】,那天的行情才會正常觸發進出場建議啊!」；定義照 主帥 2026/09/04 19:19：「…越多根K棒,我越要加上【(做多V轉)任意連續3根OSC連跌+前1根漲+當根漲】或【(做空A轉)任意連續3根OSC連漲+前1根跌+當根跌】這個先決條件?避免動不動就觸發行情!!!」
+    近5根＝當根往前數 5 根；做空：其中任意連續3根 OSC 連漲＋前1根跌＋當根跌；做多鏡像。不看中軌位置（主帥 13:01：當根K棒在中軌以下也適用）；Ｃ-262。"""
+    try:
+        o = [float(x) for x in mh.iloc[-5:]]
+        if len(o) < 5 or any(x != x for x in o):
+            return False
+        if is_long:
+            return any(o[k] > o[k + 1] > o[k + 2] for k in range(3)) and o[3] > o[2] and o[4] > o[3]
+        return any(o[k] < o[k + 1] < o[k + 2] for k in range(3)) and o[3] < o[2] and o[4] < o[3]
+    except Exception:
+        return False
+
+
+def _condgi_delay_note(name, close, d):
+    """✅11101301【條件G、條件I 延遲提醒與反向建議】比照條件W（Ｃ-169 主帥 10/16 14:01 第 7 點；Ｃ-230 退回 Yahoo 才附）；主帥 2026/11/10 13:01 第 4 點：「所以你昨晚取消的延遲20~30分鐘就建議反方向的進出場建議,是否要恢復?」；Ｃ-264。只改信件內文：判斷、方向、配額、去重不變。"""
+    if not CONDGI_DELAY_NOTE_ENABLED:
+        return '', ''
+    _o, _r = ('buy CALL', 'buy PUT') if d == 'buy' else ('buy PUT', 'buy CALL')
+    try:
+        _hn = get_weekly_option_hint(close, 'sell' if d == 'buy' else 'buy')
+    except Exception:
+        _hn = ''
+    return ((f"⏱⚠️【{name} 已延遲大約 15～25 分鐘】Yahoo 台股 5分K／15分K 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒\n"
+             f"💡【反向建議】原本要做 {_o}，建議改做 {_r}（主帥 10/16 指示；11/10 13:01 第 4 點延伸到{name}）\n\n"),
+            (f"\n\n— 反向（{_r}）履約價參考 —{_hn}" if _hn else ''))
 
 
 def _condi_session_start(now):
@@ -6028,9 +6058,9 @@ def _condi_eval(df5, df15, now=None):
             continue
         _hs = float(_sess['High'].max()); _ls = float(_sess['Low'].min()); _c = float(_d['Close'].iloc[-1])
         _m0 = float(_d['macd_hist'].iloc[-1]); _m1 = float(_d['macd_hist'].iloc[-2])
-        if _hs - _c >= CONDI_PTS and _m0 < _m1 and _rsi_dir_ok(_d, False):
+        if _hs - _c >= CONDI_PTS and _m0 < _m1 and _rsi_dir_ok(_d, False) and (not CONDI_TURN_REQUIRED or _condi_turn(_d['macd_hist'], False)):   # ✅11101301 剛A轉（Ｃ-262）
             _out.append({'dir': 'sell', 'label': _lb, 'close': _c, 'ext': _hs, 'pts': _hs - _c, 'bar_ts': _cw_bar_ts(_d)})
-        if _c - _ls >= CONDI_PTS and _m0 > _m1 and _rsi_dir_ok(_d, True):
+        if _c - _ls >= CONDI_PTS and _m0 > _m1 and _rsi_dir_ok(_d, True) and (not CONDI_TURN_REQUIRED or _condi_turn(_d['macd_hist'], True)):   # ✅11101301 剛V轉（Ｃ-262）
             _out.append({'dir': 'buy', 'label': _lb, 'close': _c, 'ext': _ls, 'pts': _c - _ls, 'bar_ts': _cw_bar_ts(_d)})
     return _out
 
@@ -6077,8 +6107,11 @@ def _condi_send(wid, df5, df15, src, now_str_f):
                f"{'當盤最高' if _dir == 'sell' else '當盤最低'}：{h['ext']:.0f}　當根收盤：{h['close']:.0f}　"
                f"{'跌' if _dir == 'sell' else '漲'} {h['pts']:.0f} 點（門檻 {CONDI_PTS}）\n"
                f"觸發週期：{h['label']}　前1根→當根 MACD柱{_ar}、RSI(5){_ar}、RSI(10){_ar}　★不看碰軌\n"
+               f"起{'跌' if _dir == 'sell' else '漲'}點：近5根連續3根 OSC 連{'漲' if _dir == 'sell' else '跌'}＋前1根、當根 OSC 皆{'跌' if _dir == 'sell' else '漲'}（✅11101301 剛{'A' if _dir == 'sell' else 'V'}轉；Ｃ-262）\n"
                f"判斷用K棒時間：{h['bar_ts'] or '未取得'}\n進場窗：{wid}\n時間：{now_str_f}"
                + _us_premarket_ref() + get_weekly_option_hint(h['close'], _dir))
+        if 'Yahoo' in str(src):   # ✅11101301 條件I 用 Yahoo 資料時附延遲提醒與反向建議（Ｃ-264）
+            _gh, _gt = _condgi_delay_note('條件I', h['close'], _dir); msg = _gh + msg + _gt
         _ok = send_gmail(f"☁️【雲端】⭐條件I週選{'做空' if _dir == 'sell' else '買進'} 台指 - {now_str_f}", msg, urgent=True)
         print(f"  {'✅' if _ok else '❌'} 條件I {_ti}／{h['label']}（本窗第{_slot}次）{'已發送' if _ok else '發送失敗'}")
 
@@ -6282,6 +6315,7 @@ CONDG_RED_TO      = 5 * 60      # 紅框 B 觀察迄：台灣 05:00（不含）
 CONDG_LOOKBACK    = 5           # 近 5 根（主帥 14:20 第 3 點 c、第 4 點 b）
 CONDG_YELLOW_BARS = 2           # 黃框：今日第 1～2 根（主帥 14:43 第 3 題）
 CONDG_YELLOW_BOTH = False       # False＝5分K OR 15分K；True＝AND
+CONDG_MOMENTUM_REQUIRED = True   # ✅11101301 黃框加判斷當下（最新已收完那根）MACD柱、RSI(5)、RSI(10) 與方向同向（主帥 2026/11/10 13:01 第 3 點、截圖 11101025_1；Ｃ-263；False＝回到 11021823 版，回滾開關）
 CONDG_DAY_FROM    = 9 * 60 + 5  # 日盤進場判斷起 09:05（R-02：起始嚴禁 09:00）
 CONDG_DAY_TO      = 11 * 60 + 30  # 日盤進場判斷迄 11:30（主帥 2026/11/02 16:51 第 2 點 a：「正確是09:00~11:30,不是只有09:00~09:10的短短10分鐘!!!」）
 
@@ -6356,12 +6390,21 @@ def _condg_eval(now=None, fetch=None, calc=None):
                     out['sell']['red'].append(f'紅框A {lab} 今日第1根 {ts}')
                 if up:
                     out['buy']['red'].append(f'紅框A {lab} 今日第1根 {ts}')
+                _mu = _md = True; _gmu = _gmd = ''   # ✅11101301 條件G 黃框判斷當下動能同向（Ｃ-263）
+                if CONDG_MOMENTUM_REQUIRED:
+                    try:
+                        _g0, _g1 = float(df['macd_hist'].iloc[-1]), float(df['macd_hist'].iloc[-2])
+                        _mu = _g0 > _g1 and _rsi_dir_ok(df, True); _md = _g0 < _g1 and _rsi_dir_ok(df, False)
+                    except Exception:
+                        _mu = _md = False
+                    _gt0 = df.index[-1].strftime('%H:%M')
+                    _gmu = f'；判斷當下 {_gt0} MACD柱、RSI(5)、RSI(10) 皆往上'; _gmd = f'；判斷當下 {_gt0} MACD柱、RSI(5)、RSI(10) 皆往下'
                 for k in todays[-CONDG_YELLOW_BARS:]:   # 判斷當下今日最近 1～2 根（16:51 第 2 點 a）
                     o = float(df['Open'].iloc[k]); c = float(df['Close'].iloc[k]); ts = df.index[k].strftime('%H:%M')
-                    if c < o:
-                        out['sell']['yellow'].append((mins, f'黃框 {lab} {ts} 收黑 {o:.0f}→{c:.0f}'))
-                    if c > o:
-                        out['buy']['yellow'].append((mins, f'黃框 {lab} {ts} 收紅 {o:.0f}→{c:.0f}'))
+                    if c < o and _md:
+                        out['sell']['yellow'].append((mins, f'黃框 {lab} {ts} 收黑 {o:.0f}→{c:.0f}' + _gmd))
+                    if c > o and _mu:
+                        out['buy']['yellow'].append((mins, f'黃框 {lab} {ts} 收紅 {o:.0f}→{c:.0f}' + _gmu))
             else:
                 if mins == 5 and len(df):
                     out['ewt_last'] = df.index[-1]
@@ -6437,6 +6480,8 @@ def scan_condition_g():
                  + f"出場：同條件W\n時間：{now_str}\n"
                  f"⏱ Yahoo 台股 5分K／15分K 約延遲 15～25 分（判斷用的是約 20 分鐘前的K棒）\n"
                  f"（✅11021443 條件G；主帥 2026/11/02 14:20 第 3、4 點、14:43 選案「1甲、2AB、3第1～2根、4同W」）" + _hint)
+        if r.get('close'):   # ✅11101301 條件G 用 Yahoo ^TWII，附延遲提醒與反向建議（Ｃ-264）
+            _gh, _gt = _condgi_delay_note('條件G', r['close'], d); _body = _gh + _body + _gt
         _ok = send_gmail(_subj, _body, urgent=True)
         print(f"  {'✅' if _ok else '❌'} 條件G {_nm}{' ' + _op}{'已發送' if _ok else '發送失敗'}")
 

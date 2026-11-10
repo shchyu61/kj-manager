@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11100615</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11101301</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -3227,7 +3227,7 @@
         window.TXF_SOURCE_ENABLED = true;   // false＝回到只用 Yahoo（回滾開關）
         window.CONDW_DIF_REQUIRED = true;   // ✅11081315 條件W 進場加 DIF 同向（主帥 11/06 21:19「1甲」；Ｃ-231）
         // ★因應 2026/11/05（週四）夜盤大跌事件新增之程式碼（約 21:30 A轉起跌、11/06 03:30 前後已跌約 3000 點；主帥 2026/11/06 04:56 第 4 點；11/10 06:15 第 3 點 b 要求註記；Ｃ-232、Ｃ-261）
-        window.CONDI_ENABLE = true; window.CONDI_PTS = 500;   // ✅11081315 條件I（主帥 11/06 04:56 第 4 點、20:36 第 2c 點；Ｃ-232）
+        window.CONDI_ENABLE = true; window.CONDI_PTS = 500; window.CONDI_TURN_REQUIRED = true; window.CONDGI_DELAY_NOTE = true;   /* ✅11101301 Ｃ-262、Ｃ-264 */   // ✅11081315 條件I（主帥 11/06 04:56 第 4 點、20:36 第 2c 點；Ｃ-232）
         window._txfBarsToD = (bars, nowSec) => {
             const now = nowSec || Math.floor(Date.now() / 1000), rows = [];
             for (const b of (bars || [])) { const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(b.t || ''); if (!m) continue;
@@ -3265,8 +3265,9 @@
                 const idx = d.ts.map((t, i) => i).filter(i => d.ts[i] >= st); if (!idx.length) continue;
                 const n = d.c.length, c = d.c[n - 1], hs = Math.max(...idx.map(i => d.hi[i])), ls = Math.min(...idx.map(i => d.lo[i]));
                 const m0 = df.macd_hist[n - 1], m1 = df.macd_hist[n - 2];
-                if (hs - c >= window.CONDI_PTS && m0 < m1 && K.kjRsiDir(df, false)) out.push({ dir: 'sell', lab, c, ext: hs, pts: hs - c, bt: d.ts[n - 1] });
-                if (c - ls >= window.CONDI_PTS && m0 > m1 && K.kjRsiDir(df, true)) out.push({ dir: 'buy', lab, c, ext: ls, pts: c - ls, bt: d.ts[n - 1] });
+                const turn = (isS) => { const o = [5, 4, 3, 2, 1].map(j => df.macd_hist[n - j]); if (o.some(v => v == null || isNaN(v))) return false; const run = [0, 1, 2].some(k => isS ? (o[k] < o[k + 1] && o[k + 1] < o[k + 2]) : (o[k] > o[k + 1] && o[k + 1] > o[k + 2])); return run && (isS ? (o[3] < o[2] && o[4] < o[3]) : (o[3] > o[2] && o[4] > o[3])); };   // ✅11101301 剛A轉／剛V轉（主帥 11/10 13:01 第 2 點選甲；09/04 19:19 定義；Ｃ-262）
+                if (hs - c >= window.CONDI_PTS && m0 < m1 && K.kjRsiDir(df, false) && (!window.CONDI_TURN_REQUIRED || turn(true))) out.push({ dir: 'sell', lab, c, ext: hs, pts: hs - c, bt: d.ts[n - 1] });
+                if (c - ls >= window.CONDI_PTS && m0 > m1 && K.kjRsiDir(df, true) && (!window.CONDI_TURN_REQUIRED || turn(false))) out.push({ dir: 'buy', lab, c, ext: ls, pts: c - ls, bt: d.ts[n - 1] });
             } return out; };
         window._condiRun = async (win, dd, src, now) => {
             if (!window.CONDI_ENABLE || !win) return;
@@ -3278,10 +3279,11 @@
                     const kc = `condi_cnt_${win}_${dir}_${today}`, c = +(localStorage.getItem(kc) || 0); if (!skip && c >= 2) skip = true; else if (!skip) localStorage.setItem(kc, String(c + 1)); } catch (e) {}
                 if (skip) continue;
                 const isS = dir === 'sell', ar = isS ? '↓' : '↑';
-                const body = `${isS ? '🔻【條件I 週選擇權：急跌做空 buy PUT】🔻' : '⭐【條件I 週選擇權：急漲做多 buy CALL】⭐'}
+                const body = (window.CONDGI_DELAY_NOTE && String(src).includes('Yahoo') ? `⏱⚠️【條件I 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒\n💡【反向建議】原本要做 ${isS ? 'buy PUT' : 'buy CALL'}，建議改做 ${isS ? 'buy CALL' : 'buy PUT'}（主帥 10/16 指示；11/10 13:01 第 4 點延伸到條件I）\n\n` : '') + `${isS ? '🔻【條件I 週選擇權：急跌做空 buy PUT】🔻' : '⭐【條件I 週選擇權：急漲做多 buy CALL】⭐'}
 資料：${src}
 ${isS ? '當盤最高' : '當盤最低'}：${h.ext.toFixed(0)}　當根收盤：${h.c.toFixed(0)}　${isS ? '跌' : '漲'} ${h.pts.toFixed(0)} 點（門檻 ${window.CONDI_PTS}）
 觸發週期：${h.lab}　前1根→當根 MACD柱${ar}、RSI(5)${ar}、RSI(10)${ar}　★不看碰軌
+起${isS ? '跌' : '漲'}點：近5根連續3根 OSC 連${isS ? '漲' : '跌'}＋前1根、當根 OSC 皆${isS ? '跌' : '漲'}（剛${isS ? 'A' : 'V'}轉）
 建議標的（價外，以小博大）：
 ${window._strikeHint(h.c, !isS)}
 ⚠️【未取得即時權利金報價】以上為【距離推估】：第一順位 12～16 元；沒有就選 16～60 元最便宜一檔；全部超過 60 元不建議買（主帥 11/06 21:19 2甲）
@@ -3369,7 +3371,7 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
         //   大跌：近 5 根任一最高≥中軌且當根收≤下軌，或近 5 根任一最高≥上軌且當根收≤中軌；大漲鏡像
         //   黃框：週二～週五 09:05～11:30 判斷當下，^TWII 今日最近 1～2 根已收完 5分K 或 15分K 任一收黑（大漲收紅）
         //   進場：紅框 AND 黃框；每日每方向 1 封（✅11100615 夜盤徵兆警示信已刪除：主帥 2026/11/10 06:15 第 3 點 c；前案 11021823 AI 提案方案 B；Ｃ-259）
-        window.CONDG_ENABLE = true;
+        window.CONDG_ENABLE = true; window.CONDG_MOMENTUM_REQUIRED = true;   /* ✅11101301 Ｃ-263 */
         window._condgTP = (t) => { const d = new Date((t + 8 * 3600) * 1000); return { ymd: d.toISOString().slice(0, 10), tv: d.getUTCHours() * 60 + d.getUTCMinutes(), wd: d.getUTCDay() }; };
         window._condgWindow = (nowSec) => {
             if (!window.CONDG_ENABLE) return null;
@@ -3407,9 +3409,11 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
                     const r = window._condgRedAt(df, todays[0]);
                     if (r.dn) out.sell.red.push(`紅框A ${lab} 今日第1根`);
                     if (r.up) out.buy.red.push(`紅框A ${lab} 今日第1根`);
+                    let mu = true, md = true;   // ✅11101301 黃框判斷當下 MACD柱、RSI 同向（主帥 11/10 13:01 第 3 點；Ｃ-263）
+                    if (window.CONDG_MOMENTUM_REQUIRED) { try { const K = window.kjCore, sub = (a) => done.map(i => (a || df.Close)[i]); const ind = K.kjIndicators({ Open: sub(df.Open), High: sub(df.High), Low: sub(df.Low), Close: sub(df.Close) }); const L = done.length, g0 = ind.macd_hist[L - 1], g1 = ind.macd_hist[L - 2]; mu = g0 > g1 && K.kjRsiDir(ind, true); md = g0 < g1 && K.kjRsiDir(ind, false); } catch (e) { mu = md = false; } }
                     for (const k of todays.slice(-2)) {
-                        if (df.Close[k] < df.Open[k]) out.sell.yellow.push(`黃框 ${lab} 收黑`);
-                        if (df.Close[k] > df.Open[k]) out.buy.yellow.push(`黃框 ${lab} 收紅`);
+                        if (df.Close[k] < df.Open[k] && md) out.sell.yellow.push(`黃框 ${lab} 收黑${window.CONDG_MOMENTUM_REQUIRED ? '；判斷當下 MACD柱、RSI 皆往下' : ''}`);
+                        if (df.Close[k] > df.Open[k] && mu) out.buy.yellow.push(`黃框 ${lab} 收紅${window.CONDG_MOMENTUM_REQUIRED ? '；判斷當下 MACD柱、RSI 皆往上' : ''}`);
                     }
                 } else {
                     if (s.mins === 5) out.ewtLast = df.ts[done[done.length - 1]];
@@ -3448,7 +3452,7 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
                 const x = r[d], put = d === 'sell', nm = put ? '大跌' : '大漲', op = put ? 'buy PUT' : 'buy CALL';
                 if (!x.go) continue;
                 if (!window._tfOnce('CONDG', put ? 'put' : 'call')) continue;   // 每日每方向 1 封
-                const _body = `⭐【條件G 週選擇權${nm}延續 → ${op}】⭐\n紅框：${x.red.join('；')}\n黃框：${x.yellow.join('；')}\n台指現價：${r.close != null ? Number(r.close).toFixed(0) : '未取得'}\n出場：同條件W\n⏱ Yahoo 報價約延遲 15～25 分\n建議標的（價外）：\n${r.close != null ? window._strikeHint(r.close, !put) : ''}\n時間：${_now}`;
+                const _body = (window.CONDGI_DELAY_NOTE ? `⏱⚠️【條件G 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒\n💡【反向建議】原本要做 ${op}，建議改做 ${put ? 'buy CALL' : 'buy PUT'}（主帥 10/16 指示；11/10 13:01 第 4 點延伸到條件G）\n\n` : '') + `⭐【條件G 週選擇權${nm}延續 → ${op}】⭐\n紅框：${x.red.join('；')}\n黃框：${x.yellow.join('；')}\n台指現價：${r.close != null ? Number(r.close).toFixed(0) : '未取得'}\n出場：同條件W\n⏱ Yahoo 報價約延遲 15～25 分\n建議標的（價外）：\n${r.close != null ? window._strikeHint(r.close, !put) : ''}\n時間：${_now}`;
                 if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail, scan_time: _now,
                     signal_count: '條件G 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('條件G 1') + '（' + String(_now) + '）', message: String(_body), });
