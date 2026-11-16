@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11101301</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11170652</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -3228,6 +3228,39 @@
         window.CONDW_DIF_REQUIRED = true;   // ✅11081315 條件W 進場加 DIF 同向（主帥 11/06 21:19「1甲」；Ｃ-231）
         // ★因應 2026/11/05（週四）夜盤大跌事件新增之程式碼（約 21:30 A轉起跌、11/06 03:30 前後已跌約 3000 點；主帥 2026/11/06 04:56 第 4 點；11/10 06:15 第 3 點 b 要求註記；Ｃ-232、Ｃ-261）
         window.CONDI_ENABLE = true; window.CONDI_PTS = 500; window.CONDI_TURN_REQUIRED = true; window.CONDGI_DELAY_NOTE = true;   /* ✅11101301 Ｃ-262、Ｃ-264 */   // ✅11081315 條件I（主帥 11/06 04:56 第 4 點、20:36 第 2c 點；Ｃ-232）
+        // ✅11170652【條件G、條件I：起漲／起跌點加嚴、延遲實測、反向建議須證明】主帥 2026/11/15 22:39 第 4 點 a、b（Ｃ-268）；與本機、雲端版 _kbar_run、_condgi_live_state、_condgi_delay_note 相同
+        window.CONDGI_START_MAX_RUN = 5; window.CONDGI_DELAY_PROOF_MIN = 15; window.CONDGI_LIVE_MAX_AGE_MIN = 10;
+        window.CONDG_YELLOW_HL = true; window.CONDG_RED_USE_HL = true;   // ✅11170652 條件G 黃框甲案（看進行中的當根：做空＝當根最低價跌破前1根最低價；做多＝當根最高價突破前1根最高價）、紅框當根用最低價／最高價；false＝回到 11021823（主帥 2026/11/16 09:55 選甲；Ｃ-272）
+        window._hmTW = (s) => new Date(s * 1000).toLocaleTimeString('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit' });
+        window._kbarRun = (op, c, isLong, i) => { let k = (i == null ? c.length - 1 : i), n = 0; while (k >= 0 && (isLong ? c[k] > op[k] : c[k] < op[k])) { n++; k--; } return n; };
+        window._condgiLive = (d, tx, nowSec) => {
+            try { const now = nowSec || Math.floor(Date.now() / 1000), x = tx && tx.d;
+                if (!x || !x.c || x.c.length < 35) return ['na', `期交所台指期快照取不到（${(tx && tx.why) || ''}）`];
+                const n = x.c.length; if ((now - (x.ts[n - 1] + 300)) / 60 > window.CONDGI_LIVE_MAX_AGE_MIN) return ['na', '期交所台指期快照不夠新'];
+                const K = window.kjCore, df = K.kjIndicators({ Open: x.op, High: x.hi, Low: x.lo, Close: x.c }); if (!df) return ['na', '期交所台指期快照指標算不出來'];
+                const up = d === 'buy', m0 = df.macd_hist[n - 1], m1 = df.macd_hist[n - 2];
+                const same = (up ? m0 > m1 : m0 < m1) && K.kjRsiDir(df, up), opp = (up ? m0 < m1 : m0 > m1) && K.kjRsiDir(df, !up), run = window._kbarRun(x.op, x.c, up);
+                const a = up ? '↑' : '↓', b = up ? '↓' : '↑', kn = up ? '紅K' : '黑K', sp = up ? '漲' : '跌', t = window._hmTW(x.ts[n - 1]);
+                if (opp) return ['opp', `期交所台指期 5分K ${t}：MACD柱${b}、RSI(5)${b}、RSI(10)${b}（原方向已結束）`];
+                if (same && run > window.CONDGI_START_MAX_RUN) return ['late', `期交所台指期 5分K ${t}：已連續 ${run} 根${kn}（超過 ${window.CONDGI_START_MAX_RUN} 根，已不是起${sp}點）`];
+                if (same) return ['same', `期交所台指期 5分K ${t}：MACD柱${a}、RSI(5)${a}、RSI(10)${a}，連續 ${run} 根${kn}（原方向仍在進行）`];
+                return ['mixed', `期交所台指期 5分K ${t}：MACD柱與 RSI 方向不一致`];
+            } catch (e) { return ['na', '期交所台指期快照判斷失敗']; } };
+        window._condgiNote = (name, d, barEndSec, barLab, live, nowSec, px) => {
+            if (!window.CONDGI_DELAY_NOTE) return '';
+            try { const now = nowSec || Math.floor(Date.now() / 1000);
+                if (barEndSec == null) return `⏱【${name}】判斷用K棒時間取不到，無法證明有沒有延遲 → 不附反向建議\n\n`;
+                const lab = barLab ? barLab + ' ' : '', e = window._hmTW(barEndSec);
+                if (now < barEndSec) return `⏱【${name} 判斷用K棒】${lab}當根進行中（${e} 收完），沒有延遲\n\n`;
+                const dm = Math.floor((now - barEndSec) / 60), bl = `${lab}${e} 收完的那一根`;
+                if (dm <= window.CONDGI_DELAY_PROOF_MIN) return `⏱【${name} 判斷用K棒】${bl}，距現在 ${dm} 分鐘（未超過 ${window.CONDGI_DELAY_PROOF_MIN} 分鐘，不算延遲）\n\n`;
+                const o = d === 'buy' ? 'buy CALL' : 'buy PUT', r = d === 'buy' ? 'buy PUT' : 'buy CALL', [st, why] = live || ['na', '期交所台指期快照取不到'];
+                const head = `⏱⚠️【${name} 實測延遲 ${dm} 分鐘】判斷用K棒：${bl}\n`;
+                if (st === 'opp') return head + `💡【反向建議】原本要做 ${o}，建議改做 ${r}\n　證明：${why}\n` + (px != null ? `反向（${r}）履約價參考：\n${window._strikeHint(px, d !== 'buy')}\n` : '') + '\n';
+                if (st === 'same') return head + `✅【照原方向 ${o}，不附反向建議】證明：${why}\n\n`;
+                if (st === 'late') return head + `🛑【建議不進場】${why}；不追、也不反向\n\n`;
+                return head + `ℹ️【不附反向建議】${why}，無法證明原方向已結束\n\n`;
+            } catch (e) { return `⏱【${name}】延遲判斷失敗 → 不附反向建議\n\n`; } };
         window._txfBarsToD = (bars, nowSec) => {
             const now = nowSec || Math.floor(Date.now() / 1000), rows = [];
             for (const b of (bars || [])) { const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(b.t || ''); if (!m) continue;
@@ -3264,10 +3297,10 @@
                 const df = K.kjIndicators({ Open: d.op, High: d.hi, Low: d.lo, Close: d.c }); if (!df) continue;
                 const idx = d.ts.map((t, i) => i).filter(i => d.ts[i] >= st); if (!idx.length) continue;
                 const n = d.c.length, c = d.c[n - 1], hs = Math.max(...idx.map(i => d.hi[i])), ls = Math.min(...idx.map(i => d.lo[i]));
-                const m0 = df.macd_hist[n - 1], m1 = df.macd_hist[n - 2];
+                const m0 = df.macd_hist[n - 1], m1 = df.macd_hist[n - 2];   // ✅11170652 500 點改用當根最低價／最高價，不用收盤價（Ｃ-269）
                 const turn = (isS) => { const o = [5, 4, 3, 2, 1].map(j => df.macd_hist[n - j]); if (o.some(v => v == null || isNaN(v))) return false; const run = [0, 1, 2].some(k => isS ? (o[k] < o[k + 1] && o[k + 1] < o[k + 2]) : (o[k] > o[k + 1] && o[k + 1] > o[k + 2])); return run && (isS ? (o[3] < o[2] && o[4] < o[3]) : (o[3] > o[2] && o[4] > o[3])); };   // ✅11101301 剛A轉／剛V轉（主帥 11/10 13:01 第 2 點選甲；09/04 19:19 定義；Ｃ-262）
-                if (hs - c >= window.CONDI_PTS && m0 < m1 && K.kjRsiDir(df, false) && (!window.CONDI_TURN_REQUIRED || turn(true))) out.push({ dir: 'sell', lab, c, ext: hs, pts: hs - c, bt: d.ts[n - 1] });
-                if (c - ls >= window.CONDI_PTS && m0 > m1 && K.kjRsiDir(df, true) && (!window.CONDI_TURN_REQUIRED || turn(false))) out.push({ dir: 'buy', lab, c, ext: ls, pts: c - ls, bt: d.ts[n - 1] });
+                if (hs - d.lo[n - 1] >= window.CONDI_PTS && m0 < m1 && K.kjRsiDir(df, false) && (!window.CONDI_TURN_REQUIRED || turn(true)) && window._kbarRun(d.op, d.c, false) <= window.CONDGI_START_MAX_RUN) out.push({ dir: 'sell', lab, c, ext: hs, pts: hs - d.lo[n - 1], tg: d.lo[n - 1], bt: d.ts[n - 1], be: d.ts[n - 1] + (lab === '5分K' ? 300 : 900) });   // ✅11170652 連續黑K 超過 5 根不算起跌點（Ｃ-268）
+                if (d.hi[n - 1] - ls >= window.CONDI_PTS && m0 > m1 && K.kjRsiDir(df, true) && (!window.CONDI_TURN_REQUIRED || turn(false)) && window._kbarRun(d.op, d.c, true) <= window.CONDGI_START_MAX_RUN) out.push({ dir: 'buy', lab, c, ext: ls, pts: d.hi[n - 1] - ls, tg: d.hi[n - 1], bt: d.ts[n - 1], be: d.ts[n - 1] + (lab === '5分K' ? 300 : 900) });   // ✅11170652 連續紅K 超過 5 根不算起漲點（Ｃ-268）
             } return out; };
         window._condiRun = async (win, dd, src, now) => {
             if (!window.CONDI_ENABLE || !win) return;
@@ -3279,9 +3312,9 @@
                     const kc = `condi_cnt_${win}_${dir}_${today}`, c = +(localStorage.getItem(kc) || 0); if (!skip && c >= 2) skip = true; else if (!skip) localStorage.setItem(kc, String(c + 1)); } catch (e) {}
                 if (skip) continue;
                 const isS = dir === 'sell', ar = isS ? '↓' : '↑';
-                const body = (window.CONDGI_DELAY_NOTE && String(src).includes('Yahoo') ? `⏱⚠️【條件I 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒\n💡【反向建議】原本要做 ${isS ? 'buy PUT' : 'buy CALL'}，建議改做 ${isS ? 'buy CALL' : 'buy PUT'}（主帥 10/16 指示；11/10 13:01 第 4 點延伸到條件I）\n\n` : '') + `${isS ? '🔻【條件I 週選擇權：急跌做空 buy PUT】🔻' : '⭐【條件I 週選擇權：急漲做多 buy CALL】⭐'}
+                const _tx1 = String(src).includes('期交所'), _lv = _tx1 ? window._condgiLive(dir, { d: dd['5m'], why: '' }) : ['na', '期交所台指期快照取不到（已退回 Yahoo）']; const body = window._condgiNote('條件I', dir, h.be, (_tx1 ? '台指期 ' : '^TWII ') + h.lab, _lv, null, h.c) + `${isS ? '🔻【條件I 週選擇權：急跌做空 buy PUT】🔻' : '⭐【條件I 週選擇權：急漲做多 buy CALL】⭐'}
 資料：${src}
-${isS ? '當盤最高' : '當盤最低'}：${h.ext.toFixed(0)}　當根收盤：${h.c.toFixed(0)}　${isS ? '跌' : '漲'} ${h.pts.toFixed(0)} 點（門檻 ${window.CONDI_PTS}）
+${isS ? '當盤最高' : '當盤最低'}：${h.ext.toFixed(0)}　${isS ? '當根最低' : '當根最高'}：${h.tg.toFixed(0)}（收盤 ${h.c.toFixed(0)}）　${isS ? '跌' : '漲'} ${h.pts.toFixed(0)} 點（門檻 ${window.CONDI_PTS}）
 觸發週期：${h.lab}　前1根→當根 MACD柱${ar}、RSI(5)${ar}、RSI(10)${ar}　★不看碰軌
 起${isS ? '跌' : '漲'}點：近5根連續3根 OSC 連${isS ? '漲' : '跌'}＋前1根、當根 OSC 皆${isS ? '跌' : '漲'}（剛${isS ? 'A' : 'V'}轉）
 建議標的（價外，以小博大）：
@@ -3290,6 +3323,53 @@ ${window._strikeHint(h.c, !isS)}
 時間：${now}`;
                 if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, { to_email: currentUserEmail, scan_time: now,
                     signal_count: '條件I 1', signal_body: body, subject: '股票PRO｜' + (isS ? '做空' : '買進') + '通知 條件I 1（' + String(now) + '）', message: String(body) });
+            }
+        };
+        // ✅11162133【條件J】週一 15分K「09:00」「09:15」兩根，當根進行中即判斷；與 Python _condj_eval 同義
+        //   主帥 2026/11/16 14:58 第 3 點：「週一要納入。但是我只要【15分K】的「09:00」「09:15」2根K棒就好。09:30~11:30勿納入。幫我備註【專門適用1116的15分K的0900進場未觸發】(若等到09:15才觸發,已經來不及了,K棒直接往下軌貫穿,原本10~20元的履約價將大幅溢價到100元以上,買不下去!)」
+        //   做空＝〔近5根最高價碰上軌、當根最低價到中軌以下〕或〔近5根最高價在中軌以上、當根最低價到下軌以下〕＋當根 MACD柱、RSI(5)、RSI(10) 都比前1根低；做多鏡像；沒有點數門檻；資料只用期交所台指期快照
+        window.CONDJ_ENABLE = true; window.CONDJ_BARS = ['08:45', '09:00'];   /* ✅11170407 程式用起點；eLeader「09:00」「09:15」＝起點 08:45、09:00 */ window.CONDJ_NOTE = '專門適用1116的15分K的0900進場未觸發'; window.CONDJ_NOTE_WHY = '若等到09:15才觸發,已經來不及了,K棒直接往下軌貫穿,原本10~20元的履約價將大幅溢價到100元以上,買不下去!';
+        window._condjWindow = (nowSec) => { const p = window._condgTP(nowSec || Math.floor(Date.now() / 1000)); if (!window.CONDJ_ENABLE || p.wd !== 1) return null; return (p.tv >= 8 * 60 + 45 && p.tv <= 9 * 60 + 14) ? 'run' : null; };
+        window._condjEval = (d, nowSec) => {
+            const K = window.kjCore, C = window.KJ_CFG, now = nowSec || Math.floor(Date.now() / 1000), out = [];
+            if (!d || !d.c || d.c.length < 35) return { hits: out, info: `條件J：15分K 只有 ${d && d.c ? d.c.length : 0} 根（需 35）` };
+            const df = K.kjIndicators({ Open: d.op, High: d.hi, Low: d.lo, Close: d.c }); if (!df) return { hits: out, info: '條件J：指標算不出來' };
+            const n = d.c.length, pb = window._condgTP(d.ts[n - 1]), pn = window._condgTP(now), hm = String(Math.floor(pb.tv / 60)).padStart(2, '0') + ':' + String(pb.tv % 60).padStart(2, '0'), ev = pb.tv + 15, el = String(Math.floor(ev / 60)).padStart(2, '0') + ':' + String(ev % 60).padStart(2, '0');
+            if (pn.wd !== 1 || pb.ymd !== pn.ymd || !window.CONDJ_BARS.includes(hm)) return { hits: out, info: `條件J：最後一根是 ${pb.ymd.slice(5)} ${hm}，不是今天（週一）eLeader「09:00」「09:15」那兩根（起點 08:45、09:00）` };
+            const hi = d.hi[n - 1], lo = d.lo[n - 1], c = d.c[n - 1], top = df.boll_top20[n - 1], bot = df.boll_bot20[n - 1], mid = (top + bot) / 2, m0 = df.macd_hist[n - 1], m1 = df.macd_hist[n - 2];
+            if ([hi, lo, c, top, bot, m0, m1].some(v => v == null || isNaN(v))) return { hits: out, info: '條件J：布林或 MACD 尚未算出（K棒不足）' };
+            const l5 = [0, 1, 2, 3, 4].map(j => n - 1 - j).filter(k => k >= 0), midAt = (k) => (df.boll_top20[k] + df.boll_bot20[k]) / 2;
+            const l1 = K.kjTouchOk(df, false, C) && lo <= mid, l2 = l5.some(k => d.hi[k] >= midAt(k)) && lo <= bot;
+            if ((l1 || l2) && m0 < m1 && K.kjRsiDir(df, false)) out.push({ dir: 'sell', bar: el, rng: hm + '～' + el, c, hi, lo, top, mid, bot, bt: d.ts[n - 1], be: d.ts[n - 1] + 900,
+                leg: (l1 ? '近5根最高價碰上軌 → 當根最低價到中軌以下' : '') + (l1 && l2 ? '；' : '') + (l2 ? '近5根最高價在中軌以上 → 當根最低價到下軌以下' : '') });
+            const u1 = K.kjTouchOk(df, true, C) && hi >= mid, u2 = l5.some(k => d.lo[k] <= midAt(k)) && hi >= top;
+            if ((u1 || u2) && m0 > m1 && K.kjRsiDir(df, true)) out.push({ dir: 'buy', bar: el, rng: hm + '～' + el, c, hi, lo, top, mid, bot, bt: d.ts[n - 1], be: d.ts[n - 1] + 900,
+                leg: (u1 ? '近5根最低價碰下軌 → 當根最高價到中軌以上' : '') + (u1 && u2 ? '；' : '') + (u2 ? '近5根最低價在中軌以下 → 當根最高價到上軌以上' : '') });
+            return { hits: out, info: `條件J「${el}」那根（${hm}～${el}）：最高 ${hi.toFixed(0)} 最低 ${lo.toFixed(0)} 目前 ${c.toFixed(0)}｜布林 上 ${top.toFixed(0)} 中 ${mid.toFixed(0)} 下 ${bot.toFixed(0)}｜做空 ${out.some(h => h.dir === 'sell') ? '✓' : '✗'} 做多 ${out.some(h => h.dir === 'buy') ? '✓' : '✗'}` };
+        };
+        window._condjRun = async (_now) => {
+            if (!window._isAdmin) return;   // 機密：期貨只限管理員（Ｃ-228）
+            if (!window._condjWindow()) return;
+            const tx = await window._txfStore();
+            if (!tx.d) { console.log('條件J：期交所台指期快照不可用（' + tx.why + '）→ 本次不判斷（不退回 Yahoo：延遲 15～25 分）'); return; }
+            const r = window._condjEval(window._resample15(tx.d)); console.log(r.info);
+            for (const h of r.hits) {
+                const isS = h.dir === 'sell', ar = isS ? '↓' : '↑';
+                if (!window._tfOnce('CONDJ', isS ? 'put' : 'call')) continue;   // 每週一每方向 1 封
+                let _lv = ['na', '當根進行中']; try { _lv = window._condgiLive(h.dir, tx); } catch (e) {}
+                let _head = ''; try { _head = window._condgiNote('條件J', h.dir, h.be, '台指期 15分K', _lv, null, h.c); } catch (e) {}
+                const body = _head + `${isS ? '🔻【條件J 週一開盤 15分K做空 → buy PUT】🔻' : '⭐【條件J 週一開盤 15分K做多 → buy CALL】⭐'}
+資料：期交所台指期快照（${tx.why}）
+觸發：15分K「${h.bar}」那根（${h.rng}；eLeader 標收完時間；進行中，不等收完）　${h.leg}
+當根：最高 ${h.hi.toFixed(0)}　最低 ${h.lo.toFixed(0)}　目前 ${h.c.toFixed(0)}｜布林 上 ${h.top.toFixed(0)}　中 ${h.mid.toFixed(0)}　下 ${h.bot.toFixed(0)}
+前1根→當根 MACD柱${ar}、RSI(5)${ar}、RSI(10)${ar}
+建議標的（價外，以小博大）：
+${window._strikeHint(h.c, !isS)}
+出場：同條件W
+備註：${window.CONDJ_NOTE}（${window.CONDJ_NOTE_WHY}）
+時間：${_now}`;
+                if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, { to_email: currentUserEmail, scan_time: _now,
+                    signal_count: '條件J 1', signal_body: body, subject: '股票PRO｜' + (isS ? '做空' : '買進') + '通知 條件J 1（' + String(_now) + '）', message: String(body) });
             }
         };
         window.scanFutures15mAndCondW = async () => {
@@ -3329,6 +3409,7 @@ RSI：${_g.rsiPrv.toFixed(1)} → ${_g.rsiNow.toFixed(1)}
                 }
             } catch (e) { console.log('期貨15分K：', e); }
             try { await window._condgRun(_now); } catch (e) { console.log('條件G：', e); }   // ✅11021823 條件G（Ｃ-213）：不受條件W 時窗限制
+            try { await window._condjRun(_now); } catch (e) { console.log('條件J：', e); }   // ✅11162133 條件J（週一 15分K 09:00、09:15；主帥 2026/11/16 14:58 第 3 點）
             // ② 條件W（只跑第三道，5分K OR 15分K）
             const _win = window._condwWindow();
             if (!_win) return;
@@ -3384,6 +3465,7 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
             n = n || 5; const at = (a, k) => (a && a[k] != null && !isNaN(a[k])) ? a[k] : null;
             const c = at(df.Close, i), top = at(df.boll_top20, i), bot = at(df.boll_bot20, i), mid = at(df.ma_c_20, i);
             if ([c, top, bot, mid].some(v => v === null)) return { dn: false, up: false };
+            const hl = window.CONDG_RED_USE_HL !== false, lo = hl ? at(df.Low, i) : c, hi = hl ? at(df.High, i) : c; if (lo === null || hi === null) return { dn: false, up: false };   // ✅11170652 紅框當根用最低價／最高價（Ｃ-272）
             let hMid = false, hTop = false, lMid = false, lBot = false;
             for (let k = Math.max(0, i - n + 1); k <= i; k++) {
                 const h = at(df.High, k), l = at(df.Low, k), m = at(df.ma_c_20, k), tp = at(df.boll_top20, k), bt = at(df.boll_bot20, k);
@@ -3392,18 +3474,18 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
                 if (l !== null && m !== null && l <= m) lMid = true;
                 if (l !== null && bt !== null && l <= bt) lBot = true;
             }
-            return { dn: (hMid && c <= bot) || (hTop && c <= mid), up: (lMid && c >= top) || (lBot && c >= mid) };
+            return { dn: (hMid && lo <= bot) || (hTop && lo <= mid), up: (lMid && hi >= top) || (lBot && hi >= mid) };
         };
         window._condgEval = (srcs, nowSec) => {   // srcs：[{mins, src:'A'|'B', df(含 ts 秒)}]；純函式，不連網，便於與 Python 對照實測
             const now = nowSec || Math.floor(Date.now() / 1000), today = window._condgTP(now).ymd;
             const out = { sell: { red: [], yellow: [] }, buy: { red: [], yellow: [] }, close: null, ewtLast: null };
             for (const s of srcs) {
                 const df = s.df; if (!df || !df.ts) continue;
-                const done = df.ts.map((t, i) => i).filter(i => df.ts[i] + s.mins * 60 <= now);
+                const live = s.src === 'A' && window.CONDG_YELLOW_HL !== false; const done = df.ts.map((t, i) => i).filter(i => live ? df.ts[i] <= now : df.ts[i] + s.mins * 60 <= now);   // ✅11170652 甲案：^TWII 含進行中的當根（Ｃ-272）
                 if (done.length < 25) continue;
                 const lab = `${s.src === 'A' ? '^TWII' : 'EWT'} ${s.mins}分K`;
                 if (s.src === 'A') {
-                    if (s.mins === 5) out.close = df.Close[done[done.length - 1]];
+                    if (s.mins === 5) { out.close = df.Close[done[done.length - 1]]; out.barEnd = df.ts[done[done.length - 1]] + 300; }   // ✅11170652 實測延遲用（Ｃ-268）
                     const todays = done.filter(i => window._condgTP(df.ts[i]).ymd === today);
                     if (!todays.length) continue;
                     const r = window._condgRedAt(df, todays[0]);
@@ -3411,9 +3493,13 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
                     if (r.up) out.buy.red.push(`紅框A ${lab} 今日第1根`);
                     let mu = true, md = true;   // ✅11101301 黃框判斷當下 MACD柱、RSI 同向（主帥 11/10 13:01 第 3 點；Ｃ-263）
                     if (window.CONDG_MOMENTUM_REQUIRED) { try { const K = window.kjCore, sub = (a) => done.map(i => (a || df.Close)[i]); const ind = K.kjIndicators({ Open: sub(df.Open), High: sub(df.High), Low: sub(df.Low), Close: sub(df.Close) }); const L = done.length, g0 = ind.macd_hist[L - 1], g1 = ind.macd_hist[L - 2]; mu = g0 > g1 && K.kjRsiDir(ind, true); md = g0 < g1 && K.kjRsiDir(ind, false); } catch (e) { mu = md = false; } }
-                    for (const k of todays.slice(-2)) {
-                        if (df.Close[k] < df.Open[k] && md) out.sell.yellow.push(`黃框 ${lab} 收黑${window.CONDG_MOMENTUM_REQUIRED ? '；判斷當下 MACD柱、RSI 皆往下' : ''}`);
-                        if (df.Close[k] > df.Open[k] && mu) out.buy.yellow.push(`黃框 ${lab} 收紅${window.CONDG_MOMENTUM_REQUIRED ? '；判斷當下 MACD柱、RSI 皆往上' : ''}`);
+                    if (window.CONDG_YELLOW_HL !== false) {   // ✅11170652 甲案：看進行中的當根，只用最高價、最低價（Ｃ-272）
+                        const k = todays[todays.length - 1], kp = k - 1, mm = window.CONDG_MOMENTUM_REQUIRED;
+                        if (kp >= 0 && df.Low[k] < df.Low[kp] && md && window._kbarRun(df.Open, df.Close, false, k) <= window.CONDGI_START_MAX_RUN) out.sell.yellow.push(`黃框 ${lab} 當根最低 ${df.Low[k].toFixed(0)} 跌破前1根最低 ${df.Low[kp].toFixed(0)}${mm ? '；判斷當下 MACD柱、RSI 皆往下' : ''}`);
+                        if (kp >= 0 && df.High[k] > df.High[kp] && mu && window._kbarRun(df.Open, df.Close, true, k) <= window.CONDGI_START_MAX_RUN) out.buy.yellow.push(`黃框 ${lab} 當根最高 ${df.High[k].toFixed(0)} 突破前1根最高 ${df.High[kp].toFixed(0)}${mm ? '；判斷當下 MACD柱、RSI 皆往上' : ''}`);
+                    } else for (const k of todays.slice(-2)) {
+                        if (df.Close[k] < df.Open[k] && md && window._kbarRun(df.Open, df.Close, false, k) <= window.CONDGI_START_MAX_RUN) out.sell.yellow.push(`黃框 ${lab} 收黑${window.CONDG_MOMENTUM_REQUIRED ? '；判斷當下 MACD柱、RSI 皆往下' : ''}`);
+                        if (df.Close[k] > df.Open[k] && mu && window._kbarRun(df.Open, df.Close, true, k) <= window.CONDGI_START_MAX_RUN) out.buy.yellow.push(`黃框 ${lab} 收紅${window.CONDG_MOMENTUM_REQUIRED ? '；判斷當下 MACD柱、RSI 皆往上' : ''}`);
                     }
                 } else {
                     if (s.mins === 5) out.ewtLast = df.ts[done[done.length - 1]];
@@ -3452,7 +3538,7 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
                 const x = r[d], put = d === 'sell', nm = put ? '大跌' : '大漲', op = put ? 'buy PUT' : 'buy CALL';
                 if (!x.go) continue;
                 if (!window._tfOnce('CONDG', put ? 'put' : 'call')) continue;   // 每日每方向 1 封
-                const _body = (window.CONDGI_DELAY_NOTE ? `⏱⚠️【條件G 已延遲大約 15～25 分鐘】Yahoo 報價本身延遲約 15～25 分，本信判斷用的是約 20 分鐘前的K棒\n💡【反向建議】原本要做 ${op}，建議改做 ${put ? 'buy CALL' : 'buy PUT'}（主帥 10/16 指示；11/10 13:01 第 4 點延伸到條件G）\n\n` : '') + `⭐【條件G 週選擇權${nm}延續 → ${op}】⭐\n紅框：${x.red.join('；')}\n黃框：${x.yellow.join('；')}\n台指現價：${r.close != null ? Number(r.close).toFixed(0) : '未取得'}\n出場：同條件W\n⏱ Yahoo 報價約延遲 15～25 分\n建議標的（價外）：\n${r.close != null ? window._strikeHint(r.close, !put) : ''}\n時間：${_now}`;
+                let _lv = ['na', '期交所台指期快照取不到']; try { _lv = window._condgiLive(d, await window._txfStore()); } catch (e) {} const _body = window._condgiNote('條件G', d, r.barEnd, '^TWII 5分K', _lv, null, r.close) + `⭐【條件G 週選擇權${nm}延續 → ${op}】⭐\n紅框：${x.red.join('；')}\n黃框：${x.yellow.join('；')}\n台指現價：${r.close != null ? Number(r.close).toFixed(0) : '未取得'}\n出場：同條件W\n★紅框A、黃框看的是加權指數現貨（^TWII，Yahoo 資料），K棒顏色與台指期可能不同\n建議標的（價外）：\n${r.close != null ? window._strikeHint(r.close, !put) : ''}\n時間：${_now}`;
                 if (window._notifyAllowed('急迫')) await emailjs.send(EMAILJS_SERVICE, EMAILJS_NOTIFY_TEMPLATE, {
                     to_email: currentUserEmail, scan_time: _now,
                     signal_count: '條件G 1', signal_body: _body, subject: '股票PRO｜買進通知 ' + String('條件G 1') + '（' + String(_now) + '）', message: String(_body), });
