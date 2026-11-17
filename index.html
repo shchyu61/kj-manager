@@ -266,7 +266,7 @@
                 <span class="font-black text-lg tracking-tight">科蓁<span class="text-blue-600 uppercase">股票PRO</span>智能理財管家</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11170652</span>
+                <span class="text-[11px] font-black text-slate-300 tracking-widest">v11171232</span>
                 <span id="cloud-hb" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <span id="tw-scan-st" class="text-[11px] font-bold tracking-wide" style="color:#94a3b8"></span>
                 <button id="btn-logout" class="hide text-[12px] font-black text-slate-400 border border-slate-200 px-3 py-1 rounded-full hover:bg-slate-50 transition-all">登出</button>
@@ -3100,7 +3100,7 @@
           //   前1根與當根 OSC 皆轉升（做空轉跌）、當根 RSI 上升（做空下降）；★第三道不看碰軌（策略說明第六章、表三 D）
           function kjCondDLong(df) {
             try { const N = 5, n = df.Close.length; if (n < N + 3) return false;
-              for (let i = n - N; i < n; i++) { if (!(df.Low[i] > df.ma_c_20[i])) return false; }
+              let _a = false; for (let i = n - N; i < n; i++) { if (df.Low[i] > df.ma_c_20[i]) { _a = true; break; } } if (!_a) return false;   // ✅11171232 近N根＝任1根（Ｃ-285）
               const o = df.macd_hist.slice(n - N); let d3 = false;
               for (let j = 0; j < o.length - 2; j++) { if (o[j] > o[j + 1] && o[j + 1] > o[j + 2]) { d3 = true; break; } }
               const mh = df.macd_hist, r = df.rsi14;
@@ -3109,19 +3109,46 @@
           }
           function kjCondDShort(df) {
             try { const N = 5, n = df.Close.length; if (n < N + 3) return false;
-              for (let i = n - N; i < n; i++) { if (!(df.High[i] < df.ma_c_20[i])) return false; }
+              let _a = false; for (let i = n - N; i < n; i++) { if (df.High[i] < df.ma_c_20[i]) { _a = true; break; } } if (!_a) return false;   // ✅11171232 近N根＝任1根（Ｃ-285）
               const o = df.macd_hist.slice(n - N); let u3 = false;
               for (let j = 0; j < o.length - 2; j++) { if (o[j] < o[j + 1] && o[j + 1] < o[j + 2]) { u3 = true; break; } }
               const mh = df.macd_hist, r = df.rsi14;
               return u3 && mh[n - 2] < mh[n - 3] && mh[n - 1] < mh[n - 2] && kjRsiDir(df, false);
             } catch (e) { return false; }
           }
-          root.kjCore = { KJ_TOUCH_N, KJ_BOLL_DDOF, kjEMA, kjMACD, kjRSI, kjBoll, kjIndicators, kjGateUpper, kjGateLower, kjTouchOk, kjOscPreOk, kjTurnOk, kjBodyOk, kjStagePass, kjCondH, kjRsiDir, kjCondDLong, kjCondDShort };
+          // ✅11171232 出場第一道丁案（Ｃ-283；雲端 _exit_g1_ok 逐式移植）：近5根任1根碰上軌＋當根 RSI(5)、RSI(10) 比昨天收盤時往下；空方鏡像。
+          //   網頁資料無時間戳：以「今天開盤＝本週期開盤」判定今天是本週期第一個交易日（是 → 比上一根；否 → 當根收盤換成昨天日K 收盤）。
+          function kjExitG1(dfI, dfD, isLong, cfg) {
+            try {
+              if (!dfI || dfI.Close.length < 25) return false; if (!dfD || dfD.Close.length < 2) return kjStagePass(dfI, isLong, false, cfg);   // ✅11171232 取不到日K → 退回舊規則
+              if (!kjTouchOk(dfI, !isLong, cfg)) return false;
+              const nI = dfI.Close.length, nD = dfD.Close.length, c = dfI.Close.slice();
+              const first = Math.abs(dfD.Open[nD - 1] - dfI.Open[nI - 1]) <= 1e-9 * Math.max(1, Math.abs(dfI.Open[nI - 1]));
+              let cy; if (first) cy = c.slice(0, nI - 1); else { cy = c.slice(); cy[nI - 1] = dfD.Close[nD - 2]; }
+              const a5 = L(kjRsi(c, 5), 1), b5 = L(kjRsi(cy, 5), 1), a10 = L(kjRsi(c, 10), 1), b10 = L(kjRsi(cy, 10), 1);
+              if ([a5, b5, a10, b10].some(x => x === undefined || Number.isNaN(x))) return false;
+              return isLong ? (a5 < b5 && a10 < b10) : (a5 > b5 && a10 > b10);
+            } catch (e) { return false; }
+          }
+          // ✅11171232 日K 出場新A轉定義（Ｃ-284；雲端 _daily_aturn_new 逐式移植）：近2根任1根開盤價站上上軌＋當根 DIF、MACD(9)、OSC、RSI(5)、RSI(10) 至少 4 個往下＋前1根 5 個全往上；空方鏡像
+          function kjDailyATurnNew(df, isLong) {
+            try {
+              if (!df || df.Close.length < 30) return false;
+              const n = df.Close.length, m = kjMACD(df.Close), S = [m.line, m.signal, m.hist, kjRsi(df.Close, 5), kjRsi(df.Close, 10)];
+              const v = S.map(a => [a[n - 3], a[n - 2], a[n - 1]]);
+              if (v.some(r => r.some(x => x === undefined || Number.isNaN(x)))) return false;
+              const pos = [1, 2].some(k => isLong ? df.Open[n - k] >= df.boll_top20[n - k] : df.Open[n - k] <= df.boll_bot20[n - k]);
+              const now = v.filter(r => isLong ? r[2] < r[1] : r[2] > r[1]).length, prev = v.filter(r => isLong ? r[1] > r[0] : r[1] < r[0]).length;
+              return pos && now >= 4 && prev === 5;
+            } catch (e) { return false; }
+          }
+          root.kjCore = { KJ_TOUCH_N, KJ_BOLL_DDOF, kjEMA, kjMACD, kjRSI, kjBoll, kjIndicators, kjGateUpper, kjGateLower, kjTouchOk, kjOscPreOk, kjTurnOk, kjBodyOk, kjStagePass, kjCondH, kjRsiDir, kjCondDLong, kjCondDShort, kjExitG1, kjDailyATurnNew };
         })(typeof window !== 'undefined' ? window : globalThis);
 
         // ✅09271755 網頁與雲端共用門檻常數（雲端 BUY_BOLL_TOLERANCE＝1.02、SELL_BOLL_TOLERANCE＝0.98、BAND_NEAR_RATIO＝0.25、BUY_RSI_MIN＝35、SHORT_RSI_MAX＝65）
         //   ★原網頁用 1.03／1.00，與雲端不一致（四版一致，Ｃ-04；主帥 09/27 15:57「A和C同意」）
         window.KJ_CFG = { tolL: 1.02, tolU: 0.98, ratio: 0.25 };
+        window.EXIT_G1_TODAY_VS_YDAY = true; window.DAILY_ATURN_NEW_DEF = true;   // ✅11171232 回滾開關（同雲端；Ｃ-283、Ｃ-284）
         window.KJ_RSI_BUY = 35; window.KJ_RSI_SHORT = 65;
         // ══════════════════════════════════════════════════════════════
         // ✅09191203【三道統一判斷 stagePass】主帥 2026/09/19 09:43「乙的加強版」、10:15~11:08 逐項定義
@@ -3601,8 +3628,10 @@ ${_useTx ? '' : `— 反向（${_isCall ? 'buy PUT' : 'buy CALL'}）履約價參
                 o.g1L = S(dfI, true, true);  o.g1S = S(dfI, false, true);
                 o.g2L = S(dfD, true, true);  o.g2S = S(dfD, false, true);
                 o.g3L = G3(d5, true) || G3(d15, true); o.g3S = G3(d5, false) || G3(d15, false);
-                o.x1L = S(dfI, true, false); o.x2L = S(dfD, true, false); o.x3L = S(d5, true, false) || S(d15, true, false);
-                o.x1S = S(dfI, false, false); o.x2S = S(dfD, false, false); o.x3S = S(d5, false, false) || S(d15, false, false);
+                o.x1L = window.EXIT_G1_TODAY_VS_YDAY === false ? S(dfI, true, false) : K.kjExitG1(dfI, dfD, true, C); o.x2L = S(dfD, true, false) || (window.DAILY_ATURN_NEW_DEF !== false && K.kjDailyATurnNew(dfD, true));   // ✅11171232 丁案（Ｃ-283）、新A轉並列（Ｃ-284）
+                 o.x3L = S(d5, true, false) || S(d15, true, false);
+                o.x1S = window.EXIT_G1_TODAY_VS_YDAY === false ? S(dfI, false, false) : K.kjExitG1(dfI, dfD, false, C); o.x2S = S(dfD, false, false) || (window.DAILY_ATURN_NEW_DEF !== false && K.kjDailyATurnNew(dfD, false));
+                 o.x3S = S(d5, false, false) || S(d15, false, false);
                 o.buy = o.g1L && o.g2L && o.g3L && !!mktOk;
                 o.short = !o.g1L && o.g1S && o.g2S && o.g3S;
                 o.exitLong = o.x1L && o.x2L && o.x3L; o.exitShort = o.x1S && o.x2S && o.x3S;

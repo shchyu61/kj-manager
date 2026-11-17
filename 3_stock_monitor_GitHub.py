@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════
 
-SCRIPT_VERSION = '11170652'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
+SCRIPT_VERSION = '11171232'   # ✅ 鐵律V2：全檔唯一版本識別處，須＝檔名時間戳（本行自07040032起連續4次交付漏改，08031637 由交付前自檢腳本揪出並根治）
 # ============================================================
 # 專案：Python股票週K布林RSI+Gmail推播自動通知　★★★【雲端版（GitHub Actions）】   ✅09271746 標示更正（原誤寫本機版）
 # ══════════════════════════════════════════════════════════════
@@ -3244,9 +3244,9 @@ def check_buy_precondition(df, is_weekly=False):
 
         # ── 條件B（截圖3、4補充）──────────────────────────────
         # 1. 近N根最低價均低於布林中軌
-        low_below_mid  = (l.iloc[-n:] < bm.iloc[-n:]).all()
+        low_below_mid  = (l.iloc[-n:] < bm.iloc[-n:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
         # 2. 近N根最高價均低於布林上軌
-        high_below_top = (h.iloc[-n:] < bt.iloc[-n:]).all()
+        high_below_top = (h.iloc[-n:] < bt.iloc[-n:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
         # 3. 前N根~前1根MACD柱持續縮小（需至少N+1根資料）
         if len(mh) >= n + 1:
             macd_shrink = all(float(mh.iloc[-n-1+j]) > float(mh.iloc[-n+j]) for j in range(n-1))
@@ -3428,7 +3428,7 @@ def check_condD_long(df):
         if df is None or len(df) < _N + 3:
             return False
         l = df['Low']; bm = df['ma_c_20']; mh = df['macd_hist']; rsi = df['rsi14']
-        _all_above_mid = bool((l.iloc[-_N:] > bm.iloc[-_N:]).all())
+        _all_above_mid = bool((l.iloc[-_N:] > bm.iloc[-_N:]).any())   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
         _osc = [float(mh.iloc[i]) for i in range(-_N, 0)]
         _osc_3drop = any(_osc[j] > _osc[j+1] > _osc[j+2] for j in range(len(_osc) - 2))
         _osc_prev_rise = float(mh.iloc[-2]) > float(mh.iloc[-3])
@@ -3445,7 +3445,7 @@ def check_condD_short(df):
         if df is None or len(df) < _N + 3:
             return False
         h = df['High']; bm = df['ma_c_20']; mh = df['macd_hist']; rsi = df['rsi14']
-        _all_below_mid = bool((h.iloc[-_N:] < bm.iloc[-_N:]).all())
+        _all_below_mid = bool((h.iloc[-_N:] < bm.iloc[-_N:]).any())   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
         _osc = [float(mh.iloc[i]) for i in range(-_N, 0)]
         _osc_3rise = any(_osc[j] < _osc[j+1] < _osc[j+2] for j in range(len(_osc) - 2))
         _osc_prev_drop = float(mh.iloc[-2]) < float(mh.iloc[-3])
@@ -3563,7 +3563,7 @@ def _gate_evid(df, lbl, long_pos):
         else:
             tch = '近%d根未碰%s（最%s %.2f／門檻 %.2f）' % (K, side, '高' if long_pos else '低', float(px.max() if long_pos else px.min()), float(g.iloc[-1]))
         r = df['rsi14']; m = df['macd_hist']
-        return '%s %s｜%s｜MACD柱 %.3f→%.3f' % (lbl, tch, _rsi_txt(df), float(m.iloc[-2]), float(m.iloc[-1]))
+        return '%s %s｜%s｜MACD柱 %.3f→%.3f' % (lbl, tch, _rsi_txt(df), float(m.iloc[-2]), float(m.iloc[-1])) + (('｜' + _G1_EVID[id(df)]) if id(df) in _G1_EVID else '')   # ✅11171232 丁案明細（Ｃ-283）
     except Exception:
         return '%s 明細取得失敗' % lbl
 
@@ -3678,8 +3678,8 @@ def check_short_precondition(df, is_weekly=False):
         cond_A = price_near_upper and rsi_falling and macd_falling
 
         # 鏡像條件B：近N根最高均>布林中軌 AND 最低均>布林下軌 AND 前N根MACD柱持續放大 AND 當根縮小
-        high_above_mid = (h.iloc[-n:] > bm.iloc[-n:]).all()
-        low_above_bot  = (l.iloc[-n:] > bb.iloc[-n:]).all()
+        high_above_mid = (h.iloc[-n:] > bm.iloc[-n:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
+        low_above_bot  = (l.iloc[-n:] > bb.iloc[-n:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
         if len(mh) >= n + 1:
             macd_expand = all(float(mh.iloc[-n-1+j]) < float(mh.iloc[-n+j]) for j in range(n-1))
         else:
@@ -4367,8 +4367,9 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             #   第一道（月K OR 週K）AND 第二道（日K）AND 第三道（5分K OR 15分K），各道 stage_pass(entry=False)、不看實體。
             #   ★取代：09190152「週K 近5根碰軌＋月週日任一出場」（主帥 09/22 06:40 查出與表二矛盾）。
             _xl = not _is_short_hold
-            _g1x = stage_pass(_df_mon, _xl, entry=False) or stage_pass(_df_wk, _xl, entry=False)
-            _g2x = stage_pass(_df_day, _xl, entry=False)
+            _g1m, _g1w = _exit_g1_ok(_df_mon, _df_day, _xl), _exit_g1_ok(_df_wk, _df_day, _xl)   # ✅11171232 丁案（Ｃ-283）
+            _g1x = _g1m or _g1w
+            _g2x = stage_pass(_df_day, _xl, entry=False) or _daily_aturn_new(_df_day, _xl)   # ✅11171232 新A轉並列（Ｃ-284）
             if not (_g1x and _g2x):
                 print(f"  🔕 {ticker} 持股出場：第一道（月K OR 週K）={_g1x}、第二道（日K）={_g2x} → 不發")
                 return None
@@ -4392,7 +4393,7 @@ def scan_stock(ticker, is_holding=False, _mode_label=None):
             if not _g3x:
                 print(f"  🔕 {ticker} 持股出場：前兩道成立，第三道（5分K OR 15分K）未成立 → 不發")
                 return None
-            _nm3 = '長期+中期出場' if (stage_pass(_df_mon, _xl, entry=False) and stage_pass(_df_wk, _xl, entry=False)) else ('長期出場' if stage_pass(_df_mon, _xl, entry=False) else '中期出場')
+            _nm3 = '長期+中期出場' if (_g1m and _g1w) else ('長期出場' if _g1m else '中期出場')   # ✅11171232
             print(f"  🔔 {ticker} [{_g3lbl}] {_nm3}（三道 AND 成立）")
             _px3 = float(_g3df['Close'].iloc[-1])
             if _is_short_hold:
@@ -6038,7 +6039,7 @@ def _condw_gate3(df, nbars, label):
 
     # ── 多方：V轉觸底翻揚（條件A／B／E 任一）──
     _cA = (lo.iloc[-n:] <= _gate_lower(bt.iloc[-n:], bb.iloc[-n:])).any() and rsi_up and mac_up
-    _cB = ((lo.iloc[-n:] < bm.iloc[-n:]).all() and (hi.iloc[-n:] < bt.iloc[-n:]).all()
+    _cB = ((lo.iloc[-n:] < bm.iloc[-n:]).any() and (hi.iloc[-n:] < bt.iloc[-n:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
            and len(mh) >= n + 1
            and all(float(mh.iloc[-n-1+j]) > float(mh.iloc[-n+j]) for j in range(n-1))
            and mac_up)
@@ -6065,7 +6066,7 @@ def _condw_gate3(df, nbars, label):
     _short = False
     if CONDW_ENABLE_SHORT:
         _sA = (hi.iloc[-n:] >= _gate_upper(bt.iloc[-n:], bb.iloc[-n:])).any() and rsi_dn and mac_dn
-        _sB = ((hi.iloc[-n:] > bm.iloc[-n:]).all() and (lo.iloc[-n:] > bb.iloc[-n:]).all()
+        _sB = ((hi.iloc[-n:] > bm.iloc[-n:]).any() and (lo.iloc[-n:] > bb.iloc[-n:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
                and len(mh) >= n + 1
                and all(float(mh.iloc[-n-1+j]) < float(mh.iloc[-n+j]) for j in range(n-1))
                and mac_dn)
@@ -7079,16 +7080,16 @@ def check_holdings_health():
             #     各道 stage_pass(entry=False)（含 RSI 轉向、不看實體）；★條件D 進場的持股，第三道另可用條件D 出場A／B。
             _xl = not _is_short
             _act = '建議評估【回補】(空單獲利了結)' if _is_short else '建議評估【賣出】(獲利了結)'
-            _gm = bool(stage_pass(_im, _xl, entry=False)) if _im is not None else False
-            _gw = bool(stage_pass(_iw, _xl, entry=False)) if _iw is not None else False
+            try:
+                _idd = get_stock_data(_tk, period='2y', interval='1d')
+                _idd = calc_indicators(_idd) if (_idd is not None and len(_idd) >= 30) else None
+            except Exception:
+                _idd = None
+            _gm = bool(_exit_g1_ok(_im, _idd, _xl)) if _im is not None else False   # ✅11171232 丁案（Ｃ-283）；日K 先取，供「今天比昨天」
+            _gw = bool(_exit_g1_ok(_iw, _idd, _xl)) if _iw is not None else False
             _hits = []
             if _gm or _gw:
-                try:
-                    _idd = get_stock_data(_tk, period='2y', interval='1d')
-                    _idd = calc_indicators(_idd) if (_idd is not None and len(_idd) >= 30) else None
-                except Exception:
-                    _idd = None
-                if _idd is not None and stage_pass(_idd, _xl, entry=False):
+                if _idd is not None and (stage_pass(_idd, _xl, entry=False) or _daily_aturn_new(_idd, _xl)):   # ✅11171232 新A轉並列（Ｃ-284）
                     _cdok = _has_condd_entry(_tk)
                     for _lbl3, _per3 in (('5分K', '5d'), ('15分K', '1mo')):
                         try:
@@ -7237,10 +7238,10 @@ def _intraday_third_gate(df, g1l, g1s, g2l, g2s, is_long, is_short):
         t_lo = bool((l.iloc[-K:] <= _gate_lower(bt.iloc[-K:], bb.iloc[-K:])).any())
         t_hi = bool((h.iloc[-K:] >= _gate_upper(bt.iloc[-K:], bb.iloc[-K:])).any())
         cA = bool((l.iloc[-n:] <= _gate_lower(bt.iloc[-n:], bb.iloc[-n:])).any()) and r_up and m_up
-        cB = (bool((l.iloc[-n:] < bm.iloc[-n:]).all()) and bool((h.iloc[-n:] < bt.iloc[-n:]).all())
+        cB = (bool((l.iloc[-n:] < bm.iloc[-n:]).any()) and bool((h.iloc[-n:] < bt.iloc[-n:]).any())   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
               and len(mh) >= n + 1 and all(float(mh.iloc[-n-1+j]) > float(mh.iloc[-n+j]) for j in range(n-1)) and m_up)
         sA = bool((h.iloc[-n:] >= _gate_upper(bt.iloc[-n:], bb.iloc[-n:])).any()) and r_dn and m_dn
-        sB = (bool((h.iloc[-n:] > bm.iloc[-n:]).all()) and bool((l.iloc[-n:] > bb.iloc[-n:]).all())
+        sB = (bool((h.iloc[-n:] > bm.iloc[-n:]).any()) and bool((l.iloc[-n:] > bb.iloc[-n:]).any())   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
               and len(mh) >= n + 1 and all(float(mh.iloc[-n-1+j]) < float(mh.iloc[-n+j]) for j in range(n-1)) and m_dn)
         try: cE = bool(check_condE_long(df))
         except Exception: cE = False
@@ -7381,6 +7382,72 @@ def _gate_one(fn_pre, fn_e, fn_el, df, within):
     return stage_pass(df, _is_long, entry=True)
 
 
+# ══ ✅11171232 出場第一道丁案、日K 新A轉並列（主帥 2026/11/17 11:57 第 2 點 c、e、f；12:0x 選丁、選甲；Ｃ-283、Ｃ-284）══
+EXIT_G1_TODAY_VS_YDAY = True   # ✅11171232 出場第一道（月K／週K）：近5根任1根碰上軌＋當根 RSI(5)、RSI(10) 比昨天收盤時往下（False＝回 stage_pass(entry=False)）
+DAILY_ATURN_NEW_DEF = True     # ✅11171232 日K 出場新A轉定義與現行並列（False＝只用現行 stage_pass(entry=False)）
+_G1_EVID = {}
+
+def _period_close_yday(dtf, dday):
+    """✅11171232 回傳『昨天收盤時』的月K／週K 收盤序列：昨天仍屬當根週期 → 當根收盤換成昨天日K 收盤；今天是本週期第一個交易日 → 去掉當根（＝上一根）"""
+    try:
+        if dtf is None or dday is None or len(dday) < 2 or len(dtf) < 12:
+            return None
+        def _nz(x):
+            x = pd.Timestamp(x)
+            return (x.tz_localize(None) if x.tzinfo is not None else x).normalize()
+        c = dtf['Close'].astype(float).copy()
+        if _nz(dday.index[-2]) >= _nz(dtf.index[-1]):
+            c.iloc[-1] = float(dday['Close'].iloc[-2])
+            return c
+        return c.iloc[:-1]
+    except Exception:
+        return None
+
+def _exit_g1_ok(dtf, dday, is_long):
+    """✅11171232【出場第一道丁案】主帥 2026/11/17 選丁：「週K今天比昨天」——近5根任1根碰上軌（多方；空方碰下軌）
+    AND 當根 RSI(5)、RSI(10) 比昨天收盤時往下（空方往上）。前案：09/22 17:00 出場定案表第一道當根 A轉（Ｃ-220）。"""
+    try:
+        if not EXIT_G1_TODAY_VS_YDAY:
+            return bool(stage_pass(dtf, is_long, entry=False))
+        if dtf is None or len(dtf) < 25 or 'boll_top20' not in dtf.columns:
+            return False
+        if not _touch_ok(dtf, not is_long):
+            return False
+        cy = _period_close_yday(dtf, dday)
+        if cy is None or len(cy) < 11:
+            return bool(stage_pass(dtf, is_long, entry=False))   # ✅11171232 取不到日K → 退回舊規則，不因缺資料而不寄
+        c = dtf['Close'].astype(float)
+        a5, b5 = float(_rsi_n(c, 5).iloc[-1]), float(_rsi_n(cy, 5).iloc[-1])
+        a10, b10 = float(_rsi_n(c, 10).iloc[-1]), float(_rsi_n(cy, 10).iloc[-1])
+        if any(x != x for x in (a5, b5, a10, b10)):
+            return False
+        _G1_EVID[id(dtf)] = '今天比昨天 RSI(5) %.1f→%.1f、RSI(10) %.1f→%.1f' % (b5, a5, b10, a10)
+        return bool((a5 < b5 and a10 < b10) if is_long else (a5 > b5 and a10 > b10))
+    except Exception:
+        return False
+
+def _daily_aturn_new(df, is_long):
+    """✅11171232【日K 出場新A轉定義】主帥 2026/11/17 11:57 第 2 點 f、選甲並列：近2根任1根開盤價站上上軌
+    AND 當根 DIF、MACD(9)、OSC、RSI(5)、RSI(10) 至少 4 個比前1根往下 AND 前1根 5 個都比前2根往上；空方回補鏡像（開盤價跌破下軌、往上）"""
+    try:
+        if not DAILY_ATURN_NEW_DEF or df is None or len(df) < 30 or 'boll_top20' not in df.columns:
+            return False
+        o = df['Open'].astype(float); c = df['Close'].astype(float)
+        S = [df['macd_line'], df['macd_signal'], df['macd_hist'], _rsi_n(c, 5), _rsi_n(c, 10)]
+        v = [[float(s.iloc[k]) for k in (-3, -2, -1)] for s in S]
+        if any(x != x for r in v for x in r):
+            return False
+        if is_long:
+            pos = any(float(o.iloc[k]) >= float(df['boll_top20'].iloc[k]) for k in (-1, -2))
+            now = sum(r[2] < r[1] for r in v); prev = sum(r[1] > r[0] for r in v)
+        else:
+            pos = any(float(o.iloc[k]) <= float(df['boll_bot20'].iloc[k]) for k in (-1, -2))
+            now = sum(r[2] > r[1] for r in v); prev = sum(r[1] < r[0] for r in v)
+        return bool(pos and now >= 4 and prev == 5)
+    except Exception:
+        return False
+
+
 def _exit_gates(dm, dw, dd, is_long):
     """✅09220640【出場三道 AND】做多平倉／做空回補的第一道與第二道（第三道在 _intraday_third_gate）。
     ・主帥 2026/09/19 10:47 b：「a點的規定，同時套用在【第一道】and【第二道】and【第三道】（不是「or」）」
@@ -7389,9 +7456,9 @@ def _exit_gates(dm, dw, dd, is_long):
       ★★★所以第一道與第二道之間必須是 AND。
     ・各道一律 stage_pass(entry=False)：近5根碰上軌 AND 當根 RSI↓ AND 當根 MACD柱↓（✅11041640 改，Ｃ-220；主帥 2026/11/03 19:59 第 2 點 d）。
     回傳 (第一道成立, 第二道成立, 路線名稱)"""
-    m = stage_pass(dm, is_long, entry=False) if dm is not None else False
-    w = stage_pass(dw, is_long, entry=False) if dw is not None else False
-    d = stage_pass(dd, is_long, entry=False) if dd is not None else False
+    m = _exit_g1_ok(dm, dd, is_long) if dm is not None else False   # ✅11171232 丁案（Ｃ-283）
+    w = _exit_g1_ok(dw, dd, is_long) if dw is not None else False
+    d = (stage_pass(dd, is_long, entry=False) or _daily_aturn_new(dd, is_long)) if dd is not None else False   # ✅11171232 新A轉並列（Ｃ-284）
     nm = '長期+中期出場' if (m and w) else ('長期出場' if m else ('中期出場' if w else ''))
     return (m or w), d, nm
 
@@ -8691,8 +8758,8 @@ def main_task():
                 # ✅08301905 容忍度改綁通道寬度；原式：bb5.iloc[-n5:] * BUY_BOLL_TOLERANCE
                 _fut_cond_A = (l5.iloc[-n5:] <= _gate_lower(bt5.iloc[-n5:], bb5.iloc[-n5:])).any() and rsi_rising and macd_rising
                 # ── 條件B：近5根最低均<布林中軌 AND 最高均<布林上軌 AND 前N根MACD縮 AND 當根MACD放大   # ✅09181106
-                _fut_low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).all()
-                _fut_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).all()
+                _fut_low_mid  = (l5.iloc[-n5:] < bm5.iloc[-n5:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
+                _fut_high_top = (h5.iloc[-n5:] < bt5.iloc[-n5:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
                 _fut_macd_shr = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) > float(mh5.iloc[-n5+j]) for j in range(n5-1))
                 _fut_cond_B   = _fut_low_mid and _fut_high_top and _fut_macd_shr and macd_rising
                 # ✅ v06160503修復：near_lower/near_upper 原定義在使用之後(use-before-def)，上移至此
@@ -8752,8 +8819,8 @@ def main_task():
                 # ✅09022055 _short_2nd 已於第二道統一算好（原本在此重算，且被 continue 擋住）
                 # 第三道做空條件A/B（鏡像多方）
                 _fut_short_A = (h5.iloc[-n5:] >= _gate_upper(bt5.iloc[-n5:], bb5.iloc[-n5:])).any() and rsi_falling and macd_falling   # ✅09170232 P0① 原式：bt5×1.00；改用與多方相同的通道制門檻（主帥 08/27～08/30 核定，ＡＫ１８）
-                _fut_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).all()
-                _fut_low_bot   = (l5.iloc[-n5:] > bb5.iloc[-n5:]).all()
+                _fut_high_mid  = (h5.iloc[-n5:] > bm5.iloc[-n5:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
+                _fut_low_bot   = (l5.iloc[-n5:] > bb5.iloc[-n5:]).any()   # ✅11171232 近N根＝任1根（主帥 2026/11/17 選乙：「條件B和條件D,是你以前早期就誤解到現在了!我至始至終原意都是乙案的【任1根】才正確。」；Ｃ-285）
                 _fut_macd_exp  = len(mh5) >= n5+1 and all(float(mh5.iloc[-n5-1+j]) < float(mh5.iloc[-n5+j]) for j in range(n5-1))
                 _fut_short_B   = _fut_high_mid and _fut_low_bot and _fut_macd_exp and macd_falling
                 #   ★★而做多有五個（A/B/D_long/E_long/F_long）→ ★★★多空嚴重不對稱。
